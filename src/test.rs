@@ -1,4 +1,4 @@
-use crate::constraint_system::{self, RootsOfUnity, Gatebb, Gate};
+use crate::gate::{self, RootsOfUnity, Gatebb, Gate};
 use ff::{PrimeField, Field};
 use halo2curves::bn256;
 use num_traits::pow;
@@ -21,10 +21,9 @@ impl RootsOfUnity for F {
 fn test_cross_terms() {
 
     for d in 0..10{
-        let f = Box::new(|v: &Vec<F>| vec![v[0].pow([d as u64])]) as Box<dyn Fn(&Vec<F>)->Vec<F>>;
+        let f = Box::new(|v: &Vec<F>| vec![v[0].pow([d as u64])]);
         let gate = Gatebb::new(d, 1, 1, f);
         let tmp = gate.cross_terms(&vec![F::ONE], &vec![F::ONE]);
         println!("{:?}", tmp.iter().map(|v|v[0]).collect::<Vec<_>>());
-        drop(gate);
     }
 }

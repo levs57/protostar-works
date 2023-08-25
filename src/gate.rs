@@ -1,34 +1,11 @@
+use std::iter::repeat;
+
 use group::{Group, Curve};
 use ff::{Field, PrimeField};
 use halo2::{arithmetic::{best_multiexp, best_fft}};
 use halo2curves::CurveAffine;
 use num_traits::pow;
-
-/// A simple commitment key.
-pub enum CkS<G: CurveAffine>{
-    Trivial,
-    Group(Vec<G>),
-}
-
-/// Commitment target.
-pub enum Ct<G: CurveAffine>{
-    Trivial(Vec<G::Scalar>),
-    Group(G),
-}
-
-/// Commitment key trait.
-pub trait Ck<G: CurveAffine> {
-    fn commit(&self, wtns: &Vec<G::Scalar>) -> Ct<G>;
-} 
-
-impl<G: CurveAffine> Ck<G> for CkS<G>{
-    fn commit(&self, wtns: &Vec<G::Scalar>) ->  Ct<G>{
-        match self {
-            CkS::Trivial => Ct::Trivial(wtns.clone()),
-            CkS::Group(v) => Ct::Group(best_multiexp(wtns, v).to_affine()),
-        }
-    }
-}
+use rand_core::OsRng;
 
 pub trait RootsOfUnity where Self : PrimeField{
     /// Returns power of a primitive root of unity of order 2^logorder.
@@ -38,7 +15,8 @@ pub trait RootsOfUnity where Self : PrimeField{
 }
 
 /// A generic black-box gate. This API is unsafe, you must guarantee that given value is a
-/// homogeneous polynomial of degree d with i inputs and o outputs. 
+/// homogeneous polynomial of degree d with i inputs and o outputs. It will do a sanity check
+/// so if a polynomial of different degree, or non-homogeneous one is provided, it will fail. 
 pub struct Gatebb<'a, F : PrimeField> {
     d : usize,
     i : usize,
@@ -48,6 +26,17 @@ pub struct Gatebb<'a, F : PrimeField> {
 
 impl<'a, F: PrimeField> Gatebb<'a, F> {
     pub fn new(d: usize, i: usize, o: usize, f: Box<dyn Fn(&Vec<F>) -> Vec<F> + 'a>) -> Self {
+        let random_input : Vec<_> = repeat(F::random(OsRng)).take(i).collect(); 
+        let random_input_2 : Vec<_> = random_input.iter().map(|x| *x*F::from(2)).collect();
+        assert!({
+            let mut flag = true;
+            (&f)(&random_input_2).iter().zip((&f)(&random_input).iter()).map(|(a, b)| flag &= (*a==*b*F::from(pow(2, d)))).count();
+            flag
+        }, "Sanity check failed - provided f is not a polynomial of degree d");
+        Gatebb::<'a>{d,i,o,f}
+    } 
+ 
+    pub fn new_unchecked(d: usize, i: usize, o: usize, f: Box<dyn Fn(&Vec<F>) -> Vec<F> + 'a>) -> Self {
         Gatebb::<'a>{d,i,o,f}
     }
 }

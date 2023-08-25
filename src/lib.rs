@@ -1,2 +1,3 @@
-pub mod constraint_system;
+pub mod gate;
+pub mod commitment;
 pub mod test;

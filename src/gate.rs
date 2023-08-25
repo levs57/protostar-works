@@ -21,11 +21,11 @@ pub struct Gatebb<'a, F : PrimeField> {
     d : usize,
     i : usize,
     o : usize,
-    f : Box<dyn Fn(&Vec<F>) -> Vec<F> + 'a>,
+    f : Box<dyn Fn(&[F]) -> Vec<F> + 'a>,
 }
 
 impl<'a, F: PrimeField> Gatebb<'a, F> {
-    pub fn new(d: usize, i: usize, o: usize, f: Box<dyn Fn(&Vec<F>) -> Vec<F> + 'a>) -> Self {
+    pub fn new(d: usize, i: usize, o: usize, f: Box<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self {
         let random_input : Vec<_> = repeat(F::random(OsRng)).take(i).collect(); 
         let random_input_2 : Vec<_> = random_input.iter().map(|x| *x*F::from(2)).collect();
         assert!({
@@ -36,12 +36,12 @@ impl<'a, F: PrimeField> Gatebb<'a, F> {
         Gatebb::<'a>{d,i,o,f}
     } 
  
-    pub fn new_unchecked(d: usize, i: usize, o: usize, f: Box<dyn Fn(&Vec<F>) -> Vec<F> + 'a>) -> Self {
+    pub fn new_unchecked(d: usize, i: usize, o: usize, f: Box<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self {
         Gatebb::<'a>{d,i,o,f}
     }
 }
 
-pub trait Gate<F : PrimeField> {
+pub trait Gate<'a, F : PrimeField> {
     /// Returns degree.
     fn d(&self) -> usize;
     /// Returns input size.
@@ -49,12 +49,12 @@ pub trait Gate<F : PrimeField> {
     /// Returns output size.
     fn o(&self) -> usize;
     /// Executes gate on a given input. Must ensure the correct length of an input.
-    fn exec(&self, input : &Vec<F>) -> Vec<F>;
+    fn exec(&'a self, input : &[F]) -> Vec<F>;
     /// Returns coefficients of  f(in1 + x in2) in x (for example, 0-th is f(in1) and d-th is f(in2))
     fn cross_terms(&self, in1: &Vec<F>, in2: &Vec<F>) -> Vec<Vec<F>>;
 }
 
-impl<'a, F : PrimeField + RootsOfUnity> Gate<F> for Gatebb<'a, F> {
+impl<'a, F : PrimeField + RootsOfUnity> Gate<'a, F> for Gatebb<'a, F> {
     /// Returns degree.
     fn d(&self) -> usize {
         self.d
@@ -68,7 +68,7 @@ impl<'a, F : PrimeField + RootsOfUnity> Gate<F> for Gatebb<'a, F> {
         self.o
     }
     /// Executes gate on a given input. Must ensure the correct length of an input.
-    fn exec(&self, input : &Vec<F>) -> Vec<F>{
+    fn exec(&'a self, input : &[F]) -> Vec<F>{
         assert!(input.len() == self.i);
         let tmp = (self.f)(input);
         assert!(tmp.len() == self.o);
@@ -94,7 +94,8 @@ impl<'a, F : PrimeField + RootsOfUnity> Gate<F> for Gatebb<'a, F> {
 
         for i in 0..pow(2, logorder){
             let t = F::roots_of_unity(i, logorder);
-            let tmp = self.exec(&in1.iter().zip(in2.iter()).map(|(x,y)| (*x + *y * t)).collect());
+            let fgsds : Vec<_> = in1.iter().zip(in2.iter()).map(|(x,y)| (*x + *y * t)).collect();
+            let tmp = self.exec(&fgsds);
             for j in 0..self.o {
                 values[j].push(tmp[j]);
             }

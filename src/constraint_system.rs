@@ -109,7 +109,7 @@ impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
         Gatebb::<'a>::new_unchecked(
             self.max_degree,
             self.wtns.len(),
-            self.constraints.iter().fold(0, |acc, v|acc+v.gate.o()),
+            self.num_rhs,
             Box::new(f)
         )
     }
@@ -124,8 +124,7 @@ impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
 
         let mut protostar = ConstraintSystem::<'a, F>{wtns : self.wtns.clone(), constraints : vec![], max_degree: self.max_degree+2, num_rounds: self.num_rounds+1, num_rhs: 0};
 
-        let num_constraints = self.constraints.len();
-        let sq = (num_constraints+1).sqrt(); // ceil of a square root
+        let sq = (self.num_rhs+1).sqrt(); // ceil of a square root
 
         let one = protostar.wtns[0].clone();
         let mut alphas = vec![one];
@@ -133,11 +132,23 @@ impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
 
         for i in 1..sq {
             {
-                let tmp = protostar.alloc(VarKind::Challenge(self.num_rounds-1)).clone();
+                let tmp = protostar.alloc({
+                    match i {
+                        1 => VarKind::Challenge(self.num_rounds-1),
+                        _ => VarKind::Round(self.num_rounds),
+                        }
+                    }
+                ).clone();
                 alphas.push(tmp);
             }
             {
-                let tmp = protostar.alloc(VarKind::Challenge(self.num_rounds-1)).clone();
+                let tmp = protostar.alloc({
+                    match i {
+                        1 => VarKind::Challenge(self.num_rounds-1),
+                        _ => VarKind::Round(self.num_rounds),
+                        }
+                    }
+                ).clone();
                 betas.push(tmp);
             }
         }
@@ -182,9 +193,11 @@ impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
         let f = Box::new(|v : &[F]|{
             let (wtns_normal, wtns_greek_letters) = v.split_at(self.wtns.len());
             let sq = (self.num_rhs+1).sqrt();
-            let (alphas, tmp) = wtns_greek_letters.split_at(sq);
+            let (tmp1, tmp2) = wtns_greek_letters.split_at(sq-1);
+            let mut alphas = vec![wtns_normal[0]];
             let mut betas = vec![wtns_normal[0]];
-            betas.append(&mut ((*tmp).to_vec()));
+            alphas.append(&mut ((*tmp1).to_vec()));
+            betas.append(&mut ((*tmp2).to_vec()));
             let rhs = self.as_gate().exec(wtns_normal);
             let mut acc = F::ZERO;
             for i in 0..rhs.len(){

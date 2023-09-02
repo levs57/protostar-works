@@ -35,10 +35,26 @@ impl<'a, F: PrimeField> Gatebb<'a, F> {
         }, "Sanity check failed - provided f is not a polynomial of degree d");
         Gatebb::<'a>{d,i,o,f}
     } 
- 
     pub fn new_unchecked(d: usize, i: usize, o: usize, f: Box<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self {
         Gatebb::<'a>{d,i,o,f}
     }
+
+    /// converts a nonuniform polynomial to a uniform one
+    /// will not work for relaxation factor = 0, however this never occurs in folding schemes
+    /// increases i by 1 - first argument is a relaxation factor
+    pub fn from_nonuniform(d: usize, i: usize, o: usize, f: Box<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self {
+        let g = |args: &[F]|{
+            let t_inv = args[0].invert().unwrap();
+            let mut args_internal = vec![];
+            for s in 0..i {
+                args_internal.push(t_inv * args[s+1])
+            }
+            f(&args_internal).iter().map(|x|*x*t_inv.pow([d as u64])).collect()
+        };
+
+        Self::new(d, i+1, o, Box::new(g))
+    }
+
 }
 
 pub trait Gate<'a, F : PrimeField> {

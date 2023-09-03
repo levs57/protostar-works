@@ -1,4 +1,4 @@
-use std::{cmp::max, rc::Weak};
+use std::{cmp::max, rc::Weak, iter::repeat};
 
 use ff::PrimeField;
 use num_integer::Roots;
@@ -93,14 +93,49 @@ impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
         self.alloc_priv_internal(self.num_rounds()-1)
     }
 
-    pub fn add_constr_group(&mut self, kind: CommitKind, degree: usize) -> ConstraintGroup<'a, F>{
+    /// Returns index of a constraint group. Can not return the reference on a group itself because crab god angry.
+    pub fn add_constr_group(&mut self, kind: CommitKind, degree: usize) -> usize {
         match kind {
             CommitKind::Zero => assert!(degree == 1, "Zero commit kind is only usable for linear constraints."),
             _ => assert!(degree > 1, "Nonzero commit kinds are only for degree > 1"),
         }
         self.cs.push(ConstraintGroup::<'a,F>{entries: vec![], kind, num_rhs: 0, degree});
-        let l = self.cs.len();
-        self.cs[l-1]
+        self.cs.len()-1
+    }
+
+    /// Computes global id of a variable.
+    pub fn var_global_id(&self, v: Variable, partial_sums: &Vec<usize>) -> usize{
+        match v {
+            Variable::Public(a, b) => partial_sums[a]+b,
+            Variable::Private(a, b) => partial_sums[a]+self.vars[a].pubs+b,
+        }
+    }
+
+    /// Computes partial sums of variable counts.
+    pub fn varcount_partial_sums(&self) -> Vec<usize> {
+        let mut ret = vec![];
+        let mut tmp = 0;
+        for i in 0..self.vars.len() {
+            tmp += (self.vars[i].privs + self.vars[i].pubs);
+            ret.push(tmp);
+        }
+        ret
+    }
+
+    pub fn num_rhs(&self) -> usize {
+        let mut num_rhs = 0;
+        for cg in &self.cs {
+            num_rhs += cg.num_rhs;
+        }
+        num_rhs
+    }
+
+    pub fn max_deg(&self) -> usize{
+        let mut max_deg = 0;
+        for cg in &self.cs {
+            max_deg = max(max_deg, cg.degree);
+        }
+        max_deg
     }
 
 
@@ -163,16 +198,11 @@ impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
         let mut max_deg = 0;
         let mut num_rhs = 0;
 
-        for cg in self.cs {
+        for cg in &self.cs {
             max_deg = max(max_deg, cg.degree);
             num_rhs += cg.num_rhs;
         }
 
-        let mut num_lhs = 0;
-
-        for vg in self.vars{
-            num_lhs += (vg.privs+vg.pubs);
-        }
 
         protostar.new_round(); // Creates a new round in which we will allocate our protostar stuff.
 
@@ -199,6 +229,9 @@ impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
         for i in 1..sq{
             betas.push(protostar.alloc_priv());
         }
+
+
+        let quad = &mut protostar.cs[quad];
 
         for i in 2..sq {
             quad.constrain(
@@ -255,11 +288,13 @@ impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
             )
         );
 
-
         // assumptions:
         // ONE lives in 0-th input
         // total argsize num_lhs + 2sq-2
-        let f = Box::new(|v : &[F]|{
+        let f = Box::new(|v : &[F]|{            
+            let partial_sums = self.varcount_partial_sums(); // Aux data for global variable id.
+            let num_lhs = partial_sums[partial_sums.len()-1];
+            let num_rhs = self.num_rhs();
             let (wtns_normal, wtns_greek_letters) = v.split_at(num_lhs);
             let sq = (num_rhs+1).sqrt();
             let (tmp1, tmp2) = wtns_greek_letters.split_at(sq-1);
@@ -267,20 +302,23 @@ impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
             let mut betas = vec![wtns_normal[0]];
             alphas.append(&mut ((*tmp1).to_vec()));
             betas.append(&mut ((*tmp2).to_vec()));
+
             let mut rhs = vec![];
-            for cg in self.cs {
+            for cg in &self.cs {
                 match cg.kind {
                     CommitKind::Zero => continue,
                     CommitKind::Trivial => panic!("Unexpected group with trivial commitment kind. Pre-protostar trivial commitment kinds are currently unsupported."),
                     _ => (),
-                }
+                }                
+                
+                for constr in &cg.entries {
+                    let args: Vec<_> = constr.inputs.iter()
+                            .map(|var|v[self.var_global_id(*var, &partial_sums)])
+                            .collect();
+                    rhs.append(&mut constr.gate.exec(&args));
 
-                let one_pow = wtns_normal[0].pow([(max_deg - cg.degree)]);
-                
-                
-                for constr in cg.entries{}
+                }
             }
-            let rhs = self.as_gate().exec(wtns_normal);
             let mut acc = F::ZERO;
             for i in 0..rhs.len(){
                 acc += rhs[i]*alphas[i%sq]*betas[i/sq]
@@ -288,12 +326,20 @@ impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
             vec![acc]
         });
 
-        let args = protostar.wtns.clone();
-        protostar.constrain_expose(
+        let mut args = vec![];
+        for (round, vg) in protostar.vars.iter().enumerate(){ // The variables are put into the gate round-by-round, public first.
+            args.append(&mut
+                (0..vg.pubs).map(|id|Variable::Public(round, id)).chain((0..vg.privs).map(|id|Variable::Private(round,id))).collect()
+            )
+        }
+
+        let triv = &mut protostar.cs[triv];
+
+        triv.constrain(
             &args, // We need to constrain everything.
             Box::new(Gatebb::<'a>::new_unchecked(
-                protostar.max_degree,
-                protostar.wtns.len(),
+                max_deg,
+                args.len(),
                 1,
                 f,
             ))

@@ -39,20 +39,20 @@ impl<'a, F: PrimeField> Gatebb<'a, F> {
         Gatebb::<'a>{d,i,o,f}
     }
 
-    /// converts a nonuniform polynomial to a uniform one
-    /// will not work for relaxation factor = 0, however this never occurs in folding schemes
-    /// increases i by 1 - first argument is a relaxation factor
-    pub fn from_nonuniform(d: usize, i: usize, o: usize, f: Box<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self {
+    /// Converts a nonuniform polynomial to a uniform one.
+    /// Will not work for relaxation factor = 0, however this never occurs in folding schemes.
+    /// Increases i by 1 - first argument is a relaxation factor.
+    pub fn from_nonuniform<'b : 'a>(d: &'a usize, i: &'a usize, o: &'a usize, f: &'b Box<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self {
         let g = |args: &[F]|{
             let t_inv = args[0].invert().unwrap();
             let mut args_internal = vec![];
-            for s in 0..i {
+            for s in 0..*i {
                 args_internal.push(t_inv * args[s+1])
             }
-            f(&args_internal).iter().map(|x|*x*t_inv.pow([d as u64])).collect()
+            f(&args_internal).iter().map(|x|*x*t_inv.pow([*d as u64])).collect()
         };
 
-        Self::new(d, i+1, o, Box::new(g))
+        Self::new(*d, *i+1, *o, Box::new(g))
     }
 
 }
@@ -68,6 +68,7 @@ pub trait Gate<'a, F : PrimeField> {
     fn exec(&'a self, input : &[F]) -> Vec<F>;
     /// Returns coefficients of  f(in1 + x in2) in x (for example, 0-th is f(in1) and d-th is f(in2))
     fn cross_terms(&self, in1: &Vec<F>, in2: &Vec<F>) -> Vec<Vec<F>>;
+
 }
 
 impl<'a, F : PrimeField + RootsOfUnity> Gate<'a, F> for Gatebb<'a, F> {

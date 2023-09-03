@@ -30,7 +30,9 @@ impl<'a, F:PrimeField> CSWtns<'a, F>{
         for vg in &cs.vars {
             wtns.push(RoundWtns{pubs: repeat(None).take(vg.pubs).collect(), privs: repeat(None).take(vg.privs).collect()})
         }
-        Self {cs, wtns}
+        let mut prep = Self {cs, wtns};
+        prep.setvar(Variable::Public(0,0), F::ONE);
+        prep
     }
 
     // Should add error resolution at some point, for now it will just panic in case of double assignment.
@@ -49,6 +51,20 @@ impl<'a, F:PrimeField> CSWtns<'a, F>{
 
     pub fn round_commit<G>(&self, round: usize, ck: CkRound<G>) -> CtRound<F, G> where G:CurveAffine<ScalarExt=F>{
         ck.commit(&self.wtns[round])
+    }
+
+    pub fn relax(self) -> CSWtnsRelaxed<'a, F> {
+        let mut err = vec![];
+        for cg in &self.cs.cs {
+            err.push(
+                match cg.kind {
+                    CommitKind::Zero => ErrGroup::Zero,
+                    CommitKind::Trivial => ErrGroup::Trivial(repeat(F::ZERO).take(cg.num_rhs).collect()),
+                    CommitKind::Group => ErrGroup::Group(repeat(F::ZERO).take(cg.num_rhs).collect()),
+                }
+            )
+        }
+        CSWtnsRelaxed { cs: self, err }
     }
 
 }

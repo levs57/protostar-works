@@ -122,10 +122,15 @@ impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
         ret
     }
 
+    /// Returns size of the error vector.
     pub fn num_rhs(&self) -> usize {
         let mut num_rhs = 0;
         for cg in &self.cs {
-            num_rhs += cg.num_rhs;
+            match cg.kind {
+                CommitKind::Zero => (),
+                CommitKind::Trivial => panic!("Unexpected trivial commitment kind."),
+                CommitKind::Group => {num_rhs += cg.num_rhs},
+            }
         }
         num_rhs
     }
@@ -139,51 +144,6 @@ impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
     }
 
 
-    /// Returns a single gate computing entire rhs on the witness vector. Uniformizes the constraint system.
-    /// Will not work if there are already constraints with public commit type.
-    /// Warning: separate reduction of linear constraints is NOT IMPLEMENTED. Do not use linear constraints.
-    // pub fn as_gate(&'a self) -> Gatebb<'a, F> {
-    //     let mut max_degree = 0;
-    //     for csgroup in self.cs {
-    //         max_degree = max(max_degree, csgroup.degree)
-    //     }
-    //     let f = |inputs: &[F]| {
-    //         let mut ones = vec![inputs[0]]; // powers of the relaxation factor
-    //         for _ in 1..max_degree {
-    //             ones.push(ones[0] * ones[ones.len()-1])
-    //         }
-    //         let mut ret = vec![];
-    //         for csgroup in self.cs{
-    //             for constr in csgroup.entries {
-    //                 assert!(match constr.kind {CommitKind::Group => true, _ => false}, "Can not uniformize constraints with trivial commitment scheme.");
-    //                 let deg_offset = self.max_degree-constr.gate.d();
-    //                 ret.append(
-    //                     {
-    //                         let tmp : Vec<_> = self.wtns.iter().map(|x|inputs[x.n]).collect();
-    //                         &mut constr.gate.exec(
-    //                             &tmp
-    //                         ).iter()
-    //                         .map(|x|{
-    //                             match deg_offset {
-    //                                 0 => *x,
-    //                                 offset => *x*ones[offset-1],
-    //                             }
-    //                         })
-    //                         .collect()
-    //                     }
-    //                 );                  
-    //             }
-    //         }
-    //         ret
-    //     };
-    //     Gatebb::<'a>::new_unchecked(
-    //         self.max_degree,
-    //         self.wtns.len(),
-    //         self.num_rhs,
-    //         Box::new(f)
-    //     )
-    // }
-
     fn div_ceil(a: usize, b: usize) -> usize{
         (a+b-1)/b
     }
@@ -195,13 +155,8 @@ impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
         assert!(self.vars[0].pubs>0, "Constraint system must have 1st input.");
         let mut protostar = ConstraintSystem::<'a, F>{vars : self.vars.clone(), cs : vec![]};
 
-        let mut max_deg = 0;
-        let mut num_rhs = 0;
-
-        for cg in &self.cs {
-            max_deg = max(max_deg, cg.degree);
-            num_rhs += cg.num_rhs;
-        }
+        let max_deg = self.max_deg();
+        let num_rhs = self.num_rhs();
 
 
         protostar.new_round(); // Creates a new round in which we will allocate our protostar stuff.
@@ -288,9 +243,6 @@ impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
             )
         );
 
-        // assumptions:
-        // ONE lives in 0-th input
-        // total argsize num_lhs + 2sq-2
         let f = Box::new(|v : &[F]|{            
             let partial_sums = self.varcount_partial_sums(); // Aux data for global variable id.
             let num_lhs = partial_sums[partial_sums.len()-1];
@@ -344,6 +296,25 @@ impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
                 f,
             ))
         );
+
+        let lin = &mut protostar.cs[lin];
+
+        // This is ugly, but I don't want to bother with DynClone for now.
+        for cg in &self.cs {
+            match cg.kind {
+                CommitKind::Trivial => {
+                    for constr in &cg.entries {
+                        lin.constrain(&constr.inputs, Box::new(Gatebb::new_unchecked(
+                            constr.gate.d(),
+                            constr.gate.i(),
+                            constr.gate.o(),
+                            Box::new(|x|constr.gate.exec(x))))
+                        )
+                    } 
+                },
+                _ => ()
+            }
+        }
 
         protostar
 

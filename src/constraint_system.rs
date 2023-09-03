@@ -24,10 +24,10 @@ pub struct Constraint<'a, F: PrimeField>{
 }
 
 pub struct ConstraintGroup<'a, F: PrimeField>{
-    entries: Vec<Constraint<'a, F>>,
-    kind: CommitKind,
-    num_rhs: usize,
-    degree: usize,
+    pub entries: Vec<Constraint<'a, F>>,
+    pub kind: CommitKind,
+    pub num_rhs: usize,
+    pub degree: usize,
 }
 
 impl<'a, F: PrimeField> ConstraintGroup<'a, F>{
@@ -41,8 +41,8 @@ impl<'a, F: PrimeField> ConstraintGroup<'a, F>{
 
 #[derive(Clone)]
 pub struct VarGroup{
-    privs: usize,
-    pubs: usize,
+    pub privs: usize,
+    pub pubs: usize,
 }
 
 impl VarGroup {
@@ -52,8 +52,8 @@ impl VarGroup {
 }
 
 pub struct ConstraintSystem<'a, F: PrimeField>{
-    vars: Vec<VarGroup>,
-    cs : Vec<ConstraintGroup<'a, F>>,
+    pub vars: Vec<VarGroup>,
+    pub cs : Vec<ConstraintGroup<'a, F>>,
 }
 
 impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{

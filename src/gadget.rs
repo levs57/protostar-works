@@ -1,9 +1,56 @@
+use std::iter::repeat;
+
 use ff::PrimeField;
 use halo2curves::CurveAffine;
 
-use crate::{gate::{self, Gate}, constraint_system::{self, ConstraintSystem}, commitment::Ck};
+use crate::{gate::{self, Gate}, constraint_system::{self, ConstraintSystem, Variable}, commitment::{CommitmentKey, CtS}};
 
-pub struct Circuit<'a, F : PrimeField, G : CurveAffine<Base=F>, CK: Ck<G>> {
+pub struct RoundWtns<F: PrimeField> {
+    pub pubs: Vec<Option<F>>,
+    pub privs: Vec<Option<F>>,
+}
+
+/// CS system + aux witness data.
+pub struct CSWtns<'a, F: PrimeField> {
+    pub cs : &'a ConstraintSystem<'a, F>,
+    pub wtns : Vec<RoundWtns<F>>,
+}
+
+impl<'a, F:PrimeField> CSWtns<'a, F>{
+
+    pub fn new(cs: &'a ConstraintSystem<'a, F>) -> Self{
+        let mut wtns = vec![];
+        for vg in &cs.vars {
+            wtns.push(RoundWtns{pubs: repeat(None).take(vg.pubs).collect(), privs: repeat(None).take(vg.privs).collect()})
+        }
+        Self {cs, wtns}
+    }
+
+    // Should add error resolution at some point, for now it will just panic in case of double assignment.
+    pub fn setvar(&mut self, var: Variable, value: F) -> (){
+        match var {
+            Variable::Public(r, i) => {
+                match self.wtns[r].pubs[i] {None => (), _ => panic!("Double assignment error.")};
+                self.wtns[r].pubs[i] = Some(value)
+            },
+            Variable::Private(r, i) => {
+                match self.wtns[r].privs[i] {None => (), _ => panic!("Double assignment error.")};
+                self.wtns[r].privs[i] = Some(value)
+            },
+        }
+    }
+
+
+}
+
+
+
+// Make CS system with partial witness / with full witness, so I can reuse it for NIFS.
+// Do not choose how prover's advices works yet, just supply private inputs for each round.
+// Gadget, by definition, takes partially computed witness, and computes a bit more data.
+// It can depend on other arbitrary inputs.
+
+pub struct Circuit<'a, F : PrimeField, G : CurveAffine<Base=F>, CK: CommitmentKey<G, CtS<G>>> {
     cs : ConstraintSystem<'a, F>,
     pub_values : Vec<Option<F>>,
     round_values : Vec<Vec<Option<F>>>,

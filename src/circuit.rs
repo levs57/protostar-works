@@ -55,43 +55,42 @@ impl<'a, F:PrimeField> PolyOp<'a, F> {
     }
 }
 
-pub struct Operation<'a, F: PrimeField>{
-    op: Vec<Box<dyn 'a + Fn(&mut CSWtns<'a, F>) -> ()>>,
-    inputs: Vec<Variable>,
-    outputs: Vec<Variable>,
+pub trait AdviceCtx<'a, F: PrimeField>{
 }
-pub struct Circuit<'a, F: PrimeField> {
+
+pub struct Circuit<'a, F: PrimeField, Ctx: AdviceCtx<'a, F>> {
     pub cs: CSWtns<'a, F>,
-    pub ops: Vec<Operation<'a, F>>,
     pub mode: ExecMode,
 
     pub max_degree: usize,
 
     pub current_exec_round: usize,
     pub vars_curr: VarGroup,
+
+    pub ctx: Ctx,
 }
 
-impl<'a, F:PrimeField+RootsOfUnity> Circuit<'a, F>{
-    pub fn new(max_degree:usize) -> Self {
+impl<'a, F:PrimeField+RootsOfUnity, Ctx:AdviceCtx<'a, F>> Circuit<'a, F, Ctx>{
+    pub fn new(max_degree:usize, ctx: Ctx) -> Self {
         let mut cs = ConstraintSystem::new();
         cs.add_constr_group(CommitKind::Group, max_degree);
         Circuit{cs : CSWtns::new(cs),
-                ops : vec![],
                 mode : ExecMode::Constrain,
                 max_degree,
                 vars_curr : VarGroup{privs: 0, pubs: 1},
                 current_exec_round: 0,
+                ctx
             }
     }
     
-    pub fn alloc_pub(&mut self) -> Variable {
+    fn alloc_pub(&mut self) -> Variable {
         match self.mode {
             ExecMode::Constrain => self.cs.cs.alloc_pub(),
             ExecMode::Execute => {self.vars_curr.pubs += 1; Variable::Public(self.current_exec_round, self.vars_curr.pubs-1)},
         }
     }
 
-    pub fn alloc_priv(&mut self) -> Variable {
+    fn alloc_priv(&mut self) -> Variable {
         match self.mode {
             ExecMode::Constrain => self.cs.cs.alloc_priv(),
             ExecMode::Execute => {self.vars_curr.privs += 1; Variable::Private(self.current_exec_round, self.vars_curr.privs-1)},
@@ -101,7 +100,7 @@ impl<'a, F:PrimeField+RootsOfUnity> Circuit<'a, F>{
     pub fn constrain<T: 'a + Gate<'a, F> + Sized>(&mut self, inputs: &[Variable], gate: T) -> (){
         match self.mode {
             ExecMode::Constrain => self.cs.cs.cs[0].constrain(inputs, Box::new(gate.adjust(self.max_degree))),
-            ExecMode::Execute => panic!("Trying to add constraints in execution mode.")
+            ExecMode::Execute => (),
         }
     }
 
@@ -141,6 +140,32 @@ impl<'a, F:PrimeField+RootsOfUnity> Circuit<'a, F>{
                 ret
             }
         }
+    }
+
+    pub fn advice_priv(&mut self, f: Box<dyn 'a + Fn(&Self, Variable) -> F>) -> Variable{
+        let var = self.alloc_priv();
+        match self.mode {
+            ExecMode::Constrain => {
+                ()
+            }
+            ExecMode::Execute => {
+                self.cs.setvar(var, f(self, var))
+            }
+        };
+        var
+    }
+
+    pub fn advice_pub(&mut self, f: Box<dyn 'a + Fn(&Self, Variable) -> F>) -> Variable{
+        let var = self.alloc_pub();
+        match self.mode {
+            ExecMode::Constrain => {
+                ()
+            }
+            ExecMode::Execute => {
+                self.cs.setvar(var, f(self, var))
+            }
+        };
+        var
     }
 }
 

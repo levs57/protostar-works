@@ -85,24 +85,3 @@ impl<'a, F: PrimeField, G:CurveAffine<ScalarExt=F>> CSSystemCommit<F, G, CkRelax
         ck.commit(&(&self.cs.wtns, &self.err))
     }
 }
-
-
-// Make CS system with partial witness / with full witness, so I can reuse it for NIFS.
-// Do not choose how prover's advices works yet, just supply private inputs for each round.
-// Gadget, by definition, takes partially computed witness, and computes a bit more data.
-// It can depend on other arbitrary inputs.
-
-// pub struct Circuit<'a, F : PrimeField, G : CurveAffine<Base=F>, CK: CommitmentKey<G, CtS<G>>> {
-//     cs : ConstraintSystem<'a, F>,
-//     pub_values : Vec<Option<F>>,
-//     round_values : Vec<Vec<Option<F>>>,
-//     challenges : Vec<Vec<Option<F>>>,
-//     exec : Vec<Box<dyn 'a + FnMut(&mut Self) -> ()>>,
-//     ck : CK,
-// }
-
-
-
-// pub fn apply<'a, F:PrimeField>(cs: &mut ConstraintSystem<'a, F>, gate: Box<dyn 'a + Gate<'a, F>>) {
-
-// }

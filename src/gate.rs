@@ -1,4 +1,4 @@
-use std::iter::repeat;
+use std::{iter::repeat, cmp::max, marker::PhantomData};
 
 use group::{Group, Curve};
 use ff::{Field, PrimeField};
@@ -12,6 +12,8 @@ pub trait RootsOfUnity where Self : PrimeField{
     fn roots_of_unity(power: u64, logorder: usize) -> Self;
     /// Returns power of 1/2.
     fn half_pow(power: u64) -> Self;
+    /// Returns FFT of the binomial.
+    fn binomial_FFT(power: usize, logorder: usize) -> Vec<Self>;
 }
 
 /// A generic black-box gate. This API is unsafe, you must guarantee that given value is a
@@ -57,6 +59,12 @@ impl<'a, F: PrimeField> Gatebb<'a, F> {
 
 }
 
+pub struct AdjustedGate<'a, F: PrimeField, T: Gate<'a, F> + Sized> {
+    gate: T,
+    deg: usize,
+    _marker: PhantomData<&'a F>
+}
+
 pub trait Gate<'a, F : PrimeField> {
     /// Returns degree.
     fn d(&self) -> usize;
@@ -68,7 +76,8 @@ pub trait Gate<'a, F : PrimeField> {
     fn exec(&'a self, input : &[F]) -> Vec<F>;
     /// Returns coefficients of  f(in1 + x in2) in x (for example, 0-th is f(in1) and d-th is f(in2))
     fn cross_terms(&self, in1: &Vec<F>, in2: &Vec<F>) -> Vec<Vec<F>>;
-
+    /// Computes cross-terms for the higher degree by using symbolic multiplication by binomial.
+    fn cross_terms_adjust(&self, in1: &Vec<F>, in2: &Vec<F>, deg: usize) -> Vec<Vec<F>>;
 }
 
 impl<'a, F : PrimeField + RootsOfUnity> Gate<'a, F> for Gatebb<'a, F> {
@@ -91,9 +100,14 @@ impl<'a, F : PrimeField + RootsOfUnity> Gate<'a, F> for Gatebb<'a, F> {
         assert!(tmp.len() == self.o);
         tmp
     }
+
     /// Returns coefficients of  f(in1 + x in2) in x (for example, 0-th is f(in1) and d-th is f(in2))
     fn cross_terms(&self, in1: &Vec<F>, in2: &Vec<F>) -> Vec<Vec<F>> {
-        let mut d = self.d;
+        self.cross_terms_adjust(in1, in2, self.d())
+    }    
+    
+    fn cross_terms_adjust(&self, in1: &Vec<F>, in2: &Vec<F>, deg: usize) -> Vec<Vec<F>> {
+        let mut d = deg;
         if d == 0 {
             return vec![self.exec(in1)]
         }
@@ -109,12 +123,22 @@ impl<'a, F : PrimeField + RootsOfUnity> Gate<'a, F> for Gatebb<'a, F> {
         let omega_inv = F::roots_of_unity(pow(2, logorder)-1, logorder);
         let scale = F::half_pow(logorder as u64);
 
+        let binomial = F::binomial_FFT(deg-self.d(), logorder);
+
         for i in 0..pow(2, logorder){
             let t = F::roots_of_unity(i, logorder);
             let fgsds : Vec<_> = in1.iter().zip(in2.iter()).map(|(x,y)| (*x + *y * t)).collect();
             let tmp = self.exec(&fgsds);
-            for j in 0..self.o {
+            for j in 0..self.o() {
                 values[j].push(tmp[j]);
+            }
+        }
+
+        if deg>self.d(){
+            for i in 0..pow(2, logorder){
+                for j in 0..self.o() {
+                    values[j][i] *= binomial[i];
+                }
             }
         }
 
@@ -142,5 +166,38 @@ impl<'a, F : PrimeField + RootsOfUnity> Gate<'a, F> for Gatebb<'a, F> {
 
         ret
 
+    }
+}
+
+impl<'a, F: PrimeField+RootsOfUnity> AdjustedGate<'a, F, Gatebb<'a, F>> {
+    pub fn from(gate: Gatebb<'a, F>, deg: usize) -> Self {
+        assert!(deg >= gate.d(), "Can only adjust upwards");
+        AdjustedGate { gate, deg, _marker : PhantomData }
+    }
+}
+
+impl<'a, F: PrimeField, T: Gate<'a, F>> Gate<'a, F> for AdjustedGate<'a, F, T>{
+    fn d(&self) -> usize {
+        self.deg
+    }
+
+    fn i(&self) -> usize {
+        self.gate.i()
+    }
+
+    fn o(&self) -> usize {
+        self.gate.o()
+    }
+
+    fn exec(&'a self, input : &[F]) -> Vec<F> {
+        self.gate.exec(input)
+    }
+
+    fn cross_terms(&self, in1: &Vec<F>, in2: &Vec<F>) -> Vec<Vec<F>> {
+        self.gate.cross_terms_adjust(in1, in2, self.deg)
+    }
+
+    fn cross_terms_adjust(&self, in1: &Vec<F>, in2: &Vec<F>, deg: usize) -> Vec<Vec<F>> {
+        panic!("Should not be called on adjusted gate")
     }
 }

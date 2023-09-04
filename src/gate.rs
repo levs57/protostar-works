@@ -78,6 +78,8 @@ pub trait Gate<'a, F : PrimeField> {
     fn cross_terms(&self, in1: &Vec<F>, in2: &Vec<F>) -> Vec<Vec<F>>;
     /// Computes cross-terms for the higher degree by using symbolic multiplication by binomial.
     fn cross_terms_adjust(&self, in1: &Vec<F>, in2: &Vec<F>, deg: usize) -> Vec<Vec<F>>;
+    /// Returns adjusted gate.
+    fn adjust(self, deg: usize) -> AdjustedGate<'a, F, Self> where Self: Sized;
 }
 
 impl<'a, F : PrimeField + RootsOfUnity> Gate<'a, F> for Gatebb<'a, F> {
@@ -167,12 +169,10 @@ impl<'a, F : PrimeField + RootsOfUnity> Gate<'a, F> for Gatebb<'a, F> {
         ret
 
     }
-}
 
-impl<'a, F: PrimeField+RootsOfUnity> AdjustedGate<'a, F, Gatebb<'a, F>> {
-    pub fn from(gate: Gatebb<'a, F>, deg: usize) -> Self {
-        assert!(deg >= gate.d(), "Can only adjust upwards");
-        AdjustedGate { gate, deg, _marker : PhantomData }
+    fn adjust(self, deg: usize) -> AdjustedGate<'a, F, Self> where Self: Sized {
+        assert!(deg >= self.d(), "Can only adjust upwards");
+        AdjustedGate { gate : self, deg, _marker : PhantomData }
     }
 }
 
@@ -199,5 +199,10 @@ impl<'a, F: PrimeField, T: Gate<'a, F>> Gate<'a, F> for AdjustedGate<'a, F, T>{
 
     fn cross_terms_adjust(&self, in1: &Vec<F>, in2: &Vec<F>, deg: usize) -> Vec<Vec<F>> {
         panic!("Should not be called on adjusted gate")
+    }
+
+    fn adjust(self, deg: usize) -> AdjustedGate<'a, F, Self> where Self: Sized {
+        assert!(deg >= self.d(), "Can only adjust upwards");
+        AdjustedGate { gate : self, deg, _marker : PhantomData }
     }
 }

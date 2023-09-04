@@ -19,13 +19,13 @@ pub trait CSSystemCommit<F: PrimeField, G: CurveAffine<ScalarExt=F>, CK: Commitm
 
 /// CS system + aux witness data.
 pub struct CSWtns<'a, F: PrimeField> {
-    pub cs : &'a ConstraintSystem<'a, F>,
+    pub cs : ConstraintSystem<'a, F>,
     pub wtns : Vec<RoundWtns<F>>,
 }
 
 impl<'a, F:PrimeField> CSWtns<'a, F>{
 
-    pub fn new(cs: &'a ConstraintSystem<'a, F>) -> Self{
+    pub fn new(cs: ConstraintSystem<'a, F>) -> Self{
         let mut wtns = vec![];
         for vg in &cs.vars {
             wtns.push(RoundWtns{pubs: repeat(None).take(vg.pubs).collect(), privs: repeat(None).take(vg.privs).collect()})
@@ -39,13 +39,24 @@ impl<'a, F:PrimeField> CSWtns<'a, F>{
     pub fn setvar(&mut self, var: Variable, value: F) -> (){
         match var {
             Variable::Public(r, i) => {
-                match self.wtns[r].pubs[i] {None => (), _ => panic!("Double assignment error.")};
+                match self.wtns[r].pubs[i] {None => (), _ => panic!("Double assignment error at public variable {}, {}.", r, i)};
                 self.wtns[r].pubs[i] = Some(value)
             },
             Variable::Private(r, i) => {
-                match self.wtns[r].privs[i] {None => (), _ => panic!("Double assignment error.")};
+                match self.wtns[r].privs[i] {None => (), _ => panic!("Double assignment error at private variable {}, {}.", r, i)};
                 self.wtns[r].privs[i] = Some(value)
             },
+        }
+    }
+
+    pub fn getvar(&self, var: Variable) -> F {
+        match var {
+            Variable::Public(r, i) => {
+                match self.wtns[r].pubs[i] {Some(x)=>x, _=>panic!("Trying to retrieve unassigned public variable {}, {}.", r, i)}
+            }
+            Variable::Private(r, i) => {
+                match self.wtns[r].privs[i] {Some(x)=>x, _=>panic!("Trying to retrieve unassigned private variable {}, {}.", r, i)}
+            }
         }
     }
 

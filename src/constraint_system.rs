@@ -59,11 +59,11 @@ pub struct ConstraintSystem<'a, F: PrimeField>{
 impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
     /// Returns a constraint system with a single public variable corresponding to 1.
     /// You would need different API for supernovaish constructions. Too lazy to do it now.
-    // pub fn new() -> Self {
-    //     let mut tmp = Self{wtns : vec![], constraints : vec![], max_degree : 0, num_rounds : 1, num_rhs : 0};
-    //     let _one = tmp.alloc(VarKind::Public);
-    //     tmp
-    // }
+    pub fn new() -> Self {
+        let mut tmp = Self{vars: vec![], cs: vec![]};
+        let _one = tmp.alloc_pub();
+        tmp
+    }
 
     pub fn num_rounds(&self) -> usize{
         self.vars.len()

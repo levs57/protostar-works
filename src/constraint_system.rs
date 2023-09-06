@@ -56,13 +56,10 @@ pub struct ConstraintSystem<'a, F: PrimeField>{
     pub cs : Vec<ConstraintGroup<'a, F>>,
 }
 
-impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
-    /// Returns a constraint system with a single public variable corresponding to 1.
-    /// You would need different API for supernovaish constructions. Too lazy to do it now.
+impl<'a, F: PrimeField> ConstraintSystem<'a, F>{
+    /// Returns an emptry constraint system.
     pub fn new() -> Self {
-        let mut tmp = Self{vars: vec![], cs: vec![]};
-        let _one = tmp.alloc_pub();
-        tmp
+        Self{vars: vec![VarGroup::new()], cs: vec![]}
     }
 
     pub fn num_rounds(&self) -> usize{
@@ -150,7 +147,7 @@ impl<'a, F: PrimeField + RootsOfUnity> ConstraintSystem<'a, F>{
 
     /// Returns a protostar transform of the constraint system.
     /// Round combining is not implemented, but you can add additional constraints after doing protostar transform.
-    pub fn protostarize(&'a self) -> Self {
+    pub fn protostarize(&'a self) -> Self where F:RootsOfUnity{
 
         assert!(self.vars[0].pubs>0, "Constraint system must have 1st input.");
         let mut protostar = ConstraintSystem::<'a, F>{vars : self.vars.clone(), cs : vec![]};

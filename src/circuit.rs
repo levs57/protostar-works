@@ -1,28 +1,21 @@
-use std::{iter::repeat, cmp::max};
+use std::{iter::repeat, rc::Rc, cell::Cell};
 
 use ff::PrimeField;
-use num_traits::{Pow, pow};
+use num_traits::pow;
 use rand_core::OsRng;
 
-use crate::{witness::CSWtns, gate::{Gate, Gatebb, RootsOfUnity, AdjustedGate}, constraint_system::{Variable, ConstraintSystem, CommitKind, VarGroup}};
+use crate::{witness::CSWtns, gate::{Gatebb, RootsOfUnity, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind}};
 
-pub enum ExecMode{
-    Constrain,
-    Execute,
-}
-
-/// A polynomial operation. First argument is a relaxation factor, passed separately.
-/// Must be homogeneous (current API limitation, need to remove it at some point).
-/// In a gate, it is by convention transformed to be first input.
+#[derive(Clone)]
 pub struct PolyOp<'a, F:PrimeField>{
     pub d: usize,
     pub i: usize,
     pub o: usize,
-    pub f: Box<dyn Fn(F, &[F]) -> Vec<F> + 'a>,
+    pub f: Rc<dyn Fn(F, &[F]) -> Vec<F> + 'a>,
 }
 
 impl<'a, F:PrimeField> PolyOp<'a, F> {
-    pub fn new(d: usize, i: usize, o: usize, f: Box<dyn Fn(F, &[F]) -> Vec<F> + 'a>) -> Self{
+    pub fn new(d: usize, i: usize, o: usize, f: Rc<dyn Fn(F, &[F]) -> Vec<F> + 'a>) -> Self{
         let random_input : (_, Vec<_>) = (F::random(OsRng) , repeat(F::random(OsRng)).take(i).collect()); 
         let random_input_2 : (_, Vec<_>) = (random_input.0*F::from(2), random_input.1.iter().map(|x| *x*F::from(2)).collect());
         assert!({
@@ -34,16 +27,16 @@ impl<'a, F:PrimeField> PolyOp<'a, F> {
             flag
         }, "Sanity check failed - provided f is not a polynomial of degree d");
  
-        PolyOp { d, i, o, f }
+        Self { d, i, o, f }
     }
 
-    pub fn into_gate(&'a self) -> Gatebb<'a, F> {
+    pub fn into_gate(self) -> Gatebb<'a, F> {
         let d = self.d;
         let i = self.i + 1 + self.o;
         let o = self.o;
 
-        let f = |args: &[F]| {
-            let (inputs, outputs) = args.split_at(self.i);
+        let f = move |args: &[F]| {
+            let (inputs, outputs) = args.split_at(self.i+1);
             let (one, inputs) = inputs.split_at(1);
             let one = one[0];
             let results = (self.f)(one, &inputs);
@@ -53,119 +46,235 @@ impl<'a, F:PrimeField> PolyOp<'a, F> {
 
         Gatebb::new(d, i, o, Box::new(f))
     }
-}
 
-pub trait AdviceCtx<'a, F: PrimeField>{
-}
-
-pub struct Circuit<'a, F: PrimeField, Ctx: AdviceCtx<'a, F>> {
-    pub cs: CSWtns<'a, F>,
-    pub mode: ExecMode,
-
-    pub max_degree: usize,
-
-    pub current_exec_round: usize,
-    pub vars_curr: VarGroup,
-
-    pub ctx: Ctx,
-}
-
-impl<'a, F:PrimeField+RootsOfUnity, Ctx:AdviceCtx<'a, F>> Circuit<'a, F, Ctx>{
-    pub fn new(max_degree:usize, ctx: Ctx) -> Self {
-        let mut cs = ConstraintSystem::new();
-        cs.add_constr_group(CommitKind::Group, max_degree);
-        Circuit{cs : CSWtns::new(cs),
-                mode : ExecMode::Constrain,
-                max_degree,
-                vars_curr : VarGroup{privs: 0, pubs: 1},
-                current_exec_round: 0,
-                ctx
-            }
+    pub fn allocate(self, i: Vec<Variable>, o: Vec<Variable>) -> PolyOpAllocated<'a, F> {
+        PolyOpAllocated { op : self, i, o }
     }
-    
-    fn alloc_pub(&mut self) -> Variable {
-        match self.mode {
-            ExecMode::Constrain => self.cs.cs.alloc_pub(),
-            ExecMode::Execute => {self.vars_curr.pubs += 1; Variable::Public(self.current_exec_round, self.vars_curr.pubs-1)},
+}
+
+pub struct PolyOpAllocated<'a, F: PrimeField> {
+    op: PolyOp<'a, F>,
+    i: Vec<Variable>,
+    o: Vec<Variable>,
+}
+
+#[derive(Clone, Copy)]
+/// Once mutable field value that implements copy.
+pub struct MaybeValue<F: PrimeField> {
+    value: F,
+    flag: bool
+}
+
+impl<F: PrimeField> MaybeValue<F> {
+    pub fn new() -> Self {
+        MaybeValue { value : F::ZERO, flag: false }
+    }
+}
+
+/// A value used for advices. Can be shared between multiple circuits, in order to enable layered constructions.
+pub struct ExternalValue<F: PrimeField> {
+    v: Cell<MaybeValue<F>>,
+}
+
+impl<F: PrimeField> ExternalValue<F> {
+    pub fn new() -> Self {
+        Self { v : Cell::new(MaybeValue::new())}
+    }
+
+    pub fn get(&self) -> F {
+        let tmp = self.v.get();
+        if tmp.flag { 
+            tmp.value
+        } else {
+            panic!("Unassigned external value error.")
         }
     }
 
-    fn alloc_priv(&mut self) -> Variable {
-        match self.mode {
-            ExecMode::Constrain => self.cs.cs.alloc_priv(),
-            ExecMode::Execute => {self.vars_curr.privs += 1; Variable::Private(self.current_exec_round, self.vars_curr.privs-1)},
-        }    
+    pub fn set(&self, value: F) -> () {
+        let tmp = self.v.get();
+        if tmp.flag {panic!("Can not assign external value twice.")}
+        self.v.set(MaybeValue {value, flag:true })
+    }
+}
+
+impl<'a, F: PrimeField> Advice<'a, F> {
+    pub fn new(ivar: usize, iext:usize, o: usize, f: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'a>) -> Self{
+        Self{ ivar, iext, o, f }
+    }
+
+    pub fn allocate(self: Advice<'a, F>, ivar: Vec<Variable>, iext: Vec<&'a ExternalValue<F>>, o: Vec<Variable>) -> AdviceAllocated<'a, F> {
+        AdviceAllocated { adv : self , ivar, iext, o }
+    }
+ }
+
+ #[derive(Clone)]
+ pub struct Advice<'a, F: PrimeField> {
+    pub ivar: usize,
+    pub iext: usize,
+    pub o: usize,
+    pub f: Rc<dyn Fn(&[F], &[F])-> Vec<F> + 'a>,
+}
+ pub struct AdviceAllocated<'a, F: PrimeField> {
+    adv: Advice<'a, F>,
+    ivar: Vec<Variable>,
+    iext: Vec<&'a ExternalValue<F>>,
+    o: Vec<Variable>,
+ }
+
+pub enum Operation<'a, F: PrimeField> {
+    Poly(PolyOpAllocated<'a, F>),
+    Adv(AdviceAllocated<'a, F>),
+    RoundLabel(usize),
+}
+
+pub struct Circuit<'a, F: PrimeField> {
+    pub cs: CSWtns<'a, F>,
+    pub ops: Vec<Operation<'a, F>>,
+    pub max_degree: usize,
+    pub finalized: bool,
+    pub pc : usize,
+}
+
+impl<'a, F: PrimeField + RootsOfUnity> Circuit<'a, F>{
+    pub fn new(max_degree: usize) -> Self {
+        let mut cs = ConstraintSystem::new();
+        cs.add_constr_group(CommitKind::Zero, 1);
+        cs.add_constr_group(CommitKind::Group, max_degree);
+        let mut prep = Self{
+                cs : CSWtns::new(cs),
+                ops: vec![],
+                max_degree,
+                finalized: false,
+                pc : 0,
+            };
+        let adv = Advice::new(0,0,1, Rc::new(|_,_|vec![F::ONE]));
+        let tmp = prep.advice_pub(adv, vec![], vec![]);
+        match tmp[0] {
+            Variable::Public(0,0) => (),
+            _ => panic!("One has allocated incorrectly. This should never fail. Abort mission."),
+        };
+        prep
+    }
+
+    pub fn advice(&mut self, adv: Advice<'a, F>, ivar: Vec<Variable>, iext: Vec<&'a ExternalValue<F>>) -> Vec<Variable> {
+        assert!(!self.finalized, "Circuit is already built.");
+        assert!(ivar.len() == adv.ivar, "Incorrect amount of inputs at operation {}", self.ops.len());
+        assert!(iext.len() == adv.iext, "Incorrect amount of advice inputs at operation {}", self.ops.len());
+        let mut output = vec![];
+        for _ in 0..adv.o {
+            output.push( self.cs.alloc_priv() );
+        }
+        self.ops.push(Operation::Adv(adv.allocate(ivar, iext, output.clone())));
+        output
+    }
+
+    pub fn advice_pub(&mut self, adv: Advice<'a, F>, ivar: Vec<Variable>, iext: Vec<&'a ExternalValue<F>>) -> Vec<Variable> {
+        assert!(!self.finalized, "Circuit is already built.");
+        assert!(ivar.len() == adv.ivar, "Incorrect amount of inputs at operation {}", self.ops.len());
+        assert!(iext.len() == adv.iext, "Incorrect amount of advice inputs at operation {}", self.ops.len());
+        let mut output = vec![];
+        for _ in 0..adv.o {
+            output.push( self.cs.alloc_pub() );
+        }
+        self.ops.push(Operation::Adv(adv.allocate(ivar, iext, output.clone())));
+        output
+    }
+
+    pub fn apply(&mut self, polyop: PolyOp<'a, F>, i: Vec<Variable>) -> Vec<Variable> {
+        assert!(!self.finalized, "Circuit is already built.");
+        assert!(i.len() == polyop.i, "Incorrect amount of inputs at operation {}", self.ops.len());
+        let mut output = vec![];
+        for _ in 0..polyop.o {
+            output.push( self.cs.alloc_priv() );
+        }
+
+        let mut gate_io = vec![Variable::Public(0,0)];
+        gate_io.append(&mut i.clone());
+        gate_io.append(&mut output.clone());
+        if polyop.d == 0 {panic!("Operation {} has degree 0, which is banned.", self.ops.len())}
+        if polyop.d > self.max_degree {panic!("Degree of operation {} is too large!", self.ops.len())};
+        if polyop.d == 1 {
+            self.cs.cs.cs[0].constrain(&gate_io, Box::new(polyop.clone().into_gate()));
+        } else {
+            self.cs.cs.cs[1].constrain(&gate_io, Box::new(polyop.clone().into_gate()));
+        }
+        
+        self.ops.push(Operation::Poly(polyop.allocate(i, output.clone())));
+
+        output
+    }
+
+    pub fn apply_pub(&mut self, polyop: PolyOp<'a, F>, i: Vec<Variable>) -> Vec<Variable> {
+        assert!(!self.finalized, "Circuit is already built.");
+        assert!(i.len() == polyop.i, "Incorrect amount of inputs at operation {}", self.ops.len());
+        let mut output = vec![];
+        for _ in 0..polyop.o {
+            output.push( self.cs.alloc_pub() );
+        }
+
+        let mut gate_io = vec![Variable::Public(0,0)];
+        gate_io.append(&mut i.clone());
+        gate_io.append(&mut output.clone());
+        if polyop.d == 0 {panic!("Operation {} has degree 0, which is banned.", self.ops.len())}
+        if polyop.d > self.max_degree {panic!("Degree of operation {} is too large!", self.ops.len())};
+        if polyop.d == 1 {
+            self.cs.cs.cs[0].constrain(&gate_io, Box::new(polyop.clone().into_gate()));
+        } else {
+            self.cs.cs.cs[1].constrain(&gate_io, Box::new(polyop.clone().into_gate()));
+        }
+        
+        self.ops.push(Operation::Poly(polyop.allocate(i, output.clone())));
+
+        output
     }
 
     pub fn constrain<T: 'a + Gate<'a, F> + Sized>(&mut self, inputs: &[Variable], gate: T) -> (){
-        match self.mode {
-            ExecMode::Constrain => self.cs.cs.cs[0].constrain(inputs, Box::new(gate.adjust(self.max_degree))),
-            ExecMode::Execute => (),
-        }
+        if gate.d() == 0 {panic!("Trying to constrain with gate of degree 0.")};
+        let mut tmp = 1;
+        if gate.d() == 1 {tmp = 0}
+        self.cs.cs.cs[tmp].constrain(inputs, Box::new(gate.adjust(self.max_degree)));
     }
 
-    pub fn new_round(&mut self) -> (){
-        match self.mode {
-            ExecMode::Constrain => self.cs.cs.new_round(),
-            ExecMode::Execute => {
-                self.current_exec_round += 1;
-                self.vars_curr = VarGroup{privs:0, pubs:0};
-            },
-        }
+
+    pub fn next_round(&mut self) -> () {
+        assert!(!self.finalized, "Circuit is already built.");
+        self.ops.push(Operation::RoundLabel(self.cs.cs.num_rounds()-1));
+        self.cs.cs.new_round();
     }
 
-    pub fn apply(&mut self, op: &'a PolyOp<'a, F>, args: &[Variable]) -> Vec<Variable>{
-        match self.mode {
-            ExecMode::Constrain => {
-                assert!(args.len() == op.i+1);
-                let mut inputs = args.to_vec();
-                let o = op.o;
-                let mut outputs = vec![];
-                for _ in 0..o {
-                    outputs.push(self.alloc_priv());
+    pub fn finalize(&mut self) -> () {
+        assert!(!self.finalized, "Circuit is already built.");
+        self.ops.push(Operation::RoundLabel(self.cs.cs.num_rounds()-1));
+        self.finalized = true;
+    }
+
+    /// Executes the circuit up from the current program counter to round k.
+    pub fn execute(&mut self, round: usize) -> () {
+        assert!(self.finalized, "Must finalize circuit before executing it.");
+        if self.pc>0 {
+            match self.ops[self.pc-1] {
+                Operation::RoundLabel(r) => assert!(r < round, "Execution has already finished round {}, attempt to execute up to round {}", r, round),
+                _ => panic!("Program counter in a wrong place. This should never happen."),
+            }
+        }
+        loop {
+            match &self.ops[self.pc] {
+                Operation::RoundLabel(x) => if *x==round {break},
+                Operation::Poly(polyop) => {
+                    let input : Vec<_> = polyop.i.iter().map(|x|self.cs.getvar(*x)).collect();
+                    let output = (&polyop.op.f)(F::ONE, &input);
+                    polyop.o.iter().zip(output.iter()).map(|(i,v)| self.cs.setvar(*i, *v)).count();
                 }
-                inputs.append(&mut outputs.clone());
-                self.constrain(&inputs, op.into_gate());
-                outputs
-            },
-            ExecMode::Execute => {
-                let fetch_args : Vec<_> = args.iter().map(|i|self.cs.getvar(*i)).collect();
-                let outputs = (op.f)(F::ONE, &fetch_args);
-                let mut ret = vec![];
-                for val in outputs {
-                    let tmp = self.alloc_priv();
-                    self.cs.setvar(tmp, val);
-                    ret.push(tmp);
+                Operation::Adv(adv) => {
+                    let input : Vec<_> = adv.ivar.iter().map(|x|self.cs.getvar(*x)).collect();
+                    let input_ext : Vec<_> = adv.iext.iter().map(|x|x.get()).collect();
+                    let output = (&adv.adv.f)(&input, &input_ext);
+                    adv.o.iter().zip(output.iter()).map(|(i,v)| {
+                        self.cs.setvar(*i, *v)
+                    }).count();
                 }
-                ret
             }
+            self.pc += 1;
         }
-    }
-
-    pub fn advice_priv(&mut self, f: Box<dyn 'a + Fn(&Self, Variable) -> F>) -> Variable{
-        let var = self.alloc_priv();
-        match self.mode {
-            ExecMode::Constrain => {
-                ()
-            }
-            ExecMode::Execute => {
-                self.cs.setvar(var, f(self, var))
-            }
-        };
-        var
-    }
-
-    pub fn advice_pub(&mut self, f: Box<dyn 'a + Fn(&Self, Variable) -> F>) -> Variable{
-        let var = self.alloc_pub();
-        match self.mode {
-            ExecMode::Constrain => {
-                ()
-            }
-            ExecMode::Execute => {
-                self.cs.setvar(var, f(self, var))
-            }
-        };
-        var
     }
 }
-

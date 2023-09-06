@@ -4,7 +4,7 @@ use ff::PrimeField;
 use group::Curve;
 use halo2curves::CurveAffine;
 
-use crate::{gate::{self, Gate}, constraint_system::{self, ConstraintSystem, Variable, CommitKind}, commitment::{CommitmentKey, CtS, CkWtns, CkRound, CtRound, ErrGroup, CkErr, CkRelaxed}};
+use crate::{gate::{self, Gate, RootsOfUnity}, constraint_system::{self, ConstraintSystem, Variable, CommitKind}, commitment::{CommitmentKey, CtS, CkWtns, CkRound, CtRound, ErrGroup, CkErr, CkRelaxed}};
 
 pub struct RoundWtns<F: PrimeField> {
     pub pubs: Vec<Option<F>>,
@@ -30,9 +30,7 @@ impl<'a, F:PrimeField> CSWtns<'a, F>{
         for vg in &cs.vars {
             wtns.push(RoundWtns{pubs: repeat(None).take(vg.pubs).collect(), privs: repeat(None).take(vg.privs).collect()})
         }
-        let mut prep = Self {cs, wtns};
-        prep.setvar(Variable::Public(0,0), F::ONE);
-        prep
+        Self {cs, wtns}
     }
 
     // Should add error resolution at some point, for now it will just panic in case of double assignment.
@@ -58,6 +56,24 @@ impl<'a, F:PrimeField> CSWtns<'a, F>{
                 match self.wtns[r].privs[i] {Some(x)=>x, _=>panic!("Trying to retrieve unassigned private variable {}, {}.", r, i)}
             }
         }
+    }
+
+    pub fn alloc_pub_internal(&mut self, r: usize) -> Variable{
+        self.wtns[r].pubs.push(None);
+        self.cs.alloc_pub_internal(r)
+    }
+
+    pub fn alloc_priv_internal(&mut self, r: usize) -> Variable{
+        self.wtns[r].privs.push(None);
+        self.cs.alloc_priv_internal(r)
+    }
+
+    pub fn alloc_pub(&mut self) -> Variable {
+        self.alloc_pub_internal(self.cs.num_rounds()-1)
+    }
+
+    pub fn alloc_priv(&mut self) -> Variable {
+        self.alloc_priv_internal(self.cs.num_rounds()-1)
     }
 
     pub fn round_commit<G>(&self, round: usize, ck: CkRound<G>) -> CtRound<F, G> where G:CurveAffine<ScalarExt=F>{

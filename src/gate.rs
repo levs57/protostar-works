@@ -109,6 +109,8 @@ impl<'a, F : PrimeField + RootsOfUnity> Gate<'a, F> for Gatebb<'a, F> {
     }    
     
     fn cross_terms_adjust(&self, in1: &Vec<F>, in2: &Vec<F>, deg: usize) -> Vec<Vec<F>> {
+        assert!(self.d() <= deg, "Can not adjust downwards.");
+        
         let mut d = deg;
         if d == 0 {
             return vec![self.exec(in1)]
@@ -149,8 +151,8 @@ impl<'a, F : PrimeField + RootsOfUnity> Gate<'a, F> for Gatebb<'a, F> {
             v.iter_mut().map(|x|*x *= scale).count();
         }).count();
 
-        let mut ret = vec![vec![]; (self.d+1)];
-        for i in 0..(self.d+1) {
+        let mut ret = vec![vec![]; (deg+1)];
+        for i in 0..(deg+1) {
             for j in 0..self.o {
                 ret[i].push(values[j][i])
             }
@@ -158,7 +160,7 @@ impl<'a, F : PrimeField + RootsOfUnity> Gate<'a, F> for Gatebb<'a, F> {
 
         assert!({
             let mut flag = true;
-            for i in (self.d+1)..pow(2,logorder) {
+            for i in (deg+1)..pow(2,logorder) {
                 for j in 0..self.o{
                     flag &= (values[j][i] == F::ZERO)
                 }

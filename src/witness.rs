@@ -96,6 +96,15 @@ impl<F:PrimeField, T: Gate<F>> CSWtns<F, T>{
         CSWtnsRelaxed { cs: self, err }
     }
 
+    pub fn valid_witness(self) -> () {
+        for cg in &self.cs.cs {
+            for constr in &cg.entries {
+                let tmp : Vec<_> = constr.inputs.iter().map(|x|self.getvar(*x)).collect();
+                constr.gate.exec(&tmp).iter().map(|ret| assert!(*ret == F::ZERO, "Some constraint is not satisfied")).count();
+            }
+        }
+    }
+
 }
 
 impl<F: PrimeField, T: Gate<F>, G:CurveAffine<ScalarExt=F>> CSSystemCommit<F, G, CkWtns<G>> for CSWtns<F, T>{

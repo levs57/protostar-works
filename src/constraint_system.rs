@@ -30,8 +30,8 @@ impl Variable {
 
 #[derive(Clone)]
 pub struct Constraint<F: PrimeField, T : Gate<F>>{
-    inputs: Vec<Variable>,
-    gate: T,
+    pub inputs: Vec<Variable>,
+    pub gate: T,
     _marker: PhantomData<F>,
 }
 

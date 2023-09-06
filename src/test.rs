@@ -1,4 +1,4 @@
-use std::{rc::Rc, cell::{RefCell, Cell}};
+use std::{rc::Rc, cell::{RefCell, Cell}, iter::repeat};
 
 use crate::{gate::{self, RootsOfUnity, Gatebb, Gate}, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}};
 use ff::{PrimeField, Field};
@@ -73,3 +73,67 @@ fn test_circuit_builder() {
     println!("{:?}", circuit.cs.getvar(Variable::Public(0,2)).to_repr());
 }
 
+#[test]
+
+fn test_permutation_argument() {
+    let pi_ext : Vec<_> = repeat(ExternalValue::<F>::new()).take(5).collect();
+    let challenge_ext = ExternalValue::<F>::new();
+
+    let mut circuit = Circuit::<F, Gatebb<F>>::new(2, 2);
+    
+    let one = Variable::Public(0,0);
+
+    let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));
+    
+
+    let mut pi = vec![];
+    for k in 0..5{
+        pi.push(
+            circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext[k]])[0]
+        );
+    }
+
+    let challenge = circuit.advice_pub(1, read_pi_advice.clone(), vec![], vec![&challenge_ext])[0];
+
+    let division_advice = Advice::new(2, 0, 1, Rc::new(|ivar : &[F], _| {
+        let ch = ivar[0];
+        let x = ivar[1];
+        vec![(x-ch).invert().unwrap()]
+    }));
+
+    let mut fractions = vec![];
+    for k in 0..5 {
+        fractions.push(
+            circuit.advice(1, division_advice.clone(), vec![challenge, pi[k]], vec![])[0]
+        );
+    }
+
+    let div_constr = Gatebb::<F>::new(2, 4, 1, Rc::new(|args|{
+        let one = args[0];
+        let ch = args[1];
+        let x = args[2];
+        let res = args[3];
+        vec![one*one - res * (x-ch)]
+    }));
+
+    for k in 0..5 {
+        circuit.constrain(&[one, challenge, pi[k], fractions[k]], div_constr.clone());
+    }
+
+    circuit.finalize();
+
+    // construction phase ended
+
+    pi_ext[0].set(F::from(2)).unwrap();
+    pi_ext[1].set(F::from(3)).unwrap();
+    pi_ext[2].set(F::from(4)).unwrap();
+    pi_ext[3].set(F::from(5)).unwrap();
+    pi_ext[4].set(F::from(6)).unwrap();
+
+    circuit.execute(0);
+
+    challenge_ext.set(F::random(OsRng)).unwrap();
+    circuit.execute(1);
+
+    circuit.cs.valid_witness(); // test that constraints are satisfied
+}

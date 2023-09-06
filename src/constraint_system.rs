@@ -18,12 +18,14 @@ pub enum Variable{
     Private(usize, usize), // Private variables.
     Public(usize, usize), // Public variables, including challenges.
 }
+#[derive(Clone)]
 pub struct Constraint<F: PrimeField, T : Gate<F>>{
     inputs: Vec<Variable>,
     gate: T,
     _marker: PhantomData<F>,
 }
 
+#[derive(Clone)]
 pub struct ConstraintGroup<F: PrimeField, T : Gate<F>>{
     pub entries: Vec<Constraint<F, T>>,
     pub kind: CommitKind,
@@ -52,6 +54,7 @@ impl VarGroup {
     }
 }
 
+#[derive(Clone)]
 pub struct ConstraintSystem<F: PrimeField, T : Gate<F>>{
     pub vars: Vec<VarGroup>,
     pub cs : Vec<ConstraintGroup<F, T>>,

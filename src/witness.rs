@@ -6,6 +6,7 @@ use halo2curves::CurveAffine;
 
 use crate::{gate::{self, Gate, RootsOfUnity}, constraint_system::{self, ConstraintSystem, Variable, CommitKind}, commitment::{CommitmentKey, CtS, CkWtns, CkRound, CtRound, ErrGroup, CkErr, CkRelaxed}};
 
+#[derive(Clone)]
 pub struct RoundWtns<F: PrimeField> {
     pub pubs: Vec<Option<F>>,
     pub privs: Vec<Option<F>>,
@@ -17,6 +18,7 @@ pub trait CSSystemCommit<F: PrimeField, G: CurveAffine<ScalarExt=F>, CK: Commitm
 }
 
 
+#[derive(Clone)]
 /// CS system + aux witness data.
 pub struct CSWtns<F: PrimeField, T: Gate<F>> {
     pub cs : ConstraintSystem<F, T>,

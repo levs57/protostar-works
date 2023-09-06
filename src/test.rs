@@ -43,7 +43,7 @@ impl RootsOfUnity for F {
 fn test_cross_terms() {
 
     for d in 2..10{
-        let f = Box::new(|v: &[F]| vec![v[0].pow([2 as u64])]);
+        let f = Rc::new(|v: &[F]| vec![v[0].pow([2 as u64])]);
         let gate = Gatebb::new(2, 1, 1, f);
         let tmp = gate.cross_terms_adjust(&vec![F::ONE], &vec![F::ONE], d);
         println!("{:?}", tmp.iter().map(|v|v[0]).collect::<Vec<_>>());
@@ -67,6 +67,8 @@ fn test_circuit_builder() {
     public_input_source.set(F::from(2)).unwrap();
 
     circuit.execute(0);
+
+    let circuit2 = circuit.clone();
 
     println!("{:?}", circuit.cs.getvar(Variable::Public(0,2)).to_repr());
 }

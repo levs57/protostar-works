@@ -51,10 +51,11 @@ impl<'a, F: PrimeField> From<PolyOp<'a, F>> for Gatebb<'a, F>{
             results.iter().zip(outputs.iter()).map(|(inp, out)|*inp-*out*onepow).collect()
         };
 
-        Gatebb::new(d, i, o, Box::new(f))    
+        Gatebb::new(d, i, o, Rc::new(f))    
     }
 }
 
+#[derive(Clone)]
 pub struct PolyOpAllocated<'a, F: PrimeField> {
     op: PolyOp<'a, F>,
     i: Vec<Variable>,
@@ -102,19 +103,23 @@ impl<'a, F: PrimeField> Advice<'a, F> {
     pub o: usize,
     pub f: Rc<dyn Fn(&[F], &[F])-> Vec<F> + 'a>,
 }
- pub struct AdviceAllocated<'a, F: PrimeField> {
+
+#[derive(Clone)]
+pub struct AdviceAllocated<'a, F: PrimeField> {
     adv: Advice<'a, F>,
     ivar: Vec<Variable>,
     iext: Vec<&'a ExternalValue<F>>,
     o: Vec<Variable>,
  }
 
+ #[derive(Clone)]
 pub enum Operation<'a, F: PrimeField> {
     Poly(PolyOpAllocated<'a, F>),
     Adv(AdviceAllocated<'a, F>),
     RoundLabel(usize),
 }
 
+#[derive(Clone)]
 pub struct Circuit<'a, F: PrimeField, T:Gate<F> + From<PolyOp<'a, F>>> {
     pub cs: CSWtns<F, T>,
     pub ops: Vec<Operation<'a, F>>,

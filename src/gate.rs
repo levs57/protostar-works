@@ -1,4 +1,4 @@
-use std::{iter::repeat, cmp::max, marker::PhantomData};
+use std::{iter::repeat, cmp::max, marker::PhantomData, rc::Rc};
 
 use group::{Group, Curve};
 use ff::{Field, PrimeField};
@@ -16,6 +16,7 @@ pub trait RootsOfUnity where Self : PrimeField{
     fn binomial_FFT(power: usize, logorder: usize) -> Vec<Self>;
 }
 
+#[derive(Clone)]
 /// A generic black-box gate. This API is unsafe, you must guarantee that given value is a
 /// homogeneous polynomial of degree d with i inputs and o outputs. It will do a sanity check
 /// so if a polynomial of different degree, or non-homogeneous one is provided, it will fail. 
@@ -23,11 +24,11 @@ pub struct Gatebb<'a, F : PrimeField> {
     d : usize,
     i : usize,
     o : usize,
-    f : Box<dyn Fn(&[F]) -> Vec<F> + 'a>,
+    f : Rc<dyn Fn(&[F]) -> Vec<F> + 'a>,
 }
 
 impl<'a, F: PrimeField> Gatebb<'a, F> {
-    pub fn new(d: usize, i: usize, o: usize, f: Box<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self {
+    pub fn new(d: usize, i: usize, o: usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self {
         let random_input : Vec<_> = repeat(F::random(OsRng)).take(i).collect(); 
         let random_input_2 : Vec<_> = random_input.iter().map(|x| *x*F::from(2)).collect();
         assert!({
@@ -37,14 +38,14 @@ impl<'a, F: PrimeField> Gatebb<'a, F> {
         }, "Sanity check failed - provided f is not a polynomial of degree d");
         Gatebb::<'a>{d,i,o,f}
     } 
-    pub fn new_unchecked(d: usize, i: usize, o: usize, f: Box<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self {
+    pub fn new_unchecked(d: usize, i: usize, o: usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self {
         Gatebb::<'a>{d,i,o,f}
     }
 
     /// Converts a nonuniform polynomial to a uniform one.
     /// Will not work for relaxation factor = 0, however this never occurs in folding schemes.
     /// Increases i by 1 - first argument is a relaxation factor.
-    pub fn from_nonuniform<'b : 'a>(d: &'a usize, i: &'a usize, o: &'a usize, f: &'b Box<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self {
+    pub fn from_nonuniform<'b : 'a>(d: &'a usize, i: &'a usize, o: &'a usize, f: &'b Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self {
         let g = |args: &[F]|{
             let t_inv = args[0].invert().unwrap();
             let mut args_internal = vec![];
@@ -54,18 +55,19 @@ impl<'a, F: PrimeField> Gatebb<'a, F> {
             f(&args_internal).iter().map(|x|*x*t_inv.pow([*d as u64])).collect()
         };
 
-        Self::new(*d, *i+1, *o, Box::new(g))
+        Self::new(*d, *i+1, *o, Rc::new(g))
     }
 
 }
 
+#[derive(Clone)]
 pub struct AdjustedGate<F: PrimeField, T: Gate<F> + Sized> {
     gate: T,
     deg: usize,
     _marker: PhantomData<F>,
 }
 
-pub trait Gate<F : PrimeField> {
+pub trait Gate<F : PrimeField> : Clone {
     /// Returns degree.
     fn d(&self) -> usize;
     /// Returns input size.

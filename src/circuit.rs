@@ -116,32 +116,31 @@ pub struct AdviceAllocated<'a, F: PrimeField> {
 pub enum Operation<'a, F: PrimeField> {
     Poly(PolyOpAllocated<'a, F>),
     Adv(AdviceAllocated<'a, F>),
-    RoundLabel(usize),
 }
 
 #[derive(Clone)]
 pub struct Circuit<'a, F: PrimeField, T:Gate<F> + From<PolyOp<'a, F>>> {
     pub cs: CSWtns<F, T>,
-    pub ops: Vec<Operation<'a, F>>,
+    pub ops: Vec<Vec<Operation<'a, F>>>,
     pub max_degree: usize,
     pub finalized: bool,
-    pub pc : usize,
+    pub round_counter : usize,
 }
 
 impl<'a, F: PrimeField + RootsOfUnity, T: Gate<F> + From<PolyOp<'a, F>>> Circuit<'a, F, T>{
-    pub fn new(max_degree: usize) -> Self {
-        let mut cs = ConstraintSystem::new();
+    pub fn new(max_degree: usize, num_rounds: usize) -> Self {
+        let mut cs = ConstraintSystem::new(num_rounds);
         cs.add_constr_group(CommitKind::Zero, 1);
         cs.add_constr_group(CommitKind::Group, max_degree);
         let mut prep = Self{
                 cs : CSWtns::new(cs),
-                ops: vec![],
+                ops: vec![vec![];num_rounds],
                 max_degree,
                 finalized: false,
-                pc : 0,
+                round_counter : 0,
             };
         let adv = Advice::new(0,0,1, Rc::new(|_,_|vec![F::ONE]));
-        let tmp = prep.advice_pub(adv, vec![], vec![]);
+        let tmp = prep.advice_pub(0, adv, vec![], vec![]);
         match tmp[0] {
             Variable::Public(0,0) => (),
             _ => panic!("One has allocated incorrectly. This should never fail. Abort mission."),
@@ -149,36 +148,48 @@ impl<'a, F: PrimeField + RootsOfUnity, T: Gate<F> + From<PolyOp<'a, F>>> Circuit
         prep
     }
 
-    pub fn advice(&mut self, adv: Advice<'a, F>, ivar: Vec<Variable>, iext: Vec<&'a ExternalValue<F>>) -> Vec<Variable> {
+    pub fn advice(&mut self, round: usize, adv: Advice<'a, F>, ivar: Vec<Variable>, iext: Vec<&'a ExternalValue<F>>) -> Vec<Variable> {
         assert!(!self.finalized, "Circuit is already built.");
-        assert!(ivar.len() == adv.ivar, "Incorrect amount of inputs at operation {}", self.ops.len());
-        assert!(iext.len() == adv.iext, "Incorrect amount of advice inputs at operation {}", self.ops.len());
+        assert!(round < self.ops.len(), "The round is too large.",);
+        assert!(ivar.len() == adv.ivar, "Incorrect amount of inputs at operation {} ; {}", round, self.ops[round].len());
+        assert!(iext.len() == adv.iext, "Incorrect amount of advice inputs at operation {} ; {}", round, self.ops[round].len());
+        for v in &ivar {
+            assert!(v.round() <= round, "Argument of an operation {} ; {} is in round {}", round, self.ops[round].len(), v.round())
+        }
+
         let mut output = vec![];
         for _ in 0..adv.o {
-            output.push( self.cs.alloc_priv() );
+            output.push( self.cs.alloc_priv_internal(round) );
         }
-        self.ops.push(Operation::Adv(adv.allocate(ivar, iext, output.clone())));
+        self.ops[round].push(Operation::Adv(adv.allocate(ivar, iext, output.clone())));
         output
     }
 
-    pub fn advice_pub(&mut self, adv: Advice<'a, F>, ivar: Vec<Variable>, iext: Vec<&'a ExternalValue<F>>) -> Vec<Variable> {
-        assert!(!self.finalized, "Circuit is already built.");
-        assert!(ivar.len() == adv.ivar, "Incorrect amount of inputs at operation {}", self.ops.len());
-        assert!(iext.len() == adv.iext, "Incorrect amount of advice inputs at operation {}", self.ops.len());
+    pub fn advice_pub(&mut self, round: usize, adv: Advice<'a, F>, ivar: Vec<Variable>, iext: Vec<&'a ExternalValue<F>>) -> Vec<Variable> {
+        assert!(round < self.ops.len(), "The round is too large.",);
+        assert!(ivar.len() == adv.ivar, "Incorrect amount of inputs at operation {} ; {}", round, self.ops[round].len());
+        assert!(iext.len() == adv.iext, "Incorrect amount of advice inputs at operation {} ; {}", round, self.ops[round].len());
+        for v in &ivar {
+            assert!(v.round() <= round, "Argument of an operation {} ; {} is in round {}", round, self.ops[round].len(), v.round())
+        }
         let mut output = vec![];
         for _ in 0..adv.o {
-            output.push( self.cs.alloc_pub() );
+            output.push( self.cs.alloc_pub_internal(round) );
         }
-        self.ops.push(Operation::Adv(adv.allocate(ivar, iext, output.clone())));
+        self.ops[round].push(Operation::Adv(adv.allocate(ivar, iext, output.clone())));
         output
     }
 
-    pub fn apply(&mut self, polyop: PolyOp<'a, F>, i: Vec<Variable>) -> Vec<Variable> {
+    pub fn apply(&mut self, round: usize, polyop: PolyOp<'a, F>, i: Vec<Variable>) -> Vec<Variable> {
         assert!(!self.finalized, "Circuit is already built.");
+        assert!(round < self.ops.len(), "The round is too large.",);
         assert!(i.len() == polyop.i, "Incorrect amount of inputs at operation {}", self.ops.len());
+        for v in &i {
+            assert!(v.round() <= round, "Argument of an operation {} ; {} is in round {}", round, self.ops[round].len(), v.round())
+        }
         let mut output = vec![];
         for _ in 0..polyop.o {
-            output.push( self.cs.alloc_priv() );
+            output.push( self.cs.alloc_priv_internal(round) );
         }
 
         let mut gate_io = vec![Variable::Public(0,0)];
@@ -192,17 +203,21 @@ impl<'a, F: PrimeField + RootsOfUnity, T: Gate<F> + From<PolyOp<'a, F>>> Circuit
             self.cs.cs.cs[1].constrain(&gate_io, T::from(polyop.clone()));
         }
         
-        self.ops.push(Operation::Poly(polyop.allocate(i, output.clone())));
+        self.ops[round].push(Operation::Poly(polyop.allocate(i, output.clone())));
 
         output
     }
 
-    pub fn apply_pub(&mut self, polyop: PolyOp<'a, F>, i: Vec<Variable>) -> Vec<Variable> {
+    pub fn apply_pub(&mut self, round : usize, polyop: PolyOp<'a, F>, i: Vec<Variable>) -> Vec<Variable> {
         assert!(!self.finalized, "Circuit is already built.");
+        assert!(round < self.ops.len(), "The round is too large.",);
         assert!(i.len() == polyop.i, "Incorrect amount of inputs at operation {}", self.ops.len());
+        for v in &i {
+            assert!(v.round() <= round, "Argument of an operation {} ; {} is in round {}", round, self.ops[round].len(), v.round())
+        }
         let mut output = vec![];
         for _ in 0..polyop.o {
-            output.push( self.cs.alloc_pub() );
+            output.push( self.cs.alloc_pub_internal(round) );
         }
 
         let mut gate_io = vec![Variable::Public(0,0)];
@@ -216,7 +231,7 @@ impl<'a, F: PrimeField + RootsOfUnity, T: Gate<F> + From<PolyOp<'a, F>>> Circuit
             self.cs.cs.cs[1].constrain(&gate_io, T::from(polyop.clone()));
         }
         
-        self.ops.push(Operation::Poly(polyop.allocate(i, output.clone())));
+        self.ops[round].push(Operation::Poly(polyop.allocate(i, output.clone())));
 
         output
     }
@@ -229,45 +244,36 @@ impl<'a, F: PrimeField + RootsOfUnity, T: Gate<F> + From<PolyOp<'a, F>>> Circuit
     }
 
 
-    pub fn next_round(&mut self) -> () {
-        assert!(!self.finalized, "Circuit is already built.");
-        self.ops.push(Operation::RoundLabel(self.cs.cs.num_rounds()-1));
-        self.cs.cs.new_round();
-    }
-
     pub fn finalize(&mut self) -> () {
         assert!(!self.finalized, "Circuit is already built.");
-        self.ops.push(Operation::RoundLabel(self.cs.cs.num_rounds()-1));
         self.finalized = true;
     }
 
     /// Executes the circuit up from the current program counter to round k.
     pub fn execute(&mut self, round: usize) -> () {
         assert!(self.finalized, "Must finalize circuit before executing it.");
-        if self.pc>0 {
-            match self.ops[self.pc-1] {
-                Operation::RoundLabel(r) => assert!(r < round, "Execution has already finished round {}, attempt to execute up to round {}", r, round),
-                _ => panic!("Program counter in a wrong place. This should never happen."),
+        if self.round_counter > round {
+            panic!("Execution is at round finished round {}, attempt to execute up to round {}", self.round_counter, round)
             }
-        }
-        loop {
-            match &self.ops[self.pc] {
-                Operation::RoundLabel(x) => if *x==round {break},
-                Operation::Poly(polyop) => {
-                    let input : Vec<_> = polyop.i.iter().map(|x|self.cs.getvar(*x)).collect();
-                    let output = (&polyop.op.f)(F::ONE, &input);
-                    polyop.o.iter().zip(output.iter()).map(|(i,v)| self.cs.setvar(*i, *v)).count();
-                }
-                Operation::Adv(adv) => {
-                    let input : Vec<_> = adv.ivar.iter().map(|x|self.cs.getvar(*x)).collect();
-                    let input_ext : Vec<_> = adv.iext.iter().map(|x|*x.get().unwrap()).collect();
-                    let output = (&adv.adv.f)(&input, &input_ext);
-                    adv.o.iter().zip(output.iter()).map(|(i,v)| {
-                        self.cs.setvar(*i, *v)
-                    }).count();
+        while (self.round_counter <= round) {
+            for op in &self.ops[self.round_counter]{
+                match op {
+                    Operation::Poly(polyop) => {
+                        let input : Vec<_> = polyop.i.iter().map(|x|self.cs.getvar(*x)).collect();
+                        let output = (&polyop.op.f)(F::ONE, &input);
+                        polyop.o.iter().zip(output.iter()).map(|(i,v)| self.cs.setvar(*i, *v)).count();
+                    }
+                    Operation::Adv(adv) => {
+                        let input : Vec<_> = adv.ivar.iter().map(|x|self.cs.getvar(*x)).collect();
+                        let input_ext : Vec<_> = adv.iext.iter().map(|x|*x.get().unwrap()).collect();
+                        let output = (&adv.adv.f)(&input, &input_ext);
+                        adv.o.iter().zip(output.iter()).map(|(i,v)| {
+                            self.cs.setvar(*i, *v)
+                        }).count();
+                    }
                 }
             }
-            self.pc += 1;
+            self.round_counter += 1;
         }
     }
 }

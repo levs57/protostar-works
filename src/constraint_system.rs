@@ -18,6 +18,16 @@ pub enum Variable{
     Private(usize, usize), // Private variables.
     Public(usize, usize), // Public variables, including challenges.
 }
+
+impl Variable {
+    pub fn round(&self) -> usize {
+        match self {
+            Self::Private(r,_) => *r,
+            Self::Public(r, _) => *r,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Constraint<F: PrimeField, T : Gate<F>>{
     inputs: Vec<Variable>,
@@ -62,8 +72,8 @@ pub struct ConstraintSystem<F: PrimeField, T : Gate<F>>{
 
 impl<F: PrimeField, T : Gate<F>> ConstraintSystem<F, T>{
     /// Returns an emptry constraint system.
-    pub fn new() -> Self {
-        Self{vars: vec![VarGroup::new()], cs: vec![]}
+    pub fn new(num_rounds:usize) -> Self {
+        Self{vars: vec![VarGroup::new(); num_rounds], cs: vec![]}
     }
 
     pub fn num_rounds(&self) -> usize{

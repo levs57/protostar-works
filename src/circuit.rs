@@ -1,10 +1,11 @@
-use std::{iter::repeat, rc::Rc, cell::Cell};
+use std::{iter::repeat, rc::Rc, cell::{Cell, OnceCell}};
 
 use ff::PrimeField;
 use num_traits::pow;
 use rand_core::OsRng;
 
 use crate::{witness::CSWtns, gate::{Gatebb, RootsOfUnity, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind}};
+
 
 #[derive(Clone)]
 pub struct PolyOp<'a, F:PrimeField>{
@@ -58,44 +59,29 @@ pub struct PolyOpAllocated<'a, F: PrimeField> {
     o: Vec<Variable>,
 }
 
-#[derive(Clone, Copy)]
-/// Once mutable field value that implements copy.
-pub struct MaybeValue<F: PrimeField> {
-    value: F,
-    flag: bool
-}
-
-impl<F: PrimeField> MaybeValue<F> {
-    pub fn new() -> Self {
-        MaybeValue { value : F::ZERO, flag: false }
-    }
-}
-
 /// A value used for advices. Can be shared between multiple circuits, in order to enable layered constructions.
-pub struct ExternalValue<F: PrimeField> {
-    v: Cell<MaybeValue<F>>,
-}
+pub type ExternalValue<F: PrimeField> = OnceCell<F>;
 
-impl<F: PrimeField> ExternalValue<F> {
-    pub fn new() -> Self {
-        Self { v : Cell::new(MaybeValue::new())}
-    }
+// impl<F: PrimeField> ExternalValue<F> {
+//     pub fn new() -> Self {
+//         Self { v : Cell::new(MaybeValue::new())}
+//     }
 
-    pub fn get(&self) -> F {
-        let tmp = self.v.get();
-        if tmp.flag { 
-            tmp.value
-        } else {
-            panic!("Unassigned external value error.")
-        }
-    }
+//     pub fn get(&self) -> F {
+//         let tmp = self.v.get();
+//         if tmp.flag { 
+//             tmp.value
+//         } else {
+//             panic!("Unassigned external value error.")
+//         }
+//     }
 
-    pub fn set(&self, value: F) -> () {
-        let tmp = self.v.get();
-        if tmp.flag {panic!("Can not assign external value twice.")}
-        self.v.set(MaybeValue {value, flag:true })
-    }
-}
+//     pub fn set(&self, value: F) -> () {
+//         let tmp = self.v.get();
+//         if tmp.flag {panic!("Can not assign external value twice.")}
+//         self.v.set(MaybeValue {value, flag:true })
+//     }
+// }
 
 impl<'a, F: PrimeField> Advice<'a, F> {
     pub fn new(ivar: usize, iext:usize, o: usize, f: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'a>) -> Self{
@@ -267,7 +253,7 @@ impl<'a, F: PrimeField + RootsOfUnity> Circuit<'a, F>{
                 }
                 Operation::Adv(adv) => {
                     let input : Vec<_> = adv.ivar.iter().map(|x|self.cs.getvar(*x)).collect();
-                    let input_ext : Vec<_> = adv.iext.iter().map(|x|x.get()).collect();
+                    let input_ext : Vec<_> = adv.iext.iter().map(|x|*x.get().unwrap()).collect();
                     let output = (&adv.adv.f)(&input, &input_ext);
                     adv.o.iter().zip(output.iter()).map(|(i,v)| {
                         self.cs.setvar(*i, *v)

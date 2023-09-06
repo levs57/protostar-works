@@ -59,13 +59,13 @@ impl<'a, F: PrimeField> Gatebb<'a, F> {
 
 }
 
-pub struct AdjustedGate<'a, F: PrimeField, T: Gate<'a, F> + Sized> {
+pub struct AdjustedGate<F: PrimeField, T: Gate<F> + Sized> {
     gate: T,
     deg: usize,
-    _marker: PhantomData<&'a F>
+    _marker: PhantomData<F>,
 }
 
-pub trait Gate<'a, F : PrimeField> {
+pub trait Gate<F : PrimeField> {
     /// Returns degree.
     fn d(&self) -> usize;
     /// Returns input size.
@@ -73,16 +73,16 @@ pub trait Gate<'a, F : PrimeField> {
     /// Returns output size.
     fn o(&self) -> usize;
     /// Executes gate on a given input. Must ensure the correct length of an input.
-    fn exec(&'a self, input : &[F]) -> Vec<F>;
+    fn exec(& self, input : &[F]) -> Vec<F>;
     /// Returns coefficients of  f(in1 + x in2) in x (for example, 0-th is f(in1) and d-th is f(in2))
     fn cross_terms(&self, in1: &Vec<F>, in2: &Vec<F>) -> Vec<Vec<F>>;
     /// Computes cross-terms for the higher degree by using symbolic multiplication by binomial.
     fn cross_terms_adjust(&self, in1: &Vec<F>, in2: &Vec<F>, deg: usize) -> Vec<Vec<F>>;
     /// Returns adjusted gate.
-    fn adjust(self, deg: usize) -> AdjustedGate<'a, F, Self> where Self: Sized;
+    fn adjust(self, deg: usize) -> AdjustedGate<F, Self> where Self: Sized;
 }
 
-impl<'a, F : PrimeField + RootsOfUnity> Gate<'a, F> for Gatebb<'a, F> {
+impl<'a, F : PrimeField + RootsOfUnity> Gate<F> for Gatebb<'a, F> {
     /// Returns degree.
     fn d(&self) -> usize {
         self.d
@@ -96,7 +96,7 @@ impl<'a, F : PrimeField + RootsOfUnity> Gate<'a, F> for Gatebb<'a, F> {
         self.o
     }
     /// Executes gate on a given input. Must ensure the correct length of an input.
-    fn exec(&'a self, input : &[F]) -> Vec<F>{
+    fn exec(&self, input : &[F]) -> Vec<F>{
         assert!(input.len() == self.i);
         let tmp = (self.f)(input);
         assert!(tmp.len() == self.o);
@@ -172,13 +172,13 @@ impl<'a, F : PrimeField + RootsOfUnity> Gate<'a, F> for Gatebb<'a, F> {
 
     }
 
-    fn adjust(self, deg: usize) -> AdjustedGate<'a, F, Self> where Self: Sized {
+    fn adjust(self, deg: usize) -> AdjustedGate<F, Self> where Self: Sized {
         assert!(deg >= self.d(), "Can only adjust upwards");
         AdjustedGate { gate : self, deg, _marker : PhantomData }
     }
 }
 
-impl<'a, F: PrimeField, T: Gate<'a, F>> Gate<'a, F> for AdjustedGate<'a, F, T>{
+impl<F: PrimeField, T: Gate<F>> Gate<F> for AdjustedGate<F, T>{
     fn d(&self) -> usize {
         self.deg
     }
@@ -191,7 +191,7 @@ impl<'a, F: PrimeField, T: Gate<'a, F>> Gate<'a, F> for AdjustedGate<'a, F, T>{
         self.gate.o()
     }
 
-    fn exec(&'a self, input : &[F]) -> Vec<F> {
+    fn exec(& self, input : &[F]) -> Vec<F> {
         self.gate.exec(input)
     }
 
@@ -203,7 +203,7 @@ impl<'a, F: PrimeField, T: Gate<'a, F>> Gate<'a, F> for AdjustedGate<'a, F, T>{
         panic!("Should not be called on adjusted gate")
     }
 
-    fn adjust(self, deg: usize) -> AdjustedGate<'a, F, Self> where Self: Sized {
+    fn adjust(self, deg: usize) -> AdjustedGate<F, Self> where Self: Sized {
         assert!(deg >= self.d(), "Can only adjust upwards");
         AdjustedGate { gate : self, deg, _marker : PhantomData }
     }

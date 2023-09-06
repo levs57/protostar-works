@@ -31,25 +31,27 @@ impl<'a, F:PrimeField> PolyOp<'a, F> {
         Self { d, i, o, f }
     }
 
-    pub fn into_gate(self) -> Gatebb<'a, F> {
-        let d = self.d;
-        let i = self.i + 1 + self.o;
-        let o = self.o;
+    pub fn allocate(self, i: Vec<Variable>, o: Vec<Variable>) -> PolyOpAllocated<'a, F> {
+        PolyOpAllocated { op : self, i, o }
+    }
+}
+
+impl<'a, F: PrimeField> From<PolyOp<'a, F>> for Gatebb<'a, F>{
+    fn from(value: PolyOp<'a, F>) -> Self {
+        let d = value.d;
+        let i = value.i + 1 + value.o;
+        let o = value.o;
 
         let f = move |args: &[F]| {
-            let (inputs, outputs) = args.split_at(self.i+1);
+            let (inputs, outputs) = args.split_at(value.i+1);
             let (one, inputs) = inputs.split_at(1);
             let one = one[0];
-            let results = (self.f)(one, &inputs);
-            let onepow = one.pow([(self.d-1) as u64]);
+            let results = (value.f)(one, &inputs);
+            let onepow = one.pow([(value.d-1) as u64]);
             results.iter().zip(outputs.iter()).map(|(inp, out)|*inp-*out*onepow).collect()
         };
 
-        Gatebb::new(d, i, o, Box::new(f))
-    }
-
-    pub fn allocate(self, i: Vec<Variable>, o: Vec<Variable>) -> PolyOpAllocated<'a, F> {
-        PolyOpAllocated { op : self, i, o }
+        Gatebb::new(d, i, o, Box::new(f))    
     }
 }
 
@@ -113,15 +115,15 @@ pub enum Operation<'a, F: PrimeField> {
     RoundLabel(usize),
 }
 
-pub struct Circuit<'a, F: PrimeField> {
-    pub cs: CSWtns<'a, F>,
+pub struct Circuit<'a, F: PrimeField, T:Gate<F> + From<PolyOp<'a, F>>> {
+    pub cs: CSWtns<F, T>,
     pub ops: Vec<Operation<'a, F>>,
     pub max_degree: usize,
     pub finalized: bool,
     pub pc : usize,
 }
 
-impl<'a, F: PrimeField + RootsOfUnity> Circuit<'a, F>{
+impl<'a, F: PrimeField + RootsOfUnity, T: Gate<F> + From<PolyOp<'a, F>>> Circuit<'a, F, T>{
     pub fn new(max_degree: usize) -> Self {
         let mut cs = ConstraintSystem::new();
         cs.add_constr_group(CommitKind::Zero, 1);
@@ -180,9 +182,9 @@ impl<'a, F: PrimeField + RootsOfUnity> Circuit<'a, F>{
         if polyop.d == 0 {panic!("Operation {} has degree 0, which is banned.", self.ops.len())}
         if polyop.d > self.max_degree {panic!("Degree of operation {} is too large!", self.ops.len())};
         if polyop.d == 1 {
-            self.cs.cs.cs[0].constrain(&gate_io, Box::new(polyop.clone().into_gate()));
+            self.cs.cs.cs[0].constrain(&gate_io, T::from(polyop.clone()));
         } else {
-            self.cs.cs.cs[1].constrain(&gate_io, Box::new(polyop.clone().into_gate()));
+            self.cs.cs.cs[1].constrain(&gate_io, T::from(polyop.clone()));
         }
         
         self.ops.push(Operation::Poly(polyop.allocate(i, output.clone())));
@@ -204,9 +206,9 @@ impl<'a, F: PrimeField + RootsOfUnity> Circuit<'a, F>{
         if polyop.d == 0 {panic!("Operation {} has degree 0, which is banned.", self.ops.len())}
         if polyop.d > self.max_degree {panic!("Degree of operation {} is too large!", self.ops.len())};
         if polyop.d == 1 {
-            self.cs.cs.cs[0].constrain(&gate_io, Box::new(polyop.clone().into_gate()));
+            self.cs.cs.cs[0].constrain(&gate_io, T::from(polyop.clone()));
         } else {
-            self.cs.cs.cs[1].constrain(&gate_io, Box::new(polyop.clone().into_gate()));
+            self.cs.cs.cs[1].constrain(&gate_io, T::from(polyop.clone()));
         }
         
         self.ops.push(Operation::Poly(polyop.allocate(i, output.clone())));
@@ -214,11 +216,11 @@ impl<'a, F: PrimeField + RootsOfUnity> Circuit<'a, F>{
         output
     }
 
-    pub fn constrain<T: 'a + Gate<'a, F> + Sized>(&mut self, inputs: &[Variable], gate: T) -> (){
+    pub fn constrain(&mut self, inputs: &[Variable], gate: T) -> (){
         if gate.d() == 0 {panic!("Trying to constrain with gate of degree 0.")};
         let mut tmp = 1;
         if gate.d() == 1 {tmp = 0}
-        self.cs.cs.cs[tmp].constrain(inputs, Box::new(gate.adjust(self.max_degree)));
+        self.cs.cs.cs[tmp].constrain(inputs, gate);
     }
 
 

@@ -18,14 +18,14 @@ pub trait CSSystemCommit<F: PrimeField, G: CurveAffine<ScalarExt=F>, CK: Commitm
 
 
 /// CS system + aux witness data.
-pub struct CSWtns<'a, F: PrimeField> {
-    pub cs : ConstraintSystem<'a, F>,
+pub struct CSWtns<F: PrimeField, T: Gate<F>> {
+    pub cs : ConstraintSystem<F, T>,
     pub wtns : Vec<RoundWtns<F>>,
 }
 
-impl<'a, F:PrimeField> CSWtns<'a, F>{
+impl<F:PrimeField, T: Gate<F>> CSWtns<F, T>{
 
-    pub fn new(cs: ConstraintSystem<'a, F>) -> Self{
+    pub fn new(cs: ConstraintSystem<F, T>) -> Self{
         let mut wtns = vec![];
         for vg in &cs.vars {
             wtns.push(RoundWtns{pubs: repeat(None).take(vg.pubs).collect(), privs: repeat(None).take(vg.privs).collect()})
@@ -80,7 +80,7 @@ impl<'a, F:PrimeField> CSWtns<'a, F>{
         ck.commit(&self.wtns[round])
     }
 
-    pub fn relax(self) -> CSWtnsRelaxed<'a, F> {
+    pub fn relax(self) -> CSWtnsRelaxed<F, T> {
         let mut err = vec![];
         for cg in &self.cs.cs {
             err.push(
@@ -96,19 +96,19 @@ impl<'a, F:PrimeField> CSWtns<'a, F>{
 
 }
 
-impl<'a, F: PrimeField, G:CurveAffine<ScalarExt=F>> CSSystemCommit<F, G, CkWtns<G>> for CSWtns<'a, F>{
+impl<F: PrimeField, T: Gate<F>, G:CurveAffine<ScalarExt=F>> CSSystemCommit<F, G, CkWtns<G>> for CSWtns<F, T>{
     fn commit(&self, ck: &CkWtns<G>) -> Vec<CtRound<F, G>> {
         ck.commit(&self.wtns)
     }
 }
 
-pub struct CSWtnsRelaxed<'a, F: PrimeField> {
-    cs: CSWtns<'a, F>,    
+pub struct CSWtnsRelaxed<F: PrimeField, T : Gate<F>> {
+    cs: CSWtns<F, T>,    
     err: Vec<ErrGroup<F>>
 }
 
-impl<'a, F: PrimeField, G:CurveAffine<ScalarExt=F>> CSSystemCommit<F, G, CkRelaxed<'a, G>> for CSWtnsRelaxed<'a, F>{
+impl<F: PrimeField, T: Gate<F>, G:CurveAffine<ScalarExt=F>> CSSystemCommit<F, G, CkRelaxed<G>> for CSWtnsRelaxed<F, T>{
     fn commit(&self, ck: &CkRelaxed<G>) -> <CkRelaxed<G> as CommitmentKey<G>>::Target {
-        ck.commit(&(&self.cs.wtns, &self.err))
+        (ck.0.commit(&self.cs.wtns),  ck.1.commit(&self.err))
     }
 }

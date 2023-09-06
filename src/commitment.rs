@@ -111,10 +111,10 @@ impl<F: PrimeField, G: CurveAffine<ScalarExt=F>> CommitmentKey<G> for CkErr<G> {
     }
 }
 
-pub type CkRelaxed<'a, G> = &'a(CkWtns<G>, CkErr<G>); // Abomination summoned by dark dreams of crab god.
+pub type CkRelaxed<G> = (CkWtns<G>, CkErr<G>);
 
-impl<'a, F: PrimeField, G: CurveAffine<ScalarExt=F>> CommitmentKey<G> for CkRelaxed<'a, G> {
-    type Scalars = (&'a <CkWtns<G> as CommitmentKey<G>>::Scalars, &'a <CkErr<G> as CommitmentKey<G>>::Scalars);
+impl<F: PrimeField, G: CurveAffine<ScalarExt=F>> CommitmentKey<G> for CkRelaxed<G> {
+    type Scalars = (<CkWtns<G> as CommitmentKey<G>>::Scalars, <CkErr<G> as CommitmentKey<G>>::Scalars);
     type Target = (<CkWtns<G> as CommitmentKey<G>>::Target, <CkErr<G> as CommitmentKey<G>>::Target);
 
     fn commit(&self, wtns: &Self::Scalars) -> Self::Target {

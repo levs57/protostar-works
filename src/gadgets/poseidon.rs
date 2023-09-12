@@ -6,7 +6,6 @@ use std::rc::Rc;
 use ff::{Field, PrimeField};
 use crate::gadgets::poseidon_constants;
 use halo2curves::{bn256, serde::SerdeObject};
-
 use crate::{circuit::{Circuit, PolyOp}, constraint_system::Variable, gate::Gatebb};
 
 
@@ -151,8 +150,6 @@ pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a
     let n_rounds_f = cfg.constants.n_rounds_f;
     let n_rounds_p = cfg.constants.n_rounds_p[t - 2];
 
-    println!("Init");
-
     let mut state = circuit.apply(
         round,
         PolyOp::new(
@@ -168,8 +165,6 @@ pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a
             )
         ),
         inp);
-
-    println!("1st round passed");
 
     for i in 1..(n_rounds_f+n_rounds_p)/k {
         state = circuit.apply(

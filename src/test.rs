@@ -153,5 +153,7 @@ fn test_poseidon_gadget(){
 
     circuit.execute(0);
 
+    assert!(circuit.cs.getvar(ret) == F::from_str_vartime("18586133768512220936620570745912940619677854269274689475585506675881198879027").unwrap());
+
     println!("{:?}", circuit.cs.getvar(ret).to_repr());
 }

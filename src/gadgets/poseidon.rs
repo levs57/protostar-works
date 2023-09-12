@@ -1,4 +1,5 @@
 // Implementation taken from arnaucube's poseidon-rs implementation and adapted as blackbox-gadget.
+// Also adapted structures so they work with my field.
 
 use std::rc::Rc;
 
@@ -56,6 +57,11 @@ pub struct Poseidon {
     constants: Constants,
 }
 
+pub fn new() -> Poseidon {
+    Poseidon {
+        constants: load_constants(),
+    }
+}
 fn ark(one: F, state: &mut Vec<F>, c: &Vec<F>, it: usize) -> (){
     for i in 0..state.len() {
         state[i] += &c[it+i]*one;

@@ -276,4 +276,8 @@ impl<'a, F: PrimeField + RootsOfUnity, T: Gate<F> + From<PolyOp<'a, F>>> Circuit
             self.round_counter += 1;
         }
     }
+
+    pub fn one(&self) -> Variable {
+        Variable::Public(0, 0)
+    }
 }

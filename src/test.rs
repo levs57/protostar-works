@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::{RefCell, Cell}, iter::repeat};
 
-use crate::{gate::{self, RootsOfUnity, Gatebb, Gate}, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}};
+use crate::{gate::{self, RootsOfUnity, Gatebb, Gate}, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::poseidon::{poseidon_gadget, Poseidon, ark, sbox, mix, poseidon_kround_poly}};
 use ff::{PrimeField, Field};
 use halo2::arithmetic::best_fft;
 use halo2curves::{bn256, serde::SerdeObject};
@@ -136,4 +136,22 @@ fn test_permutation_argument() {
     circuit.execute(1);
 
     circuit.cs.valid_witness(); // test that constraints are satisfied
+}
+
+#[test]
+fn test_poseidon_gadget(){
+    let cfg = Poseidon::new();
+    let pi_ext = ExternalValue::<F>::new();
+    let mut circuit = Circuit::<F, Gatebb<F>>::new(25, 1);
+    let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
+    let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
+    let ret = poseidon_gadget(&mut circuit, &cfg, 1, 0, vec![pi]);
+
+    circuit.finalize();
+
+    pi_ext.set(F::ONE).unwrap();
+
+    circuit.execute(0);
+
+    println!("{:?}", circuit.cs.getvar(ret).to_repr());
 }

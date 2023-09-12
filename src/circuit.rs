@@ -21,10 +21,10 @@ impl<'a, F:PrimeField> PolyOp<'a, F> {
         let random_input_2 : (_, Vec<_>) = (random_input.0*F::from(2), random_input.1.iter().map(|x| *x*F::from(2)).collect());
         assert!({
             let mut flag = true;
-            (&f)(random_input_2.0, &random_input_2.1).iter().zip((&f)(random_input.0, &random_input.1).iter())
+            assert!((&f)(random_input_2.0, &random_input_2.1).iter().zip((&f)(random_input.0, &random_input.1).iter())
                 .map(|(a, b)| {
                     flag &= (*a==*b*F::from(pow(2, d)))
-                }).count();
+                }).count() == o, "Wrong output size");
             flag
         }, "Sanity check failed - provided f is not a polynomial of degree d");
  

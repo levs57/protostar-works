@@ -54,32 +54,34 @@ pub fn load_constants() -> Constants {
 
 
 pub struct Poseidon {
-    constants: Constants,
+    pub constants: Constants,
 }
 
-pub fn new() -> Poseidon {
-    Poseidon {
-        constants: load_constants(),
+impl Poseidon {
+    pub fn new() -> Poseidon {
+        Poseidon {
+            constants: load_constants(),
+        }
     }
 }
-fn ark(one: F, state: &mut Vec<F>, c: &Vec<F>, it: usize) -> (){
+pub fn ark(one: F, state: &mut Vec<F>, c: &Vec<F>, it: usize) -> (){
     for i in 0..state.len() {
         state[i] += &c[it+i]*one;
     }
 }
 
-fn sbox(one4: F, n_rounds_f: usize, n_rounds_p: usize, state: &mut Vec<F>, i: usize) -> () {
+pub fn sbox(one4: F, n_rounds_f: usize, n_rounds_p: usize, state: &mut Vec<F>, i: usize) -> () {
     if i < n_rounds_f / 2 || i >= n_rounds_f / 2 + n_rounds_p {
         for j in 0..state.len() {
             let aux = state[j];
-            state[j].square();
-            state[j].square();
+            state[j] = state[j].square();
+            state[j] = state[j].square();
             state[j] *= &aux;
         }
     } else {
         let aux = state[0];
-        state[0].square();
-        state[0].square();
+        state[0] = state[0].square();
+        state[0] = state[0].square();
         state[0] *= &aux;
 
         for j in 1..state.len() {
@@ -88,7 +90,7 @@ fn sbox(one4: F, n_rounds_f: usize, n_rounds_p: usize, state: &mut Vec<F>, i: us
     }
 }
 
-fn mix(state: &Vec<F>, m: &Vec<Vec<F>>) -> Vec<F> {
+pub fn mix(state: &Vec<F>, m: &Vec<Vec<F>>) -> Vec<F> {
     let mut new_state: Vec<F> = Vec::new();
     for i in 0..state.len() {
         new_state.push(F::zero());
@@ -103,7 +105,7 @@ fn mix(state: &Vec<F>, m: &Vec<Vec<F>>) -> Vec<F> {
 
 /// A polynomial operation executing k rounds of Poseidon. Recommended k = 2, which amounts to the polyop of degree 25.
 /// Does not make any sanity checks on state length.
-fn poseidon_kround_poly(
+pub fn poseidon_kround_poly(
     k: usize,
     one: F,
     state: &[F],
@@ -115,14 +117,24 @@ fn poseidon_kround_poly(
     t: usize,
     ) -> Vec<F> {
     
+    let mut one_arr = vec![F::ZERO; k];
+    let mut one4_arr = vec![F::ZERO; k];
+    
+    one_arr[0] = one;
     let one2 = one*one;
-    let one4 = one2*one2;
+    one4_arr[0] = one2*one2;
+    
+    for s in 1..k {
+        one_arr[s] = one4_arr[s-1]*one_arr[s-1];
+        let one2 = one_arr[s]*one_arr[s];
+        one4_arr[s] = one2*one2;
+    }
 
     let mut state = state.to_vec();
     
-    for j in i..i+k {
-        ark(one, &mut state, c, j*t);
-        sbox(one4, n_rounds_f, n_rounds_p, &mut state, j);
+    for j in 0..k {
+        ark(one_arr[j], &mut state, c, (i+j)*t);
+        sbox(one4_arr[j], n_rounds_f, n_rounds_p, &mut state, i+j);
         state = mix(&state, m);
     }
 
@@ -139,6 +151,8 @@ pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a
     let n_rounds_f = cfg.constants.n_rounds_f;
     let n_rounds_p = cfg.constants.n_rounds_p[t - 2];
 
+    println!("Init");
+
     let mut state = circuit.apply(
         round,
         PolyOp::new(
@@ -154,6 +168,8 @@ pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a
             )
         ),
         inp);
+
+    println!("1st round passed");
 
     for i in 1..(n_rounds_f+n_rounds_p)/k {
         state = circuit.apply(

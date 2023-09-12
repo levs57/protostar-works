@@ -1,2 +1,2 @@
 mod poseidon_constants;
-mod poseidon;
+pub mod poseidon;

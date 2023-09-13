@@ -96,7 +96,7 @@ impl<F:PrimeField, T: Gate<F>> CSWtns<F, T>{
         CSWtnsRelaxed { cs: self, err }
     }
 
-    pub fn valid_witness(self) -> () {
+    pub fn valid_witness(&self) -> () {
         for cg in &self.cs.cs {
             for constr in &cg.entries {
                 let tmp : Vec<_> = constr.inputs.iter().map(|x|self.getvar(*x)).collect();

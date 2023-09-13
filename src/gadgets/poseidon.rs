@@ -141,7 +141,6 @@ pub fn poseidon_kround_poly(
 }
 
 pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, k: usize, round: usize, inp: Vec<Variable>) -> Variable {
-    let one = circuit.one();
     let t = inp.len()+1;
     if inp.is_empty() || inp.len() > cfg.constants.n_rounds_p.len() {
         panic!("Wrong inputs length");

@@ -47,15 +47,15 @@ pub fn double_internal<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(state: &
     let y = state.1;
     let z = state.2;
 
-    let w = F::from(3)*x.square();
+    let w = x.square().scale(3);
     let s = y*z;
     let b = x*y*s;
-    let h = w.square() - F::from(8)*b;
+    let h = w.square() - b.scale(8);
     
-    state.0 = F::from(2)*h*s;
+    state.0 = h*s.scale(2);
     let s_sq = s.square();
-    state.1 = w*(F::from(4)*b - h) - F::from(8)*y.square()*s_sq;
-    state.2 = F::from(8)*s*s_sq;
+    state.1 = w*(b.scale(4) - h) - y.square()*s_sq.scale(8);
+    state.2 = s*s_sq.scale(8);
 }
 
 pub fn double_k_times_internal<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(x: F, y: F, k:usize) -> (F, F, F) {

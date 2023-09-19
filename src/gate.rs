@@ -59,7 +59,7 @@ pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&
     }
 }
 
-/// Attempts to find a polynomial degree of a black-box function.
+/// Attempts to find a polynomial degree of a black-box function. Should instead use binary search, of course :).
 pub fn find_degree<'a, F: PrimeField>(max_degree: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Result<usize, &str>{
     let a : Vec<_> = repeat(F::random(OsRng)).take(i).collect(); 
     let b : Vec<_> = repeat(F::random(OsRng)).take(i).collect(); 

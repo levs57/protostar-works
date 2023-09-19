@@ -87,9 +87,16 @@ pub fn double_k_times_gadget<'a, F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>
     let ret_x = tmp[0];
     let ret_y = tmp[1];
 
+    let d = match k {
+        1 => 6,
+        2 => 30,
+        3 => 174,
+        _ => panic!("Unsupported value of k"),
+    };
+
     circuit.constrain(
         &vec![pt.x, pt.y, ret_x, ret_y],
-        Gatebb::new(pow(6,k)+1, 4, 2, Rc::new(move |args|{
+        Gatebb::new(d, 4, 2, Rc::new(move |args|{
             let ptx = args[0];
             let pty = args[1];
             let rhs_x = args[2];

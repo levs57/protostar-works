@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::{RefCell, Cell}, iter::repeat};
 
-use crate::{gate::{self, RootsOfUnity, Gatebb, Gate}, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, ark, sbox, mix, poseidon_kround_poly}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget, ecmul::{EcAffinePoint, double_k_times_gadget}}};
+use crate::{gate::{self, RootsOfUnity, Gatebb, Gate, check_poly, find_degree}, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, ark, sbox, mix, poseidon_kround_poly}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget, ecmul::{EcAffinePoint, double_k_times_gadget, double_k_times_internal}}};
 use ff::{PrimeField, Field};
 use group::{Group, Curve};
 use halo2::{arithmetic::best_fft};
@@ -202,6 +202,22 @@ fn test_chunk_decomposition(){
     assert!(chunks.len()==2);
     assert!(circuit.cs.getvar(chunks[0]) == F::from(2));
     assert!(circuit.cs.getvar(chunks[1]) == F::from(1));
+}
+
+#[test]
+
+fn test_check_poly() {
+    let f = Rc::new(|x: &[F]|{vec![x[0].pow([5])]});
+    check_poly(4, 1, 1, f).unwrap();
+}
+
+#[test]
+
+fn test_doubling_degree() {
+    for k in 1..5 {
+        let f = Rc::new(|args: &[F]|{let tmp = double_k_times_internal::<F,C>(args[0], args[1], k); vec![tmp.0, tmp.1, tmp.2]});
+        println!("at k={}, deg={}", k, find_degree(1000, 2, 3, f).unwrap());
+    }
 }
 
 #[test]

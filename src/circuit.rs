@@ -17,7 +17,7 @@ pub struct PolyOp<'a, F:PrimeField>{
 
 impl<'a, F:PrimeField> PolyOp<'a, F> {
     pub fn new(d: usize, i: usize, o: usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self{
-        check_poly(d, i, o, f.clone()); 
+        check_poly(d, i, o, f.clone()).unwrap(); 
         Self { d, i, o, f }
     }
 

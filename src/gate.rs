@@ -1,4 +1,4 @@
-use std::{iter::repeat, cmp::max, marker::PhantomData, rc::Rc};
+use std::{iter::repeat, cmp::max, marker::PhantomData, rc::Rc, string};
 
 use group::{Group, Curve};
 use ff::{Field, PrimeField};
@@ -16,7 +16,7 @@ pub trait RootsOfUnity where Self : PrimeField{
     fn binomial_FFT(power: usize, logorder: usize) -> Vec<Self>;
 }
 
-pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>){
+pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Result<(), &str>{
     let a : Vec<_> = repeat(F::random(OsRng)).take(i).collect(); 
     let b : Vec<_> = repeat(F::random(OsRng)).take(i).collect(); 
     
@@ -45,9 +45,51 @@ pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&
         }).count();
     }
 
+    let mut flag = true;
+
     for val in acc {
-        assert!(val == F::ZERO, "Provided polynomial is not of degree d");
+        flag &= (val == F::ZERO);
     }
+
+    match flag {
+        true => Ok(()),
+        false => Err("The provided polynomial has incorrect degree"),
+    }
+}
+
+/// Attempts to find a polynomial degree of a black-box function.
+pub fn find_degree<'a, F: PrimeField>(max_degree: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Result<usize, &str>{
+    let a : Vec<_> = repeat(F::random(OsRng)).take(i).collect(); 
+    let b : Vec<_> = repeat(F::random(OsRng)).take(i).collect(); 
+    
+    let mut lcs : Vec<Vec<_>> = vec![];
+
+    for j in 0..max_degree+1 {
+        let tmp : Vec<F> = a.iter().zip(b.iter()).map(|(a,b)|*a+F::from(j as u64)*b).collect();
+        lcs.push((*f)(&tmp));
+
+        if j == 0 { continue }
+        let mut acc = vec![F::ZERO; i];
+        let mut binom = F::ONE;
+    
+        let n = j-1;
+        // n!/k!(n-k)! = n!/(k-1)!(n-k+1)! * (n-k+1)/k
+        for k in 0..n+1 {
+            if k>0 {
+                binom *= F::from((n-k+1) as u64) * F::from(k as u64).invert().unwrap() 
+            }
+            let sign = F::ONE-F::from(((k%2)*2) as u64);
+            acc.iter_mut().zip(lcs[k].iter()).map(|(acc, upd)|{
+                *acc += sign * (*upd) * binom;
+            }).count();
+        }
+        let mut flag = true;
+        for v in acc {flag &= (v==F::ZERO)}
+        
+        if flag {return Ok((n-1))}
+    };
+
+    Err("Degree not found")
 }
 
 #[derive(Clone)]
@@ -63,7 +105,7 @@ pub struct Gatebb<'a, F : PrimeField> {
 
 impl<'a, F: PrimeField> Gatebb<'a, F> {
     pub fn new(d: usize, i: usize, o: usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self {
-        check_poly(d, i, o, f.clone());
+        check_poly(d, i, o, f.clone()).unwrap();
         Gatebb::<'a>{d,i,o,f}
     } 
     pub fn new_unchecked(d: usize, i: usize, o: usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self {

@@ -1,3 +1,4 @@
+// Poseidon gadget.
 // Implementation taken from arnaucube's poseidon-rs implementation and adapted as blackbox-gadget.
 // Also adapted structures so they work with my field.
 
@@ -63,13 +64,13 @@ impl Poseidon {
         }
     }
 }
-pub fn ark(one: F, state: &mut Vec<F>, c: &Vec<F>, it: usize) -> (){
+pub fn ark(state: &mut Vec<F>, c: &Vec<F>, it: usize) -> (){
     for i in 0..state.len() {
-        state[i] += &c[it+i]*one;
+        state[i] += &c[it+i];
     }
 }
 
-pub fn sbox(one4: F, n_rounds_f: usize, n_rounds_p: usize, state: &mut Vec<F>, i: usize) -> () {
+pub fn sbox(n_rounds_f: usize, n_rounds_p: usize, state: &mut Vec<F>, i: usize) -> () {
     if i < n_rounds_f / 2 || i >= n_rounds_f / 2 + n_rounds_p {
         for j in 0..state.len() {
             let aux = state[j];
@@ -82,10 +83,6 @@ pub fn sbox(one4: F, n_rounds_f: usize, n_rounds_p: usize, state: &mut Vec<F>, i
         state[0] = state[0].square();
         state[0] = state[0].square();
         state[0] *= &aux;
-
-        for j in 1..state.len() {
-            state[j] *= one4;
-        }  
     }
 }
 
@@ -106,7 +103,6 @@ pub fn mix(state: &Vec<F>, m: &Vec<Vec<F>>) -> Vec<F> {
 /// Does not make any sanity checks on state length.
 pub fn poseidon_kround_poly(
     k: usize,
-    one: F,
     state: &[F],
     i: usize,
     c: &Vec<F>,
@@ -115,25 +111,12 @@ pub fn poseidon_kround_poly(
     n_rounds_p: usize,
     t: usize,
     ) -> Vec<F> {
-    
-    let mut one_arr = vec![F::ZERO; k];
-    let mut one4_arr = vec![F::ZERO; k];
-    
-    one_arr[0] = one;
-    let one2 = one*one;
-    one4_arr[0] = one2*one2;
-    
-    for s in 1..k {
-        one_arr[s] = one4_arr[s-1]*one_arr[s-1];
-        let one2 = one_arr[s]*one_arr[s];
-        one4_arr[s] = one2*one2;
-    }
 
     let mut state = state.to_vec();
     
     for j in 0..k {
-        ark(one_arr[j], &mut state, c, (i+j)*t);
-        sbox(one4_arr[j], n_rounds_f, n_rounds_p, &mut state, i+j);
+        ark(&mut state, c, (i+j)*t);
+        sbox(n_rounds_f, n_rounds_p, &mut state, i+j);
         state = mix(&state, m);
     }
 
@@ -149,6 +132,8 @@ pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a
     let n_rounds_f = cfg.constants.n_rounds_f;
     let n_rounds_p = cfg.constants.n_rounds_p[t - 2];
 
+    println!("Hi!");
+
     let mut state = circuit.apply(
         round,
         PolyOp::new(
@@ -156,10 +141,10 @@ pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a
             t-1,
             t,
             Rc::new(
-                move |one, inp|{
+                move |inp|{
                     let mut state = vec![F::ZERO; t];
                     state[1..].clone_from_slice(&inp);            
-                    poseidon_kround_poly(k, one, &state, 0, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
+                    poseidon_kround_poly(k, &state, 0, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
                 }
             )
         ),
@@ -173,8 +158,8 @@ pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a
                 t,
                 t,
                 Rc::new(
-                    move |one, inp| {
-                        poseidon_kround_poly(k, one, inp, i*k, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
+                    move |inp| {
+                        poseidon_kround_poly(k, inp, i*k, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
                     }
                 )
             ),
@@ -192,8 +177,8 @@ pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a
                 t,
                 t,
                 Rc::new(
-                    move |one, inp| {
-                        poseidon_kround_poly(rem, one, inp, (n_rounds_f + n_rounds_p)-rem, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
+                    move |inp| {
+                        poseidon_kround_poly(rem, inp, (n_rounds_f + n_rounds_p)-rem, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
                     }
                 )
             ),

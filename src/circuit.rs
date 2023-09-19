@@ -4,7 +4,7 @@ use ff::PrimeField;
 use num_traits::pow;
 use rand_core::OsRng;
 
-use crate::{witness::CSWtns, gate::{Gatebb, RootsOfUnity, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind}};
+use crate::{witness::CSWtns, gate::{Gatebb, RootsOfUnity, Gate, check_poly}, constraint_system::{Variable, ConstraintSystem, CommitKind}};
 
 
 #[derive(Clone)]
@@ -12,22 +12,12 @@ pub struct PolyOp<'a, F:PrimeField>{
     pub d: usize,
     pub i: usize,
     pub o: usize,
-    pub f: Rc<dyn Fn(F, &[F]) -> Vec<F> + 'a>,
+    pub f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>,
 }
 
 impl<'a, F:PrimeField> PolyOp<'a, F> {
-    pub fn new(d: usize, i: usize, o: usize, f: Rc<dyn Fn(F, &[F]) -> Vec<F> + 'a>) -> Self{
-        let random_input : (_, Vec<_>) = (F::random(OsRng) , repeat(F::random(OsRng)).take(i).collect()); 
-        let random_input_2 : (_, Vec<_>) = (random_input.0*F::from(2), random_input.1.iter().map(|x| *x*F::from(2)).collect());
-        assert!({
-            let mut flag = true;
-            assert!((&f)(random_input_2.0, &random_input_2.1).iter().zip((&f)(random_input.0, &random_input.1).iter())
-                .map(|(a, b)| {
-                    flag &= (*a==*b*F::from(pow(2, d)))
-                }).count() == o, "Wrong output size");
-            flag
-        }, "Sanity check failed - provided f is not a polynomial of degree d");
- 
+    pub fn new(d: usize, i: usize, o: usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self{
+        check_poly(d, i, o, f.clone()); 
         Self { d, i, o, f }
     }
 
@@ -39,19 +29,16 @@ impl<'a, F:PrimeField> PolyOp<'a, F> {
 impl<'a, F: PrimeField> From<PolyOp<'a, F>> for Gatebb<'a, F>{
     fn from(value: PolyOp<'a, F>) -> Self {
         let d = value.d;
-        let i = value.i + 1 + value.o;
+        let i = value.i + value.o;
         let o = value.o;
 
         let f = move |args: &[F]| {
-            let (inputs, outputs) = args.split_at(value.i+1);
-            let (one, inputs) = inputs.split_at(1);
-            let one = one[0];
-            let results = (value.f)(one, &inputs);
-            let onepow = one.pow([(value.d-1) as u64]);
-            results.iter().zip(outputs.iter()).map(|(inp, out)|*inp-*out*onepow).collect()
+            let (inputs, outputs) = args.split_at(value.i);
+            let results = (value.f)(&inputs);
+            results.iter().zip(outputs.iter()).map(|(res, out)|*res-*out).collect()
         };
 
-        Gatebb::new(d, i, o, Rc::new(f))    
+        Gatebb::new(d, i, o, Rc::new(f))   
     }
 }
 
@@ -192,7 +179,7 @@ impl<'a, F: PrimeField + RootsOfUnity, T: Gate<F> + From<PolyOp<'a, F>>> Circuit
             output.push( self.cs.alloc_priv_internal(round) );
         }
 
-        let mut gate_io = vec![Variable::Public(0,0)];
+        let mut gate_io = vec![];
         gate_io.append(&mut i.clone());
         gate_io.append(&mut output.clone());
         if polyop.d == 0 {panic!("Operation {} has degree 0, which is banned.", self.ops.len())}
@@ -220,7 +207,7 @@ impl<'a, F: PrimeField + RootsOfUnity, T: Gate<F> + From<PolyOp<'a, F>>> Circuit
             output.push( self.cs.alloc_pub_internal(round) );
         }
 
-        let mut gate_io = vec![Variable::Public(0,0)];
+        let mut gate_io = vec![];
         gate_io.append(&mut i.clone());
         gate_io.append(&mut output.clone());
         if polyop.d == 0 {panic!("Operation {} has degree 0, which is banned.", self.ops.len())}
@@ -260,7 +247,7 @@ impl<'a, F: PrimeField + RootsOfUnity, T: Gate<F> + From<PolyOp<'a, F>>> Circuit
                 match op {
                     Operation::Poly(polyop) => {
                         let input : Vec<_> = polyop.i.iter().map(|x|self.cs.getvar(*x)).collect();
-                        let output = (&polyop.op.f)(F::ONE, &input);
+                        let output = (&polyop.op.f)(&input);
                         polyop.o.iter().zip(output.iter()).map(|(i,v)| self.cs.setvar(*i, *v)).count();
                     }
                     Operation::Adv(adv) => {

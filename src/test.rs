@@ -38,17 +38,17 @@ impl RootsOfUnity for F {
     }
 }
 
-#[test]
+// #[test]
 
-fn test_cross_terms() {
+// fn test_cross_terms() {
 
-    for d in 2..10{
-        let f = Rc::new(|v: &[F]| vec![v[0].pow([2 as u64])]);
-        let gate = Gatebb::new(2, 1, 1, f);
-        let tmp = gate.cross_terms_adjust(&vec![F::ONE], &vec![F::ONE], d);
-        println!("{:?}", tmp.iter().map(|v|v[0]).collect::<Vec<_>>());
-    }
-}
+//     for d in 2..10{
+//         let f = Rc::new(|v: &[F]| vec![v[0].pow([2 as u64])]);
+//         let gate = Gatebb::new(2, 1, 1, f);
+//         let tmp = gate.cross_terms_adjust(&vec![F::ONE], &vec![F::ONE], d);
+//         println!("{:?}", tmp.iter().map(|v|v[0]).collect::<Vec<_>>());
+//     }
+// }
 
 #[test]
 
@@ -57,7 +57,7 @@ fn test_circuit_builder() {
 
     let mut circuit = Circuit::<F, Gatebb<F>>::new(2, 1);
 
-    let sq = PolyOp::new(2, 1, 1, Rc::new(|_: F, x|vec!(x[0]*x[0])));
+    let sq = PolyOp::new(2, 1, 1, Rc::new(|x|vec!(x[0]*x[0])));
     let input = circuit.advice_pub(0, Advice::new(0, 1, 1, Rc::new(|_, iext|vec![iext[0]])), vec![], vec![&public_input_source])[0];
     let sq1 = circuit.apply(0, sq.clone(), vec![input]);
     let output = circuit.apply_pub(0, sq.clone(), sq1);

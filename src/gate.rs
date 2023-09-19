@@ -14,6 +14,8 @@ pub trait RootsOfUnity where Self : PrimeField{
     fn half_pow(power: u64) -> Self;
     /// Returns FFT of the binomial.
     fn binomial_FFT(power: usize, logorder: usize) -> Vec<Self>;
+    /// Multiplies the value by the small scalar.
+    fn scale(&self, scale: u64) -> Self;
 }
 
 pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Result<(), &str>{

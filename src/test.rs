@@ -38,6 +38,43 @@ impl RootsOfUnity for F {
         best_fft(&mut bin_coeffs, omega, logorder as u32);
         bin_coeffs
     }
+
+    /// Addition chains mostly taken from https://github.com/mratsim/constantine/blob/master/constantine/math/arithmetic/finite_fields.nim#L443 
+    fn scale(&self, scale: u64) -> Self {
+        let mut x = *self;
+        let mut acc = Self::ZERO;
+        if scale > 15 {
+            let mut scale = scale;
+            while scale > 0 {
+                if scale%2 == 1 {
+                    acc += x;
+                }
+                x = x.double();
+                scale >>= 1;
+            }
+            acc
+        } else {
+            match scale {
+                0 => F::ZERO,
+                1 => x,
+                2 => x.double(),
+                3 => {let y = x.double(); y+x},
+                4 => x.double().double(),
+                5 => {let y = x.double().double(); y+x},
+                6 => {x = x.double(); let y = x.double(); y+x},
+                7 => {let y = x.double().double().double(); y-x},
+                8 => {x.double().double().double()},
+                9 => {let y = x.double().double().double(); y+x},
+                10 => {x = x.double(); let y = x.double().double(); y+x},
+                11 => {let y = x.double().double(); y.double()+y-x},
+                12 => {let y = x.double().double(); y.double()+y},
+                13 => {let y = x.double().double(); y.double()+y+x},
+                14 => {x=x.double(); let y = x.double().double().double(); y-x},
+                15 => {let y = x.double().double().double().double(); y-x},
+                _ => unreachable!(),
+            }
+        }
+    }
 }
 
 // #[test]
@@ -254,4 +291,13 @@ fn test_double_k_times() {
     let quad = randptproj.double().double().to_affine();
 
     assert!(grumpkin::G1Affine::from_xy(retx, rety).unwrap() == quad);
+}
+
+#[test]
+
+fn test_scale(){
+    let x = F::random(OsRng);
+    for y in 0..100 {
+        assert!(x.scale(y) == x*F::from(y));
+    }
 }

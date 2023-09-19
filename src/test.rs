@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::{RefCell, Cell}, iter::repeat};
 
-use crate::{gate::{self, RootsOfUnity, Gatebb, Gate}, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, ark, sbox, mix, poseidon_kround_poly}, bits::bit_decomposition_gadget}};
+use crate::{gate::{self, RootsOfUnity, Gatebb, Gate}, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, ark, sbox, mix, poseidon_kround_poly}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget}};
 use ff::{PrimeField, Field};
 use halo2::arithmetic::best_fft;
 use halo2curves::{bn256, serde::SerdeObject};
@@ -179,4 +179,25 @@ fn test_bit_decomposition(){
     assert!(circuit.cs.getvar(bits[0]) == F::ZERO);
     assert!(circuit.cs.getvar(bits[1]) == F::ONE);
     assert!(circuit.cs.getvar(bits[2]) == F::ONE);
+}
+
+#[test]
+
+fn test_chunk_decomposition(){
+    let pi_ext = ExternalValue::<F>::new();
+    let mut circuit = Circuit::<F, Gatebb<F>>::new(4, 1);
+    let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
+    let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
+
+    let chunks = bit_chunks_gadget(&mut circuit, 0, 2, 2, pi);
+
+    circuit.finalize();
+    pi_ext.set(F::from(6)).unwrap();
+    circuit.execute(0);
+
+    circuit.cs.valid_witness();
+
+    assert!(chunks.len()==2);
+    assert!(circuit.cs.getvar(chunks[0]) == F::from(2));
+    assert!(circuit.cs.getvar(chunks[1]) == F::from(1));
 }

@@ -7,9 +7,8 @@ use ff::PrimeField;
 use crate::{circuit::{Circuit, Advice, PolyOp}, gate::{Gatebb, RootsOfUnity}, constraint_system::Variable};
 
 pub fn bitcheck<F: PrimeField>(arg: &[F]) -> Vec<F> {
-    let one = arg[0];
-    let x = arg[1];
-    vec![x*x - one*x]
+    let x = arg[0];
+    vec![x*x - x]
 }
 
 // This gate is homogeneous, so it DOES not take 1 as first input.
@@ -48,13 +47,12 @@ pub fn bit_decomposition_gadget<'a, F: PrimeField+RootsOfUnity>(circuit: &mut Ci
         vec![]
     );
 
-    let bitcheck_gate = Gatebb::new(2, 2, 1, Rc::new(bitcheck::<F>));
-    let one = circuit.one();
+    let bitcheck_gate = Gatebb::new(2, 1, 1, Rc::new(bitcheck::<F>));
 
     for i in 0..num_bits-1 {
-        circuit.constrain(&vec![one, bits[i]], bitcheck_gate.clone())
+        circuit.constrain(&vec![bits[i]], bitcheck_gate.clone())
     }
-    circuit.constrain(&vec![one, bits[num_bits-1]], bitcheck_gate);
+    circuit.constrain(&vec![bits[num_bits-1]], bitcheck_gate);
 
     let decompcheck_gate = Gatebb::new(1, num_bits+1, 1, Rc::new(decompcheck::<F>));
     let tmp : Vec<_> = repeat(input).take(1).chain(bits.iter().map(|x|*x)).collect();

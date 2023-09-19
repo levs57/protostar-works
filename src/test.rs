@@ -1,13 +1,15 @@
 use std::{rc::Rc, cell::{RefCell, Cell}, iter::repeat};
 
-use crate::{gate::{self, RootsOfUnity, Gatebb, Gate}, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, ark, sbox, mix, poseidon_kround_poly}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget}};
+use crate::{gate::{self, RootsOfUnity, Gatebb, Gate}, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, ark, sbox, mix, poseidon_kround_poly}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget, ecmul::{EcAffinePoint, double_k_times_gadget}}};
 use ff::{PrimeField, Field};
-use halo2::arithmetic::best_fft;
-use halo2curves::{bn256, serde::SerdeObject};
+use group::{Group, Curve};
+use halo2::{arithmetic::best_fft};
+use halo2curves::{bn256, serde::SerdeObject, grumpkin, CurveAffine, CurveExt};
 use num_traits::pow;
 use rand_core::OsRng;
 
 type F = bn256::Fr;
+type C = grumpkin::G1;
 
 impl RootsOfUnity for F {
     /// Returns power of a primitive root of unity of order 2^logorder.
@@ -200,4 +202,40 @@ fn test_chunk_decomposition(){
     assert!(chunks.len()==2);
     assert!(circuit.cs.getvar(chunks[0]) == F::from(2));
     assert!(circuit.cs.getvar(chunks[1]) == F::from(1));
+}
+
+#[test]
+
+fn test_double_k_times() {
+    let pi_x_ext = ExternalValue::<F>::new();
+    let pi_y_ext = ExternalValue::<F>::new();
+    let mut circuit = Circuit::<F, Gatebb<F>>::new(37, 1);
+    let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
+
+    let x = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_x_ext])[0];
+    let y = circuit.advice_pub(0, read_pi_advice, vec![], vec![&pi_y_ext])[0];
+    
+    let pt = EcAffinePoint::<F, C>::new(&mut circuit, x,y);
+
+    let ret = double_k_times_gadget(&mut circuit, 2, 0, pt);
+
+    circuit.finalize();
+
+    let randpt = C::random(OsRng).to_affine();
+    let randx = randpt.x;
+    let randy = randpt.y;
+
+    pi_x_ext.set(randx).unwrap();
+    pi_y_ext.set(randy).unwrap();
+
+    circuit.execute(0);
+    circuit.cs.valid_witness();
+
+    let retx = circuit.cs.getvar(ret.x);
+    let rety = circuit.cs.getvar(ret.y);
+
+    let randptproj : C = randpt.into();
+    let quad = randptproj.double().double().to_affine();
+
+    assert!(grumpkin::G1Affine::from_xy(retx, rety).unwrap() == quad);
 }

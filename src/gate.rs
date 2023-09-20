@@ -55,43 +55,32 @@ pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&
 
     match flag {
         true => Ok(()),
-        false => Err("The provided polynomial has incorrect degree"),
+        false => Err("The provided polynomial has degree larger than provided"),
     }
 }
 
 /// Attempts to find a polynomial degree of a black-box function. Should instead use binary search, of course :).
 pub fn find_degree<'a, F: PrimeField>(max_degree: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Result<usize, &str>{
-    let a : Vec<_> = repeat(F::random(OsRng)).take(i).collect(); 
-    let b : Vec<_> = repeat(F::random(OsRng)).take(i).collect(); 
-    
-    let mut lcs : Vec<Vec<_>> = vec![];
-
-    for j in 0..max_degree+1 {
-        let tmp : Vec<F> = a.iter().zip(b.iter()).map(|(a,b)|*a+F::from(j as u64)*b).collect();
-        lcs.push((*f)(&tmp));
-
-        if j == 0 { continue }
-        let mut acc = vec![F::ZERO; i];
-        let mut binom = F::ONE;
-    
-        let n = j-1;
-        // n!/k!(n-k)! = n!/(k-1)!(n-k+1)! * (n-k+1)/k
-        for k in 0..n+1 {
-            if k>0 {
-                binom *= F::from((n-k+1) as u64) * F::from(k as u64).invert().unwrap() 
-            }
-            let sign = F::ONE-F::from(((k%2)*2) as u64);
-            acc.iter_mut().zip(lcs[k].iter()).map(|(acc, upd)|{
-                *acc += sign * (*upd) * binom;
-            }).count();
+    let mut top = 1;
+    loop {
+        if top > max_degree {return Err("The degree of provided function is too large.")}
+        match check_poly(top, i, o, f.clone()) {
+            Err(_) => top*=2,
+            Ok(()) => break, 
         }
-        let mut flag = true;
-        for v in acc {flag &= (v==F::ZERO)}
-        
-        if flag {return Ok((n-1))}
-    };
+    }
+    let mut bot = top/2;
+    if bot == 0 {return Ok(1)}
+    while top-bot > 1 {
+        let mid = (top+bot)/2;
+        match check_poly(mid, i, o, f.clone()) {
+            Err(_) => bot = mid,
+            Ok(()) => top = mid,
+        }
+    }
 
-    Err("Degree not found")
+    Ok(top)
+
 }
 
 #[derive(Clone)]

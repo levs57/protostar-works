@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::{RefCell, Cell}, iter::repeat};
 
-use crate::{gate::{self, RootsOfUnity, Gatebb, Gate, check_poly, find_degree}, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, ark, sbox, mix, poseidon_kround_poly}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget, ecmul::{EcAffinePoint, double_k_times_gadget, double_k_times_internal}}};
+use crate::{gate::{self, RootsOfUnity, Gatebb, Gate, check_poly, find_degree}, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, ark, sbox, mix, poseidon_kround_poly}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget, ecmul::{EcAffinePoint, add_proj, best_mul_proj, double_and_add_proj, double_and_add_proj_le, oct_suboptimal, quad_aleg_optimal, oct_subsuboptimal, sq_aleg_optimal}}};
 use ff::{PrimeField, Field};
 use group::{Group, Curve};
 use halo2::{arithmetic::best_fft};
@@ -248,50 +248,50 @@ fn test_check_poly() {
     check_poly(4, 1, 1, f).unwrap();
 }
 
-#[test]
+// #[test]
 
-fn test_doubling_degree() {
-    for k in 1..5 {
-        let f = Rc::new(|args: &[F]|{let tmp = double_k_times_internal::<F,C>(args[0], args[1], k); vec![tmp.0, tmp.1, tmp.2]});
-        println!("at k={}, deg={}", k, find_degree(1000, 2, 3, f).unwrap());
-    }
-}
+// fn test_doubling_degree() {
+//     for k in 1..5 {
+//         let f = Rc::new(|args: &[F]|{let tmp = double_k_times_internal::<F,C>(args[0], args[1], k); vec![tmp.0, tmp.1, tmp.2]});
+//         println!("at k={}, deg={}", k, find_degree(1000, 2, 3, f).unwrap());
+//     }
+// }
 
-#[test]
+// #[test]
 
-fn test_double_k_times() {
-    let pi_x_ext = ExternalValue::<F>::new();
-    let pi_y_ext = ExternalValue::<F>::new();
-    let mut circuit = Circuit::<F, Gatebb<F>>::new(37, 1);
-    let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
+// fn test_double_k_times() {
+//     let pi_x_ext = ExternalValue::<F>::new();
+//     let pi_y_ext = ExternalValue::<F>::new();
+//     let mut circuit = Circuit::<F, Gatebb<F>>::new(37, 1);
+//     let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
 
-    let x = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_x_ext])[0];
-    let y = circuit.advice_pub(0, read_pi_advice, vec![], vec![&pi_y_ext])[0];
+//     let x = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_x_ext])[0];
+//     let y = circuit.advice_pub(0, read_pi_advice, vec![], vec![&pi_y_ext])[0];
     
-    let pt = EcAffinePoint::<F, C>::new(&mut circuit, x,y);
+//     let pt = EcAffinePoint::<F, C>::new(&mut circuit, x,y);
 
-    let ret = double_k_times_gadget(&mut circuit, 2, 0, pt);
+//     let ret = double_k_times_gadget(&mut circuit, 2, 0, pt);
 
-    circuit.finalize();
+//     circuit.finalize();
 
-    let randpt = C::random(OsRng).to_affine();
-    let randx = randpt.x;
-    let randy = randpt.y;
+//     let randpt = C::random(OsRng).to_affine();
+//     let randx = randpt.x;
+//     let randy = randpt.y;
 
-    pi_x_ext.set(randx).unwrap();
-    pi_y_ext.set(randy).unwrap();
+//     pi_x_ext.set(randx).unwrap();
+//     pi_y_ext.set(randy).unwrap();
 
-    circuit.execute(0);
-    circuit.cs.valid_witness();
+//     circuit.execute(0);
+//     circuit.cs.valid_witness();
 
-    let retx = circuit.cs.getvar(ret.x);
-    let rety = circuit.cs.getvar(ret.y);
+//     let retx = circuit.cs.getvar(ret.x);
+//     let rety = circuit.cs.getvar(ret.y);
 
-    let randptproj : C = randpt.into();
-    let quad = randptproj.double().double().to_affine();
+//     let randptproj : C = randpt.into();
+//     let quad = randptproj.double().double().to_affine();
 
-    assert!(grumpkin::G1Affine::from_xy(retx, rety).unwrap() == quad);
-}
+//     assert!(grumpkin::G1Affine::from_xy(retx, rety).unwrap() == quad);
+// }
 
 #[test]
 
@@ -299,5 +299,125 @@ fn test_scale(){
     let x = F::random(OsRng);
     for y in 0..100 {
         assert!(x.scale(y) == x*F::from(y));
+    }
+}
+
+#[test]
+
+fn test_add() {
+    let pt1 = C::random(OsRng).to_affine();
+    let pt2 = C::random(OsRng).to_affine();
+
+    let r1 = F::random(OsRng);
+    let r2 = F::random(OsRng);
+
+    let pt1_ = (pt1.x*r1, pt1.y*r1, r1);
+    let pt2_ = (pt2.x*r2, pt2.y*r2, r2);
+
+    let pt3_ = add_proj::<F,C>(pt1_, pt2_);
+
+    let r3_inv = pt3_.2.invert().unwrap();
+    let pt3 = grumpkin::G1Affine::from_xy(pt3_.0*r3_inv, pt3_.1*r3_inv).unwrap();
+
+    assert!(Into::<C>::into(pt3) == pt1+pt2);
+}
+
+#[test]
+
+fn test_mul() {
+    let pt = C::random(OsRng).to_affine();
+    for k in 1..100 {
+        let retl = pt*<C as CurveExt>::ScalarExt::from(k);
+        
+        let tmp = best_mul_proj::<F,C>(pt.x, pt.y, k);
+        let inv = tmp.2.invert().unwrap();
+        
+        let retr = Into::<C>::into(grumpkin::G1Affine::from_xy(tmp.0*inv, tmp.1*inv).unwrap());
+
+        assert!(retr == retl);
+        let tmp = double_and_add_proj::<F,C>(pt.x, pt.y, k);
+        let inv = tmp.2.invert().unwrap();
+        
+        let retr = Into::<C>::into(grumpkin::G1Affine::from_xy(tmp.0*inv, tmp.1*inv).unwrap());
+
+        assert!(retr == retl);
+
+        let tmp = double_and_add_proj_le::<F,C>(pt.x, pt.y, k);
+        let inv = tmp.2.invert().unwrap();
+        
+        let retr = Into::<C>::into(grumpkin::G1Affine::from_xy(tmp.0*inv, tmp.1*inv).unwrap());
+
+        assert!(retr == retl);
+
+    }
+}
+
+#[test]
+
+fn test_mul_deg() {
+    for k in (1..5).map(|x|1<<x) {
+        
+        println!("The degree of the (allegedly) optimal mixed multiplication by {} is {}",
+            k,
+            find_degree(2000, 2, 3, Rc::new(move |args| {
+                let tmp = best_mul_proj::<F,C>(args[0], args[1], k);
+                vec![tmp.0, tmp.1, tmp.2]
+            })).unwrap());
+
+        println!("The degree of the double-and-add      mixed multiplication by {} is {}",
+        k,
+        find_degree(2000, 2, 3, Rc::new(move |args| {
+            let tmp = double_and_add_proj::<F,C>(args[0], args[1], k);
+            vec![tmp.0, tmp.1, tmp.2]
+        })).unwrap());
+
+        println!("The degree of the le double-and-add   mixed multiplication by {} is {}\n",
+            k,
+            find_degree(2000, 2, 3, Rc::new(move |args| {
+                let tmp = double_and_add_proj_le::<F,C>(args[0], args[1], k);
+                vec![tmp.0, tmp.1, tmp.2]
+            })).unwrap());
+    }
+}
+
+#[test]
+fn test_oct_deg() {
+    for i in 0..10 {
+        for j in 0..10 {
+            match find_degree(100,
+                2,
+                3,
+                Rc::new(move|args|{
+                    let x = args[0]; let y = args[1];
+                    let tmp = oct_suboptimal::<F,C>(x, y, i, j);
+                    vec![tmp.0, tmp.1, tmp.2]
+                })) {
+                    Err(_) => (),
+                    Ok(d) => println!("For deg2={}, deg4={}, polynomial is valid, total degree = {}", j, i, d),
+                }
+        }
+    }
+}
+
+#[test]
+fn test_oct_deg2() {
+    for i in 2..5 {
+        for j in 40..50 {
+            match find_degree(300,
+                2,
+                3,
+                Rc::new(move|args|{
+                    let x = args[0]; let y = args[1];
+                    let oct = oct_subsuboptimal::<F,C>(x, y);
+                    let quad = quad_aleg_optimal::<F,C>(x, y);
+                    let sq = sq_aleg_optimal::<F,C>(x, y);
+                    let scaling = (sq.2.pow([j as u64])*quad.2.pow([i as u64])).invert().unwrap();
+                    assert!(i > 0 || j > 0 || scaling  == F::ONE);
+                    vec![oct.0 * scaling, oct.1 * scaling, oct.2 * scaling]
+                })) {
+                    Err(e) => break,
+                    Ok(d) => println!("For deg2={}, deg4={}, polynomial is valid, total degree = {}", j, i, d),
+                }
+        }
     }
 }

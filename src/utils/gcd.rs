@@ -97,17 +97,18 @@ fn test_gcd_mulvar(){
         assert!(pt*<C as CurveExt>::ScalarExt::from(k) == grumpkin::G1Affine::from_xy(test_output.0*s2, test_output.1*s2).unwrap().into());
 
         //println!("Processing map A->{}A", k);
-        let tmp = gcd_mulvar_deg::<F>(17000, 2, 3, Rc::new(move |args|{
-            let tmp = mul_doubling_phase::<F,C>((args[0], args[1], F::ONE), k);
+        let tmp = gcd_mulvar_deg::<F>(17000, 3, 3, Rc::new(move |args|{
+            let tmp = mul_doubling_phase::<F,C>((args[0], args[1], args[2]), k);
             assert!(args[1] != args[0]);
             vec![tmp.0, tmp.1, tmp.2]
         }));
 
-        ret1.push(k);
+        ret1.push(tmp.0);
         ret2.push(tmp.0 - tmp.1);
     }
 
     println!("-------------------------------------------------");
+    println!("{:?}", (2..20).collect::<Vec<_>>());
     println!("{:?}", ret1);
     println!("{:?}", ret2);
 }

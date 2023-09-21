@@ -10,16 +10,17 @@ use ff::{Field, PrimeField};
 use group::Curve;
 use halo2curves::{bn256, serde::SerdeObject, CurveExt};
 use num_traits::pow;
-use crate::{circuit::{Circuit, PolyOp, Advice}, constraint_system::Variable, gate::{Gatebb, RootsOfUnity}};
+use crate::{circuit::{Circuit, PolyOp, Advice}, constraint_system::Variable, gate::{Gatebb}};
+use crate::utils::field_precomp::{FieldUtils};
 
 /// A nonzero elliptic curve point.
-pub struct EcAffinePoint<F: PrimeField+RootsOfUnity, C: CurveExt<Base = F>> {
+pub struct EcAffinePoint<F: PrimeField+FieldUtils, C: CurveExt<Base = F>> {
     pub x: Variable,
     pub y: Variable,
     _marker: PhantomData<C>,
 }
 
-impl<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>> EcAffinePoint<F, C> {
+impl<F: PrimeField+FieldUtils, C: CurveExt<Base=F>> EcAffinePoint<F, C> {
 
     pub fn new_unchecked(x: Variable, y: Variable) -> Self {
         Self{x,y, _marker: PhantomData::<C>}
@@ -43,7 +44,7 @@ impl<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>> EcAffinePoint<F, C> {
 // Formulas taken from here: https://en.wikibooks.org/wiki/Cryptography/Prime_Curve/Standard_Projective_Coordinates
 // Should later switch to more efficient multiplication by integers (multiplying by F::from(integer) is not efficient),
 // not sure if there is an API for that.
-pub fn double_proj<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(pt: (F,F,F)) -> (F,F,F) {
+pub fn double_proj<F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(pt: (F,F,F)) -> (F,F,F) {
     let x = pt.0;
     let y = pt.1;
     let z = pt.2;
@@ -59,7 +60,7 @@ pub fn double_proj<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(pt: (F,F,F))
 }
 
 /// Addition in projective coordinates. Will fail if a==b.
-pub fn add_proj<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(pt1: (F,F,F), pt2: (F,F,F)) -> (F, F, F){
+pub fn add_proj<F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(pt1: (F,F,F), pt2: (F,F,F)) -> (F, F, F){
     let u1 = pt2.1*pt1.2;
     let u2 = pt1.1*pt2.2;
     let v1 = pt2.0*pt1.2;
@@ -82,7 +83,7 @@ pub fn add_proj<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(pt1: (F,F,F), p
 
 
 /// This computes sc*base, (sc+1)*base
-fn mul_neighbor_chain_phase<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(base: (F,F,F), sc: u64) -> ((F,F,F),(F,F,F)) {
+fn mul_neighbor_chain_phase<F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(base: (F,F,F), sc: u64) -> ((F,F,F),(F,F,F)) {
     if sc == 1 {return (base, double_proj::<F,C>(base))};
     
     let (x,y) = mul_neighbor_chain_phase::<F,C>(base, sc >> 1);
@@ -93,7 +94,7 @@ fn mul_neighbor_chain_phase<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(bas
     }
 }
 
-pub fn mul_doubling_phase<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(base: (F,F,F), sc: u64) -> (F,F,F) {
+pub fn mul_doubling_phase<F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(base: (F,F,F), sc: u64) -> (F,F,F) {
     if sc == 1 {
         base
     } else if sc%2 == 0 {
@@ -107,12 +108,12 @@ pub fn mul_doubling_phase<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(base:
 /// This function will compute multiplication of a point by scalar, using projective coordinates and a specific
 /// addition chain which guarantees minimal degree of the corresponding polynomial. I do not know the reference
 /// for this theorem, so I'll just write it here in comments.
-pub fn best_mul_proj<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(x: F, y:F, sc: u64) -> (F, F, F) {
+pub fn best_mul_proj<F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(x: F, y:F, sc: u64) -> (F, F, F) {
     assert!(sc > 0, "Should never happen.");
     mul_doubling_phase::<F,C>((x, y, F::ONE), sc)
 }
 
-pub fn double_and_add_proj<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>> (x:F, y:F, sc: u64) -> (F, F, F) {
+pub fn double_and_add_proj<F: PrimeField+FieldUtils, C: CurveExt<Base=F>> (x:F, y:F, sc: u64) -> (F, F, F) {
     let mut bits = vec![];
     let mut sc = sc;
     while sc>0 {
@@ -132,7 +133,7 @@ pub fn double_and_add_proj<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>> (x:F
     acc
 }
 
-pub fn double_and_add_proj_le<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>> (x:F, y:F, sc: u64) -> (F, F, F) {
+pub fn double_and_add_proj_le<F: PrimeField+FieldUtils, C: CurveExt<Base=F>> (x:F, y:F, sc: u64) -> (F, F, F) {
     let mut pow = sc;
     let mut base = (x, y, F::ONE);
     let mut acc = (F::ZERO, F::ONE, F::ZERO);
@@ -157,7 +158,7 @@ pub fn double_and_add_proj_le<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>> (
     acc
 }
 
-pub fn double_proj_scaled<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(pt: (F,F,F), scale_pow: u64) -> (F,F,F) {
+pub fn double_proj_scaled<F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(pt: (F,F,F), scale_pow: u64) -> (F,F,F) {
     let x = pt.0;
     let y = pt.1;
     let z = pt.2;
@@ -174,7 +175,7 @@ pub fn double_proj_scaled<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(pt: (
     (h*s.scale(2)*scaling, (w*(b.scale(4) - h) - y.square()*s_sq.scale(8))*scaling, (s*s_sq.scale(8))*scaling)
 }
 
-pub fn oct_suboptimal<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(x: F, y: F, deg4: u64, deg2: u64) -> (F,F,F) {
+pub fn oct_suboptimal<F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(x: F, y: F, deg4: u64, deg2: u64) -> (F,F,F) {
     let pt = (x, y, F::ONE);
     let pt2 = double_proj_scaled::<F,C>(pt, 0);
     let pt4 = double_proj_scaled::<F,C>(pt2, 7);
@@ -185,7 +186,7 @@ pub fn oct_suboptimal<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(x: F, y: 
     (pt8.0*scaling, pt8.1*scaling, pt8.2*scaling)
 }
 
-pub fn oct_naive<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(x: F, y: F) -> (F,F,F) {
+pub fn oct_naive<F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(x: F, y: F) -> (F,F,F) {
     let pt = (x, y, F::ONE);
     let pt2 = double_proj_scaled::<F,C>(pt, 0);
     let pt4 = double_proj_scaled::<F,C>(pt2, 0);
@@ -193,7 +194,7 @@ pub fn oct_naive<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(x: F, y: F) ->
     pt8
 }
 
-pub fn hex_naive<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(x: F, y: F) -> (F,F,F) {
+pub fn hex_naive<F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(x: F, y: F) -> (F,F,F) {
     let pt = (x, y, F::ONE);
     let pt2 = double_proj_scaled::<F,C>(pt, 0);
     let pt4 = double_proj_scaled::<F,C>(pt2, 0);
@@ -202,14 +203,14 @@ pub fn hex_naive<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(x: F, y: F) ->
     pt16
 }
 
-pub fn quad_aleg_optimal<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(x: F, y: F) -> (F,F,F) {
+pub fn quad_aleg_optimal<F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(x: F, y: F) -> (F,F,F) {
     let pt = (x, y, F::ONE);
     let pt2 = double_proj_scaled::<F,C>(pt, 0);
     let pt4 = double_proj_scaled::<F,C>(pt2, 7);
     pt4
 }
 
-pub fn sq_aleg_optimal<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(x: F, y: F) -> (F,F,F) {
+pub fn sq_aleg_optimal<F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(x: F, y: F) -> (F,F,F) {
     let pt = (x, y, F::ONE);
     let pt2 = double_proj_scaled::<F,C>(pt, 0);
     pt2
@@ -217,7 +218,7 @@ pub fn sq_aleg_optimal<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(x: F, y:
 
 // Takes an EC affine point and doubles it k times.
 // Because doubling of a point is never a zero point of a curve, 3rd projective coordinate is always nonzero.
-// pub fn double_k_times_gadget<'a, F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, k: usize, round: usize, pt: EcAffinePoint<F, C>) -> EcAffinePoint<F,C> {
+// pub fn double_k_times_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, k: usize, round: usize, pt: EcAffinePoint<F, C>) -> EcAffinePoint<F,C> {
 
 //     let tmp = circuit.advice(
 //         round,

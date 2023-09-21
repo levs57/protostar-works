@@ -7,7 +7,10 @@ use halo2curves::{bn256, grumpkin, CurveAffine, CurveExt};
 use num_traits::pow;
 use rand_core::{OsRng, RngCore};
 
-use crate::{gate::{find_degree, RootsOfUnity, check_poly}, gadgets::ecmul::{oct_naive, hex_naive, best_mul_proj, mul_doubling_phase}};
+use crate::{gadgets::ecmul::{oct_naive, hex_naive, best_mul_proj, mul_doubling_phase}};
+use crate::utils::field_precomp::{FieldUtils};
+
+use super::poly_utils::find_degree;
 
 
 type F = bn256::Fr;
@@ -41,7 +44,7 @@ pub fn gcd<F: PrimeField>(a: &[F], b: &[F]) -> Vec<F> {
 }
 
 /// Returns (degree, gcd degree).
-pub fn gcd_mulvar_deg<'a, F: PrimeField + RootsOfUnity>(max_degree: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> (usize, usize) {
+pub fn gcd_mulvar_deg<'a, F: PrimeField + FieldUtils>(max_degree: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> (usize, usize) {
     let deg = find_degree(max_degree, i, o, f.clone()).unwrap();
 
     let mut v = vec![]; for _ in 0..i {v.push(F::random(OsRng))}

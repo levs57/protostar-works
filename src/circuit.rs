@@ -4,7 +4,8 @@ use ff::PrimeField;
 use num_traits::pow;
 use rand_core::OsRng;
 
-use crate::{witness::CSWtns, gate::{Gatebb, RootsOfUnity, Gate, check_poly}, constraint_system::{Variable, ConstraintSystem, CommitKind}};
+use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind}, utils::poly_utils::check_poly};
+use crate::utils::field_precomp::{FieldUtils};
 
 
 #[derive(Clone)]
@@ -114,7 +115,7 @@ pub struct Circuit<'a, F: PrimeField, T:Gate<F> + From<PolyOp<'a, F>>> {
     pub round_counter : usize,
 }
 
-impl<'a, F: PrimeField + RootsOfUnity, T: Gate<F> + From<PolyOp<'a, F>>> Circuit<'a, F, T>{
+impl<'a, F: PrimeField + FieldUtils, T: Gate<F> + From<PolyOp<'a, F>>> Circuit<'a, F, T>{
     pub fn new(max_degree: usize, num_rounds: usize) -> Self {
         let mut cs = ConstraintSystem::new(num_rounds);
         cs.add_constr_group(CommitKind::Zero, 1);

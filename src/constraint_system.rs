@@ -1,9 +1,8 @@
-use std::{cmp::max, rc::Weak, iter::repeat, marker::PhantomData};
+use std::{cmp::max, marker::PhantomData};
 
 use ff::PrimeField;
-use num_integer::Roots;
 
-use crate::gate::{Gate, Gatebb, RootsOfUnity};
+use crate::gate::{Gate};
 
 #[derive(Clone, Copy)]
 
@@ -161,7 +160,7 @@ impl<F: PrimeField, T : Gate<F>> ConstraintSystem<F, T>{
 
     // Returns a protostar transform of the constraint system.
     // Round combining is not implemented, but you can add additional constraints after doing protostar transform.
-    // pub fn protostarize<'a>(&'a self) -> Self where F:RootsOfUnity, T:Gatebb<'a, F>{
+    // pub fn protostarize<'a>(&'a self) -> Self where F:FieldUtils, T:Gatebb<'a, F>{
 
     //     assert!(self.vars[0].pubs>0, "Constraint system must have 1st input.");
     //     let mut protostar = ConstraintSystem::<F, T>{vars : self.vars.clone(), cs : vec![]};

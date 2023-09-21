@@ -6,4 +6,5 @@ pub mod constraint_system;
 pub mod witness;
 pub mod circuit;
 pub mod gadgets;
+pub mod utils;
 pub mod test;

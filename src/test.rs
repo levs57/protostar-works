@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::{RefCell, Cell}, iter::repeat};
 
-use crate::{gate::{self, RootsOfUnity, Gatebb, Gate, check_poly, find_degree}, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, ark, sbox, mix, poseidon_kround_poly}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget, ecmul::{EcAffinePoint, add_proj, best_mul_proj, double_and_add_proj, double_and_add_proj_le, oct_suboptimal, quad_aleg_optimal, oct_subsuboptimal, sq_aleg_optimal}}};
+use crate::{gate::{self, RootsOfUnity, Gatebb, Gate, check_poly, find_degree}, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, ark, sbox, mix, poseidon_kround_poly}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget, ecmul::{EcAffinePoint, add_proj, best_mul_proj, double_and_add_proj, double_and_add_proj_le, oct_suboptimal, quad_aleg_optimal, oct_naive, sq_aleg_optimal}}};
 use ff::{PrimeField, Field};
 use group::{Group, Curve};
 use halo2::{arithmetic::best_fft};
@@ -408,7 +408,7 @@ fn test_oct_deg2() {
                 3,
                 Rc::new(move|args|{
                     let x = args[0]; let y = args[1];
-                    let oct = oct_subsuboptimal::<F,C>(x, y);
+                    let oct = oct_naive::<F,C>(x, y);
                     let quad = quad_aleg_optimal::<F,C>(x, y);
                     let sq = sq_aleg_optimal::<F,C>(x, y);
                     let scaling = (sq.2.pow([j as u64])*quad.2.pow([i as u64])).invert().unwrap();

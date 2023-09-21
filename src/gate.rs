@@ -19,9 +19,9 @@ pub trait RootsOfUnity where Self : PrimeField{
 }
 
 pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Result<(), &str>{
-    let a : Vec<_> = repeat(F::random(OsRng)).take(i).collect(); 
-    let b : Vec<_> = repeat(F::random(OsRng)).take(i).collect(); 
-    
+    let mut a = vec![]; for _ in 0..i {a.push(F::random(OsRng))} 
+    let mut b = vec![]; for _ in 0..i {b.push(F::random(OsRng))} 
+
     let mut lcs : Vec<Vec<_>> = vec![];
 
     let n = d+1; // we need to compute a+tb in d+2 different points
@@ -33,7 +33,7 @@ pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&
 
     assert!(lcs[0].len() == o);
 
-    let mut acc = vec![F::ZERO; i];
+    let mut acc = vec![F::ZERO; o];
     let mut binom = F::ONE;
 
     // n!/k!(n-k)! = n!/(k-1)!(n-k+1)! * (n-k+1)/k
@@ -55,7 +55,7 @@ pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&
 
     match flag {
         true => Ok(()),
-        false => Err("The provided polynomial has degree larger than provided"),
+        false => Err("The provided polynomial has degree larger than d"),
     }
 }
 

@@ -55,9 +55,7 @@ pub fn double_proj<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(pt: (F,F,F))
     
     let s_sq = s.square();
 
-    let scaling = (z.square().cube()*z).invert().unwrap();
-
-    (h*s.scale(2)*scaling, (w*(b.scale(4) - h) - y.square()*s_sq.scale(8))*scaling, (s*s_sq.scale(8))*scaling)
+    (h*s.scale(2), (w*(b.scale(4) - h) - y.square()*s_sq.scale(8)), (s*s_sq.scale(8)))
 }
 
 /// Addition in projective coordinates. Will fail if a==b.
@@ -77,11 +75,9 @@ pub fn add_proj<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(pt1: (F,F,F), p
 
     let a = u.square()*w - vcb - vsq*v2.scale(2);
 
-    let scaling = (pt1.2 * pt2.2).invert().unwrap();
-    
-    (v*a*scaling,
-    (u*(vsq*v2 - a) - vcb*u2)*scaling,
-    vcb*w*scaling,)
+    (v*a,
+    (u*(vsq*v2 - a) - vcb*u2),
+    vcb*w,)
 }
 
 
@@ -97,7 +93,7 @@ fn mul_neighbor_chain_phase<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(bas
     }
 }
 
-fn mul_doubling_phase<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(base: (F,F,F), sc: u64) -> (F,F,F) {
+pub fn mul_doubling_phase<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(base: (F,F,F), sc: u64) -> (F,F,F) {
     if sc == 1 {
         base
     } else if sc%2 == 0 {
@@ -189,12 +185,21 @@ pub fn oct_suboptimal<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(x: F, y: 
     (pt8.0*scaling, pt8.1*scaling, pt8.2*scaling)
 }
 
-pub fn oct_subsuboptimal<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(x: F, y: F) -> (F,F,F) {
+pub fn oct_naive<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(x: F, y: F) -> (F,F,F) {
     let pt = (x, y, F::ONE);
     let pt2 = double_proj_scaled::<F,C>(pt, 0);
     let pt4 = double_proj_scaled::<F,C>(pt2, 0);
     let pt8 = double_proj_scaled::<F,C>(pt4, 0);
     pt8
+}
+
+pub fn hex_naive<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(x: F, y: F) -> (F,F,F) {
+    let pt = (x, y, F::ONE);
+    let pt2 = double_proj_scaled::<F,C>(pt, 0);
+    let pt4 = double_proj_scaled::<F,C>(pt2, 0);
+    let pt8 = double_proj_scaled::<F,C>(pt4, 0);
+    let pt16 = double_proj_scaled::<F,C>(pt8, 0);
+    pt16
 }
 
 pub fn quad_aleg_optimal<F: PrimeField+RootsOfUnity, C: CurveExt<Base=F>>(x: F, y: F) -> (F,F,F) {

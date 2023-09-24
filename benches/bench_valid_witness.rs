@@ -46,7 +46,5 @@ pub fn evaluate_on_random_linear_combinations(gate: impl Gate<F>, a: Vec<F>, b: 
 
 }
 
-pub fn bench_
-
 criterion_group!(benches, hundred_poseidons_witness_verification);
 criterion_main!(benches);

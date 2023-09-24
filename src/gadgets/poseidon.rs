@@ -132,7 +132,7 @@ pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a
     let n_rounds_f = cfg.constants.n_rounds_f;
     let n_rounds_p = cfg.constants.n_rounds_p[t - 2];
 
-    println!("Hi!");
+    // println!("Hi!");
 
     let mut state = circuit.apply(
         round,

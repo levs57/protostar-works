@@ -19,8 +19,13 @@ rand_core = { version = "0.6", default-features = false }
 rayon-core = "1.11.0"
 
 [dev-dependencies]
+criterion = { version = "0.4", features = ["html_reports"] }
 
 [features]
 sanity-check = []
 info = []
 default = ["sanity-check"]
+
+[[bench]]
+name = "bench_valid_witness"
+harness = false

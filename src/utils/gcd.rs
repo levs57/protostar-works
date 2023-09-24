@@ -1,20 +1,13 @@
-use std::{cmp::max, iter::repeat, rc::Rc};
+use std::rc::Rc;
 
-use ff::{PrimeField, Field};
-use group::{Group, Curve};
+use ff::PrimeField;
 use halo2::arithmetic::best_fft;
-use halo2curves::{bn256, grumpkin, CurveAffine, CurveExt};
 use num_traits::pow;
-use rand_core::{OsRng, RngCore};
+use rand_core::OsRng;
 
-use crate::{gadgets::ecmul::{oct_naive, hex_naive, best_mul_proj, mul_doubling_phase}};
-use crate::utils::field_precomp::{FieldUtils};
+use crate::utils::field_precomp::FieldUtils;
 
 use super::poly_utils::find_degree;
-
-
-type F = bn256::Fr;
-type C = grumpkin::G1;
 
 
 /// One-dimensional gcd
@@ -75,49 +68,66 @@ pub fn gcd_mulvar_deg<'a, F: PrimeField + FieldUtils>(max_degree: usize, i: usiz
     
     (deg, values.iter().fold(vec![], |acc, upd| gcd(&acc, &upd)).len()-1)
 }
-#[test]
-fn test_gcd(){
-    let a = vec![F::from(3), F::from(5), F::from(2)];
-    let b = vec![F::from(1),];
-    assert!(gcd(&a,&b).len() == 1);
-}
 
-#[test]
-fn test_gcd_mulvar(){
+#[cfg(test)]
+mod tests {
+    use std::rc::Rc;
 
-    let mut ret1 = vec![];
-    let mut ret2 = vec![];
+    use ff::Field;
+    use group::Group;
+    use halo2curves::{CurveExt, grumpkin, CurveAffine, bn256};
+    use rand_core::OsRng;
 
-    for k in 2..20{
-        let pt = C::random(OsRng);
-        let s = F::random(OsRng);
-        
-        let test_input = (pt.x*s, pt.y*s, s);
-        let test_output = mul_doubling_phase::<F,C>(test_input, k);
-        
-        let s2 = test_output.2.invert().unwrap();
-        
-        assert!(pt*<C as CurveExt>::ScalarExt::from(k) == grumpkin::G1Affine::from_xy(test_output.0*s2, test_output.1*s2).unwrap().into());
+    use crate::{utils::gcd::{gcd, gcd_mulvar_deg}, gadgets::ecmul::mul_doubling_phase};
 
-        //println!("Processing map A->{}A", k);
-        let tmp = gcd_mulvar_deg::<F>(17000, 3, 3, Rc::new(move |args|{
-            let tmp = mul_doubling_phase::<F,C>((args[0], args[1], args[2]), k);
-            assert!(args[1] != args[0]);
-            vec![tmp.0, tmp.1, tmp.2]
-        }));
 
-        ret1.push(tmp.0);
-        ret2.push(tmp.0 - tmp.1);
+    type F = bn256::Fr;
+    type C = grumpkin::G1;
+
+    #[test]
+    fn test_gcd(){
+        let a = vec![F::from(3), F::from(5), F::from(2)];
+        let b = vec![F::from(1),];
+        assert!(gcd(&a,&b).len() == 1);
     }
 
-    println!("-------------------------------------------------");
-    println!("{:?}", (2..20).collect::<Vec<_>>());
-    println!("{:?}", ret1);
-    println!("{:?}", ret2);
-}
+    #[test]
+    fn test_gcd_mulvar(){
 
-//w = 3x^2, s = yz, b=x y^2 z
-//h = 9x^4 - 8 x y^2 z = x (9 x^3 - 8 y^2 z)
-// x' = 2 xy (9x^3 - 8 y^2)
-// y' = 3x^2*(12 x y^2  - 9x^4) - 8 y^4 
-// z' = 8 y^3
+        let mut ret1 = vec![];
+        let mut ret2 = vec![];
+
+        for k in 2..20{
+            let pt = C::random(OsRng);
+            let s = F::random(OsRng);
+            
+            let test_input = (pt.x*s, pt.y*s, s);
+            let test_output = mul_doubling_phase::<F,C>(test_input, k);
+            
+            let s2 = test_output.2.invert().unwrap();
+            
+            assert!(pt*<C as CurveExt>::ScalarExt::from(k) == grumpkin::G1Affine::from_xy(test_output.0*s2, test_output.1*s2).unwrap().into());
+
+            //println!("Processing map A->{}A", k);
+            let tmp = gcd_mulvar_deg::<F>(17000, 3, 3, Rc::new(move |args|{
+                let tmp = mul_doubling_phase::<F,C>((args[0], args[1], args[2]), k);
+                assert!(args[1] != args[0]);
+                vec![tmp.0, tmp.1, tmp.2]
+            }));
+
+            ret1.push(tmp.0);
+            ret2.push(tmp.0 - tmp.1);
+        }
+
+        println!("-------------------------------------------------");
+        println!("{:?}", (2..20).collect::<Vec<_>>());
+        println!("{:?}", ret1);
+        println!("{:?}", ret2);
+    }
+
+    // w = 3x^2, s = yz, b=x y^2 z
+    // h = 9x^4 - 8 x y^2 z = x (9 x^3 - 8 y^2 z)
+    // x' = 2 xy (9x^3 - 8 y^2)
+    // y' = 3x^2*(12 x y^2  - 9x^4) - 8 y^4 
+    // z' = 8 y^3
+}

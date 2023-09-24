@@ -6,12 +6,10 @@
 
 use std::{rc::Rc, marker::PhantomData};
 
-use ff::{Field, PrimeField};
-use group::Curve;
-use halo2curves::{bn256, serde::SerdeObject, CurveExt};
-use num_traits::pow;
-use crate::{circuit::{Circuit, PolyOp, Advice}, constraint_system::Variable, gate::{Gatebb}};
-use crate::utils::field_precomp::{FieldUtils};
+use ff::PrimeField;
+use halo2curves::CurveExt;
+use crate::{circuit::Circuit, constraint_system::Variable, gate::Gatebb};
+use crate::utils::field_precomp::FieldUtils;
 
 /// A nonzero elliptic curve point.
 pub struct EcAffinePoint<F: PrimeField+FieldUtils, C: CurveExt<Base = F>> {

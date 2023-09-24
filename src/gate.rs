@@ -1,14 +1,9 @@
-use std::{iter::repeat, cmp::max, marker::PhantomData, rc::Rc, string};
+use std::rc::Rc;
 
-use group::{Group, Curve};
-use ff::{Field, PrimeField};
-use halo2::{arithmetic::{best_multiexp, best_fft}};
-use halo2curves::CurveAffine;
-use num_traits::pow;
-use rand_core::OsRng;
+use ff::PrimeField;
 
 use crate::utils::poly_utils::check_poly;
-use crate::utils::field_precomp::{FieldUtils};
+use crate::utils::field_precomp::FieldUtils;
 
 #[derive(Clone)]
 /// A generic black-box gate. This API is unsafe, you must guarantee that given value is a

@@ -1,10 +1,9 @@
 use std::iter::repeat;
 
 use ff::PrimeField;
-use group::Curve;
 use halo2curves::CurveAffine;
 
-use crate::{gate::{Gate}, constraint_system::{ConstraintSystem, Variable, CommitKind}, commitment::{CommitmentKey, CtS, CkWtns, CkRound, CtRound, ErrGroup, CkErr, CkRelaxed}};
+use crate::{gate::Gate, constraint_system::{ConstraintSystem, Variable, CommitKind}, commitment::{CommitmentKey, CkWtns, CkRound, CtRound, ErrGroup, CkRelaxed}};
 
 #[derive(Clone)]
 pub struct RoundWtns<F: PrimeField> {

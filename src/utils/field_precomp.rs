@@ -9,7 +9,7 @@ pub trait FieldUtils where Self : PrimeField{
     /// Returns power of 1/2.
     fn half_pow(power: u64) -> Self;
     /// Returns FFT of the binomial.
-    fn binomial_FFT(power: usize, logorder: usize) -> Vec<Self>;
+    fn binomial_fft(power: usize, logorder: usize) -> Vec<Self>;
     /// Multiplies the value by the small scalar.
     fn scale(&self, scale: u64) -> Self;
 }
@@ -26,7 +26,7 @@ impl FieldUtils for F {
         F::TWO_INV.pow([power])
     }
 
-    fn binomial_FFT(power: usize, logorder: usize) -> Vec<Self> {
+    fn binomial_fft(power: usize, logorder: usize) -> Vec<Self> {
         assert!(power < pow(2, logorder));
         let mut bin_coeffs = vec![1];
         for i in 1..pow(2,logorder) {

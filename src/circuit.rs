@@ -1,11 +1,9 @@
-use std::{iter::repeat, rc::Rc, cell::{Cell, OnceCell}};
+use std::{rc::Rc, cell::OnceCell};
 
 use ff::PrimeField;
-use num_traits::pow;
-use rand_core::OsRng;
 
 use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind}, utils::poly_utils::check_poly};
-use crate::utils::field_precomp::{FieldUtils};
+use crate::utils::field_precomp::FieldUtils;
 
 
 #[derive(Clone)]
@@ -51,7 +49,7 @@ pub struct PolyOpAllocated<'a, F: PrimeField> {
 }
 
 /// A value used for advices. Can be shared between multiple circuits, in order to enable layered constructions.
-pub type ExternalValue<F: PrimeField> = OnceCell<F>;
+pub type ExternalValue<F> = OnceCell<F>;
 
 // impl<F: PrimeField> ExternalValue<F> {
 //     pub fn new() -> Self {
@@ -243,7 +241,7 @@ impl<'a, F: PrimeField + FieldUtils, T: Gate<F> + From<PolyOp<'a, F>>> Circuit<'
         if self.round_counter > round {
             panic!("Execution is at round finished round {}, attempt to execute up to round {}", self.round_counter, round)
             }
-        while (self.round_counter <= round) {
+        while self.round_counter <= round {
             for op in &self.ops[self.round_counter]{
                 match op {
                     Operation::Poly(polyop) => {

@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use ff::{Field, PrimeField};
 use crate::gadgets::poseidon_constants;
-use halo2curves::{bn256, serde::SerdeObject};
+use halo2curves::bn256;
 use crate::{circuit::{Circuit, PolyOp}, constraint_system::Variable, gate::Gatebb};
 use num_traits::pow;
 

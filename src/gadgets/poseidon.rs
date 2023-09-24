@@ -8,6 +8,7 @@ use ff::{Field, PrimeField};
 use crate::gadgets::poseidon_constants;
 use halo2curves::{bn256, serde::SerdeObject};
 use crate::{circuit::{Circuit, PolyOp}, constraint_system::Variable, gate::Gatebb};
+use num_traits::pow;
 
 
 type F = bn256::Fr;
@@ -137,7 +138,7 @@ pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a
     let mut state = circuit.apply(
         round,
         PolyOp::new(
-            5*k,
+            pow(5,k),
             t-1,
             t,
             Rc::new(
@@ -154,7 +155,7 @@ pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a
         state = circuit.apply(
             round,
             PolyOp::new(
-                5*k,
+                pow(5,k),
                 t,
                 t,
                 Rc::new(
@@ -173,7 +174,7 @@ pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a
         state = circuit.apply(
             round,
             PolyOp::new(
-                5*rem,
+                pow(5,rem),
                 t,
                 t,
                 Rc::new(

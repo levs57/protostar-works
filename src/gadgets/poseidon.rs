@@ -5,7 +5,7 @@
 use std::rc::Rc;
 
 use ff::{Field, PrimeField};
-use crate::gadgets::poseidon_constants;
+use crate::{gadgets::poseidon_constants, circuit::Advice};
 use halo2curves::{bn256, serde::SerdeObject};
 use crate::{circuit::{Circuit, PolyOp}, constraint_system::Variable, gate::Gatebb};
 use num_traits::pow;
@@ -124,6 +124,163 @@ pub fn poseidon_kround_poly(
     state
 }
 
+/// This function is a single polynomial of degree 5, executing all partial rounds in one go.
+/// It takes as an advice the vector of 1st elements of each state after the sbox operation.
+/// It is given in a form of constraint, because otherwise we would need to introduce an additional linear constraint.
+/// This is an API limitation - currently there is no way to map output of a polynomial operation to an already
+/// existing variable.
+/// Input advices correspond to 5-th power of the state[0], and output advices to new state[0].
+/// User then must map them to the same variable input.
+pub fn poseidon_partial_rounds_constraint(
+    input_state: &[F],
+    output_state: &[F],
+    input_advices: &[F],
+    output_advices: &[F],
+    c: &Vec<F>,
+    m: &Vec<Vec<F>>,
+    n_rounds_f: usize,
+    n_rounds_p: usize,
+    t: usize,
+) -> Vec<F> {
+    let mut state = input_state.to_vec();
+    let mut ret = vec![];
+    for j in 0 .. n_rounds_p {
+        ark(&mut state, c, t*(j+n_rounds_f/2));
+        let tmp = state[0].square().square();
+        ret.push(state[0]*tmp - output_advices[j]); // push state[0]^5 == output_advices[j]
+        state[0] = input_advices[j]; // replace value with input advice
+        state = mix(&state, m);
+    }
+
+    for j in 0 .. state.len(){
+        ret.push(state[j] - output_state[j]);
+    }
+
+    ret
+}
+
+/// This will compute intermediate state[0] values and the final state
+pub fn poseidon_partial_rounds_advice(
+    input_state: &[F],
+    c: &Vec<F>,
+    m: &Vec<Vec<F>>,
+    n_rounds_f: usize,
+    n_rounds_p: usize,
+    t: usize,
+) -> Vec<F> {
+    let mut state = input_state.to_vec();
+    let mut ret = vec![];
+    for j in 0 .. n_rounds_p {
+        ark(&mut state, c, t*(j+n_rounds_f/2));
+        let tmp = state[0].square().square();
+        state[0] *= tmp;
+        ret.push(state[0]);
+        state = mix(&state, m);
+    }
+
+    for j in 0 .. state.len(){
+        ret.push(state[j]);
+    }
+
+    ret
+}
+
+/// A gadget which implements partial rounds of Poseidon hash function.
+pub fn poseidon_partial_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, inp: Vec<Variable>, round: usize) -> Vec<Variable>{
+    let t = inp.len();
+    let n_rounds_f = cfg.constants.n_rounds_f;
+    let n_rounds_p = cfg.constants.n_rounds_p[t - 2];
+    let c = &cfg.constants.c[t-2];
+    let m = &cfg.constants.m[t-2];
+
+    let tmp = circuit.advice(
+        round,
+        Advice::new(
+            t,
+            0,
+            n_rounds_p + t,
+            Rc::new(move |input_state: &[F], _: &[F]| {
+                poseidon_partial_rounds_advice(input_state, c, m, n_rounds_f, n_rounds_p, t)
+            })
+        ),
+        inp.clone(),
+        vec![],
+    );
+
+    let (adv, out) = tmp.split_at(n_rounds_p);
+
+    // repeat intermediate values twice, then append input and output
+    let to_constrain : Vec<Variable> = adv.iter().chain(adv.iter()).chain(inp.iter()).chain(out.iter()).map(|x|*x).collect();
+
+    circuit.constrain(
+        &to_constrain,
+        Gatebb::new(
+            5,
+            2*n_rounds_p+2*t,
+            n_rounds_p+t,
+            Rc::new(move|args: &[F]|{
+                let (tmp, io) = args.split_at(2*n_rounds_p);
+                let (adv_in, adv_out) = tmp.split_at(n_rounds_p);
+                let (inp, out) = io.split_at(t);
+                poseidon_partial_rounds_constraint(inp, out, adv_in, adv_out, c, m, n_rounds_f, n_rounds_p, t)
+            })
+        )
+    );
+
+    out.to_vec()
+}
+
+pub fn poseidon_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, k: usize, round: usize, inp: Vec<Variable>, start: usize, finish: usize) -> Vec<Variable> {
+    let t = inp.len();
+    let n_rounds_f = cfg.constants.n_rounds_f;
+    let n_rounds_p = cfg.constants.n_rounds_p[t - 2];
+
+    assert!(start<finish, "Must give positive range.");
+    assert!(finish <= n_rounds_f/2 || start >= n_rounds_f/2 + n_rounds_p, "Range intersects partial rounds region.");
+
+    let rem = (finish-start)%k;
+
+    let mut state = inp.clone(); 
+    let mut i = start;
+
+    while i < finish {
+        state = circuit.apply(
+            round,
+            PolyOp::new(
+                pow(5,k),
+                t,
+                t,
+                Rc::new(
+                    move |inp| {
+                        poseidon_kround_poly(k, inp, i, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
+                    }
+                )
+            ),
+            state
+        );        
+        i+=k
+    }
+
+    if rem > 0 {
+        state = circuit.apply(
+            round,
+            PolyOp::new(
+                pow(5,rem),
+                t,
+                t,
+                Rc::new(
+                    move |inp| {
+                        poseidon_kround_poly(rem, inp, i, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
+                    }
+                )
+            ),
+            state
+        )
+    }
+
+    state
+}
+
 pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, k: usize, round: usize, inp: Vec<Variable>) -> Variable {
     let t = inp.len()+1;
     if inp.is_empty() || inp.len() > cfg.constants.n_rounds_p.len() {
@@ -133,7 +290,7 @@ pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a
     let n_rounds_f = cfg.constants.n_rounds_f;
     let n_rounds_p = cfg.constants.n_rounds_p[t - 2];
 
-    println!("Hi!");
+    assert!(k < n_rounds_f/2, "Not implemented for k larger than half of the full rounds. Also, you shouldn't do this anyways.");
 
     let mut state = circuit.apply(
         round,
@@ -151,42 +308,8 @@ pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a
         ),
         inp);
 
-    for i in 1..(n_rounds_f+n_rounds_p)/k {
-        state = circuit.apply(
-            round,
-            PolyOp::new(
-                pow(5,k),
-                t,
-                t,
-                Rc::new(
-                    move |inp| {
-                        poseidon_kround_poly(k, inp, i*k, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
-                    }
-                )
-            ),
-            state
-        )
-    }
-
-    let rem = (n_rounds_f + n_rounds_p)%k;
-
-    if rem > 0 {
-        state = circuit.apply(
-            round,
-            PolyOp::new(
-                pow(5,rem),
-                t,
-                t,
-                Rc::new(
-                    move |inp| {
-                        poseidon_kround_poly(rem, inp, (n_rounds_f + n_rounds_p)-rem, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
-                    }
-                )
-            ),
-            state
-        )
-
-    }
-
+    state = poseidon_full_rounds_gadget(circuit, cfg, k, round, state, k, n_rounds_f/2);
+    state = poseidon_partial_rounds_gadget(circuit, cfg, state, round);
+    state = poseidon_full_rounds_gadget(circuit, cfg, k, round, state, n_rounds_f/2 + n_rounds_p, n_rounds_f + n_rounds_p);
     state[0]
 }

@@ -120,7 +120,7 @@ fn test_poseidon_gadget(){
     let mut circuit = Circuit::<F, Gatebb<F>>::new(25, 1);
     let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
     let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
-    let ret = poseidon_gadget(&mut circuit, &cfg, 1, 0, vec![pi]);
+    let ret = poseidon_gadget(&mut circuit, &cfg, 2, 0, vec![pi]);
 
     circuit.finalize();
 

@@ -231,7 +231,9 @@ pub fn poseidon_partial_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a
 }
 
 pub fn poseidon_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, k: usize, round: usize, inp: Vec<Variable>, start: usize, finish: usize) -> Vec<Variable> {
-    let t = inp.len();
+
+    let t = if start==0 {inp.len()+1} else {inp.len()};
+
     let n_rounds_f = cfg.constants.n_rounds_f;
     let n_rounds_p = cfg.constants.n_rounds_p[t - 2];
 
@@ -242,6 +244,24 @@ pub fn poseidon_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F
 
     let mut state = inp.clone(); 
     let mut i = start;
+
+    if i == 0 {state = circuit.apply(
+        round,
+        PolyOp::new(
+            pow(5,k),
+            t-1,
+            t,
+            Rc::new(
+                move |inp|{
+                    let mut state = vec![F::ZERO; t];
+                    state[1..].clone_from_slice(&inp);            
+                    poseidon_kround_poly(k, &state, 0, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
+                }
+            )
+        ),
+        state);
+        i+=k;
+    }
 
     while i < finish {
         state = circuit.apply(
@@ -292,23 +312,7 @@ pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a
 
     assert!(k < n_rounds_f/2, "Not implemented for k larger than half of the full rounds. Also, you shouldn't do this anyways.");
 
-    let mut state = circuit.apply(
-        round,
-        PolyOp::new(
-            pow(5,k),
-            t-1,
-            t,
-            Rc::new(
-                move |inp|{
-                    let mut state = vec![F::ZERO; t];
-                    state[1..].clone_from_slice(&inp);            
-                    poseidon_kround_poly(k, &state, 0, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
-                }
-            )
-        ),
-        inp);
-
-    state = poseidon_full_rounds_gadget(circuit, cfg, k, round, state, k, n_rounds_f/2);
+    let mut state = poseidon_full_rounds_gadget(circuit, cfg, k, round, inp, 0, n_rounds_f/2);
     state = poseidon_partial_rounds_gadget(circuit, cfg, state, round);
     state = poseidon_full_rounds_gadget(circuit, cfg, k, round, state, n_rounds_f/2 + n_rounds_p, n_rounds_f + n_rounds_p);
     state[0]

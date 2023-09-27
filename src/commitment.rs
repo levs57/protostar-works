@@ -1,10 +1,7 @@
-use std::marker::PhantomData;
-
 use ff::PrimeField;
-use group::Curve;
 use halo2::arithmetic::best_multiexp;
 use halo2curves::CurveAffine;
-use crate::{witness::RoundWtns, constraint_system::CommitKind};
+use crate::witness::RoundWtns;
 
 /// A simple commitment key.
 pub enum CkS<G: CurveAffine>{
@@ -55,7 +52,7 @@ impl<F: PrimeField, G: CurveAffine<ScalarExt=F>> CommitmentKey<G> for CkRound<G>
 }
 
 /// Commitment key for the full witness.
-pub type CkWtns<G: CurveAffine> = Vec<CkRound<G>>;
+pub type CkWtns<G> = Vec<CkRound<G>>;
 
 impl<F: PrimeField, G: CurveAffine<ScalarExt=F>> CommitmentKey<G> for CkWtns<G> {
     type Scalars = Vec<<CkRound<G> as CommitmentKey<G>>::Scalars>;

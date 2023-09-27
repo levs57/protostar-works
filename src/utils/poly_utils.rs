@@ -3,6 +3,20 @@ use std::rc::Rc;
 use ff::PrimeField;
 use rand_core::OsRng;
 
+
+/// Little endian bit decomposition of n
+pub fn bits_le(n: usize) -> Vec<u64> {
+    let mut n = n;
+    let mut bits = vec![];
+
+    while n > 0 {
+        bits.push((n as u64) & 1);
+        n >>= 1;
+    }
+
+    bits
+}
+
 pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Result<(), &str>{
     let mut a = vec![]; for _ in 0..i {a.push(F::random(OsRng))} 
     let mut b = vec![]; for _ in 0..i {b.push(F::random(OsRng))} 
@@ -35,7 +49,7 @@ pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&
     let mut flag = true;
 
     for val in acc {
-        flag &= (val == F::ZERO);
+        flag = flag & (val == F::ZERO);
     }
 
     match flag {
@@ -65,5 +79,4 @@ pub fn find_degree<'a, F: PrimeField>(max_degree: usize, i: usize, o:usize, f: R
     }
 
     Ok(top)
-
 }

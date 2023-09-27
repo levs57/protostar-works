@@ -2,7 +2,7 @@ use std::{cmp::max, marker::PhantomData};
 
 use ff::PrimeField;
 
-use crate::gate::{Gate};
+use crate::gate::Gate;
 
 #[derive(Clone, Copy)]
 
@@ -126,7 +126,7 @@ impl<F: PrimeField, T : Gate<F>> ConstraintSystem<F, T>{
         let mut ret = vec![];
         let mut tmp = 0;
         for i in 0..self.vars.len() {
-            tmp += (self.vars[i].privs + self.vars[i].pubs);
+            tmp = tmp + self.vars[i].privs + self.vars[i].pubs;
             ret.push(tmp);
         }
         ret
@@ -153,10 +153,9 @@ impl<F: PrimeField, T : Gate<F>> ConstraintSystem<F, T>{
         max_deg
     }
 
-
-    fn div_ceil(a: usize, b: usize) -> usize{
-        (a+b-1)/b
-    }
+    // fn div_ceil(a: usize, b: usize) -> usize{
+    //     (a+b-1)/b
+    // }
 
     // Returns a protostar transform of the constraint system.
     // Round combining is not implemented, but you can add additional constraints after doing protostar transform.

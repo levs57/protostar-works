@@ -11,8 +11,8 @@ use std::{rc::Rc, iter::repeat};
 use ff::PrimeField;
 use num_traits::pow;
 
-use crate::{circuit::{Circuit, Advice, PolyOp}, gate::{Gatebb}, constraint_system::Variable};
-use crate::utils::field_precomp::{FieldUtils};
+use crate::{circuit::{Circuit, Advice}, gate::Gatebb, constraint_system::Variable};
+use crate::utils::field_precomp::FieldUtils;
 
 pub fn chunkcheck<F: PrimeField>(arg: &[F], k:usize) -> Vec<F> {
     let x = arg[0];

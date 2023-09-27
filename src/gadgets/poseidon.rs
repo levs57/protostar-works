@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use ff::{Field, PrimeField};
 use crate::{gadgets::poseidon_constants, circuit::Advice};
-use halo2curves::{bn256, serde::SerdeObject};
+use halo2curves::bn256;
 use crate::{circuit::{Circuit, PolyOp}, constraint_system::Variable, gate::Gatebb};
 use num_traits::pow;
 
@@ -239,6 +239,7 @@ pub fn poseidon_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F
 
     assert!(start<finish, "Must give positive range.");
     assert!(finish <= n_rounds_f/2 || start >= n_rounds_f/2 + n_rounds_p, "Range intersects partial rounds region.");
+
 
     let rem = (finish-start)%k;
 

@@ -27,5 +27,5 @@ info = []
 default = ["sanity-check"]
 
 [[bench]]
-name = "bench_valid_witness"
+name = "bench_poseidons"
 harness = false

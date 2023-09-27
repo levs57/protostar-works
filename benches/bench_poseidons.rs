@@ -2,9 +2,8 @@ use std::{rc::Rc, iter::repeat_with};
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use ff::Field;
-use halo2::circuit;
 use halo2curves::bn256;
-use protostar_works::{gadgets::poseidon::{Poseidon, poseidon_gadget}, circuit::{ExternalValue, Circuit, Advice}, gate::{Gatebb, Gate}, utils::poly_utils::bits_le, commitment::{CkRound, CommitmentKey}, witness::CSSystemCommit};
+use protostar_works::{gadgets::poseidon::{Poseidon, poseidon_gadget}, circuit::{ExternalValue, Circuit, Advice}, gate::{Gatebb, Gate}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit};
 use rand_core::OsRng;
 
 
@@ -34,10 +33,6 @@ pub fn homogenize<'a>(gate: Gatebb<'a, F>, mu: F) -> Gatebb<'a, F> {
         obuf
     };
 
-    // let f = move |input: &[F]| {
-    //     gate.exec(input)
-    // };
-
     Gatebb::new(gate_d, gate_i, gate_o, Rc::new(f))
 }
 
@@ -54,62 +49,28 @@ pub fn evaluate_on_random_linear_combinations(gate: &impl Gate<F>, a: &Vec<F>, b
 
 }
 
-pub fn assemble_poseidon_circuit(circuit: &mut Circuit<'_, F, Gatebb<'_, F>>) {
-    let pi = ExternalValue::new();
-    let poseidon_consts = Poseidon::new();
-
-    let mut circuit = Circuit::<F, Gatebb<F>>::new(25, 1);
-
+pub fn assemble_poseidon_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, pi: &'a ExternalValue<F>) {
     let load_pi_advice_head = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));
-    let mut acc = circuit.advice_pub(0, load_pi_advice_head, vec![], vec![&pi])[0];
-
-    println!("Circuit spawned, starting to assemble poseidons.");
+    let mut acc = circuit.advice_pub(0, load_pi_advice_head, vec![], vec![pi])[0];
 
     for _ in 0..1000 {
-        acc = poseidon_gadget(&mut circuit, &poseidon_consts, 2, 0, vec![acc]);
+        acc = poseidon_gadget(circuit, cfg, 2, 0, vec![acc]);
     }
 
     circuit.finalize();
 
-    println!("Construction ready. Executing...");
-
-    // FIXME: use criterion's randomness
     pi.set(F::random(OsRng)).unwrap();
     circuit.execute(0);
 
-    println!("Validating witness...");
     circuit.cs.valid_witness();
-
-    circuit
 }
 
 pub fn poseidons_pseudo_fold(c: &mut Criterion) {
     let pi = ExternalValue::new();
-    let poseidon_consts = Poseidon::new();
+    let cfg = Poseidon::new();
 
     let mut circuit = Circuit::<F, Gatebb<F>>::new(25, 1);
-
-    let load_pi_advice_head = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));
-    let mut acc = circuit.advice_pub(0, load_pi_advice_head, vec![], vec![&pi])[0];
-
-    println!("Circuit spawned, starting to assemble poseidons.");
-
-    for _ in 0..1000 {
-        acc = poseidon_gadget(&mut circuit, &poseidon_consts, 2, 0, vec![acc]);
-    }
-
-    circuit.finalize();
-
-    println!("Construction ready. Executing...");
-
-    // FIXME: use criterion's randomness
-    pi.set(F::random(OsRng)).unwrap();
-    circuit.execute(0);
-
-    println!("Validating witness...");
-    circuit.cs.valid_witness();
-
-    println!("Preparing homogenized gates...");
+    assemble_poseidon_circuit(&mut circuit, &cfg, &pi);
 
     let mu = F::random(OsRng); // relaxation factor
 
@@ -125,9 +86,6 @@ pub fn poseidons_pseudo_fold(c: &mut Criterion) {
         }
     }
 
-    println!("Bench data prepared! Starting fold evaluation now.");
-    println!("Will evaluate {} gates.", bench_data.len());
-
     c.bench_function("poseidons pseudo fold", |b| b.iter(|| {
         bench_data.iter().for_each(|(gate, a, b)| evaluate_on_random_linear_combinations(gate, a, b))
     }));
@@ -136,32 +94,10 @@ pub fn poseidons_pseudo_fold(c: &mut Criterion) {
 
 pub fn poseidons_msm(c: &mut Criterion) {
     let pi = ExternalValue::new();
-    let poseidon_consts = Poseidon::new();
+    let cfg = Poseidon::new();
 
     let mut circuit = Circuit::<F, Gatebb<F>>::new(25, 1);
-
-    let load_pi_advice_head = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));
-    let mut acc = circuit.advice_pub(0, load_pi_advice_head, vec![], vec![&pi])[0];
-
-    println!("Circuit spawned, starting to assemble poseidons.");
-
-    for _ in 0..1000 {
-        acc = poseidon_gadget(&mut circuit, &poseidon_consts, 2, 0, vec![acc]);
-    }
-
-    circuit.finalize();
-
-    println!("Construction ready. Executing...");
-
-    // FIXME: use criterion's randomness
-    pi.set(F::random(OsRng)).unwrap();
-    circuit.execute(0);
-
-    println!("Validating witness...");
-    circuit.cs.valid_witness();
-
-    let witness_len: usize = circuit.cs.wtns.iter().map(|rw| rw.privs.len() + rw.pubs.len()).sum();
-    println!("Witness valid. Length: {}", witness_len);
+    assemble_poseidon_circuit(&mut circuit, &cfg, &pi);
 
     let mut ck = Vec::with_capacity(circuit.cs.wtns.len());
     for rw in &circuit.cs.wtns {

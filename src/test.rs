@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::{RefCell, Cell}, iter::repeat};
 
-use crate::{gate::{self, Gatebb, Gate}, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, ark, sbox, mix, poseidon_kround_poly}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget, ecmul::{EcAffinePoint, add_proj, best_mul_proj, double_and_add_proj, double_and_add_proj_le, oct_suboptimal, quad_aleg_optimal, oct_naive, sq_aleg_optimal}}};
+use crate::{gate::{self, Gatebb, Gate}, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, ark, sbox, mix, poseidon_kround_poly, poseidon_gadget_mixstrat}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget, ecmul::{EcAffinePoint, add_proj, best_mul_proj, double_and_add_proj, double_and_add_proj_le, oct_suboptimal, quad_aleg_optimal, oct_naive, sq_aleg_optimal}}};
 use ff::{PrimeField, Field};
 use group::{Group, Curve};
 use halo2::{arithmetic::best_fft};
@@ -133,6 +133,28 @@ fn test_poseidon_gadget(){
 
     println!("{:?}", circuit.cs.getvar(ret).to_repr());
 }
+
+#[test]
+fn test_poseidon_gadget_mixstrat(){
+    let cfg = Poseidon::new();
+    let pi_ext = ExternalValue::<F>::new();
+    let mut circuit = Circuit::<F, Gatebb<F>>::new(25, 1);
+    let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
+    let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
+    let ret = poseidon_gadget_mixstrat(&mut circuit, &cfg, 0, vec![pi]);
+
+    circuit.finalize();
+
+    pi_ext.set(F::ONE).unwrap();
+
+    circuit.execute(0);
+    circuit.cs.valid_witness();
+
+    assert!(circuit.cs.getvar(ret) == F::from_str_vartime("18586133768512220936620570745912940619677854269274689475585506675881198879027").unwrap());
+
+    println!("{:?}", circuit.cs.getvar(ret).to_repr());
+}
+
 
 #[test]
 

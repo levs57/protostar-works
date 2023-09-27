@@ -301,6 +301,127 @@ pub fn poseidon_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F
     state
 }
 
+pub fn poseidon_mixed_strategy_start(
+    state: &[F],
+    i: usize,
+    cfg: &Poseidon,
+) -> Vec<F> {
+    let t = state.len();
+    let c = &cfg.constants.c[t-2];
+    let m = &cfg.constants.m[t-2];
+    let n_rounds_f = cfg.constants.n_rounds_f;
+    let n_rounds_p = cfg.constants.n_rounds_p[t-2];
+    let mut state = state.to_vec();
+
+    ark(&mut state, c, t*i);
+    sbox(n_rounds_f, n_rounds_p, &mut state, i);
+    state = mix(&state, m);
+    ark(&mut state, c, t*(i+1)); // The head of i+1-st round.
+
+    state
+}
+
+pub fn poseidon_mixed_strategy_mid(
+    state: &[F],
+    i: usize,
+    cfg: &Poseidon,
+) -> Vec<F> {
+    let t = state.len();
+    let c = &cfg.constants.c[t-2];
+    let m = &cfg.constants.m[t-2];
+    let n_rounds_f = cfg.constants.n_rounds_f;
+    let n_rounds_p = cfg.constants.n_rounds_p[t-2];
+    let mut state = state.to_vec();
+
+    
+    sbox(n_rounds_f, n_rounds_p, &mut state, i);
+    state = mix(&state, m);
+    ark(&mut state, c, t*(i+1)); // The head of i+1-st round.
+    sbox(n_rounds_f, n_rounds_p, &mut state, i+1);
+
+    state
+}
+
+pub fn poseidon_mixed_strategy_end(
+    state: &[F],
+    i: usize,
+    cfg: &Poseidon,
+) -> Vec<F> {
+    let t = state.len();
+    let c = &cfg.constants.c[t-2];
+    let m = &cfg.constants.m[t-2];
+    let n_rounds_f = cfg.constants.n_rounds_f;
+    let n_rounds_p = cfg.constants.n_rounds_p[t-2];
+    let mut state = state.to_vec();
+
+    state = mix(&state, m); // The tail of i-1 st round.
+    ark(&mut state, c, t*i);
+    sbox(n_rounds_f, n_rounds_p, &mut state, i);
+    mix(&state, m) // Ends in i-th round
+}
+
+pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, round: usize, state: Vec<Variable>, is_first_part:bool) -> Vec<Variable>{
+    let t = if is_first_part {state.len() + 1} else {state.len()};
+    
+    let c = &cfg.constants.c[t-2];
+    let m = &cfg.constants.m[t-2];
+    let n_rounds_f = cfg.constants.n_rounds_f;
+    let n_rounds_p = cfg.constants.n_rounds_p[t-2];
+
+    assert!(n_rounds_f == 8, "This should never fail.");
+    
+    let i = if is_first_part {0} else {n_rounds_f/2 + n_rounds_p};
+    
+    let mut state = if is_first_part {
+        circuit.apply(round,
+            PolyOp::new(
+                5,
+                t-1,
+                t,
+                Rc::new(move |inp: &[F]| {
+                    let mut state = vec![F::ZERO; t];
+                    state[1..].clone_from_slice(&inp);
+                    poseidon_mixed_strategy_start(&state, i, cfg)
+                })
+            ),
+            state)
+    } else {
+        circuit.apply(round,
+            PolyOp::new(
+                5,
+                t,
+                t,
+                Rc::new(move |state: &[F]| {
+                    poseidon_mixed_strategy_start(state, i, cfg)
+                })
+            ),
+            state
+        )
+    };
+
+    state = circuit.apply(
+        round,
+        PolyOp::new(
+            25,
+            t,
+            t,
+            Rc::new(move |state: &[F]|{poseidon_mixed_strategy_mid(state, i+1, cfg)})
+        ),
+        state
+    );
+
+    circuit.apply(
+        round,
+        PolyOp::new(
+            5,
+            t,
+            t,
+            Rc::new(move |state: &[F]|{poseidon_mixed_strategy_end(state, i+3, cfg)})
+        ),
+        state
+    )
+}
+
 pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, k: usize, round: usize, inp: Vec<Variable>) -> Variable {
     let t = inp.len()+1;
     if inp.is_empty() || inp.len() > cfg.constants.n_rounds_p.len() {
@@ -315,5 +436,12 @@ pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a
     let mut state = poseidon_full_rounds_gadget(circuit, cfg, k, round, inp, 0, n_rounds_f/2);
     state = poseidon_partial_rounds_gadget(circuit, cfg, state, round);
     state = poseidon_full_rounds_gadget(circuit, cfg, k, round, state, n_rounds_f/2 + n_rounds_p, n_rounds_f + n_rounds_p);
+    state[0]
+}
+
+pub fn poseidon_gadget_mixstrat<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, round: usize, inp: Vec<Variable>) -> Variable {
+    let mut state = poseidon_mixed_strategy_full_rounds_gadget(circuit, cfg, round, inp, true);
+    state = poseidon_partial_rounds_gadget(circuit, cfg, state, round);
+    state = poseidon_mixed_strategy_full_rounds_gadget(circuit, cfg, round, state, false);
     state[0]
 }

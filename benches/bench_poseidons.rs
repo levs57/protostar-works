@@ -36,12 +36,11 @@ pub fn homogenize<'a>(gate: Gatebb<'a, F>, mu: F) -> Gatebb<'a, F> {
     Gatebb::new(gate_d, gate_i, gate_o, Rc::new(f))
 }
 
-pub fn evaluate_on_random_linear_combinations(gate: &impl Gate<F>, a: &Vec<F>, b: &Vec<F>) {
+pub fn evaluate_on_random_linear_combinations(gate: &impl Gate<F>, a: &Vec<F>, b: &Vec<F>, randomness: &Vec<F>) {
     let mut interpolation_values: Vec<Vec<F>> = Vec::with_capacity(gate.d());
 
-    for _ in 0..gate.d() {
-        let t = F::random(OsRng);
-        let fold: Vec<_> = a.iter().zip(b.iter()).map(|(&x, &y)| x + t * y).collect();
+    for i in 0..gate.d() {
+        let fold: Vec<_> = a.iter().zip(b.iter()).map(|(&x, &y)| x + randomness[i] * y).collect();
 
         let obuf = gate.exec(&fold);
         interpolation_values.push(obuf);
@@ -74,7 +73,7 @@ pub fn poseidons_pseudo_fold(c: &mut Criterion) {
 
     let mu = F::random(OsRng); // relaxation factor
 
-    let mut bench_data = Vec::<(Gatebb<F>, Vec<F>, Vec<F>)>::new();
+    let mut bench_data = Vec::<(Gatebb<F>, Vec<F>, Vec<F>, Vec<F>)>::new();
     for cg in &circuit.cs.cs.cs {
         for constr in &cg.entries {
             let gate = homogenize(constr.gate.clone(), mu);
@@ -82,12 +81,14 @@ pub fn poseidons_pseudo_fold(c: &mut Criterion) {
             let a: Vec<_> = repeat_with(|| F::random(OsRng)).take(gate.i()).collect();
             let b: Vec<_> = repeat_with(|| F::random(OsRng)).take(gate.i()).collect();
 
-            bench_data.push((gate, a, b));
+            let randomness: Vec<_> = repeat_with(|| F::random(OsRng)).take(gate.d()).collect();
+
+            bench_data.push((gate, a, b, randomness));
         }
     }
 
     c.bench_function("poseidons pseudo fold", |b| b.iter(|| {
-        bench_data.iter().for_each(|(gate, a, b)| evaluate_on_random_linear_combinations(gate, a, b))
+        bench_data.iter().for_each(|(gate, a, b, randomness)| evaluate_on_random_linear_combinations(gate, a, b, randomness))
     }));
 
 }

@@ -9,7 +9,7 @@ num-bigint = { version = "0.4", features = ["rand"] }
 num-integer = "0.1"
 num-traits = "0.2"
 halo2curves = { package = "halo2curves", git = "https://github.com/privacy-scaling-explorations/halo2curves"}
-halo2 = { package = "halo2_proofs", git = "https://github.com/privacy-scaling-explorations/halo2", default-features = false, features = ["batch"] }
+halo2 = { package = "halo2_proofs", git = "https://github.com/privacy-scaling-explorations/halo2" }
 poseidon-rs = "0.0.10"
 group = "0.13"
 ff = "0.13"

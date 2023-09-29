@@ -3,7 +3,7 @@ use std::{rc::Rc, iter::repeat_with};
 use criterion::{criterion_group, criterion_main, Criterion};
 use ff::Field;
 use halo2curves::bn256;
-use protostar_works::{gadgets::poseidon::{Poseidon, poseidon_gadget}, circuit::{ExternalValue, Circuit, Advice}, gate::{Gatebb, Gate}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit};
+use protostar_works::{gadgets::poseidon::{Poseidon, poseidon_gadget}, circuit::{ExternalValue, Circuit, Advice, Build}, gate::{Gatebb, Gate}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit};
 use rand_core::OsRng;
 
 
@@ -48,28 +48,28 @@ pub fn evaluate_on_random_linear_combinations(gate: &impl Gate<F>, a: &Vec<F>, b
 
 }
 
-pub fn assemble_poseidon_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, pi: &'a ExternalValue<F>) {
+pub fn assemble_poseidon_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, cfg: &'a Poseidon, pi: &'a ExternalValue<F>) {
     let load_pi_advice_head = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));
     let mut acc = circuit.advice_pub(0, load_pi_advice_head, vec![], vec![pi])[0];
 
     for _ in 0..1000 {
         acc = poseidon_gadget(circuit, cfg, 2, 0, vec![acc]);
     }
-
-    circuit.finalize();
-
-    pi.set(F::random(OsRng)).unwrap();
-    circuit.execute(0);
-
-    circuit.cs.valid_witness();
 }
 
 pub fn poseidons_pseudo_fold(c: &mut Criterion) {
     let pi = ExternalValue::new();
     let cfg = Poseidon::new();
 
-    let mut circuit = Circuit::<F, Gatebb<F>>::new(25, 1);
+    let mut circuit = Circuit::new(25, 1);
     assemble_poseidon_circuit(&mut circuit, &cfg, &pi);
+
+    let mut circuit = circuit.finalize();
+
+    pi.set(F::random(OsRng)).unwrap();
+    circuit.execute(0);
+
+    circuit.cs.valid_witness();
 
     let mu = F::random(OsRng); // relaxation factor
 
@@ -97,8 +97,15 @@ pub fn poseidons_msm(c: &mut Criterion) {
     let pi = ExternalValue::new();
     let cfg = Poseidon::new();
 
-    let mut circuit = Circuit::<F, Gatebb<F>>::new(25, 1);
+    let mut circuit = Circuit::new(25, 1);
     assemble_poseidon_circuit(&mut circuit, &cfg, &pi);
+
+    let mut circuit = circuit.finalize();
+
+    pi.set(F::random(OsRng)).unwrap();
+    circuit.execute(0);
+
+    circuit.cs.valid_witness();
 
     let mut ck = Vec::with_capacity(circuit.cs.wtns.len());
     for rw in &circuit.cs.wtns {

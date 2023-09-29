@@ -2,7 +2,7 @@
 mod tests {
     use std::{rc::Rc, iter::repeat};
 
-    use crate::{gate::Gatebb, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, poseidon_gadget_mixstrat}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget, ecmul::{add_proj, best_mul_proj, double_and_add_proj, double_and_add_proj_le, oct_suboptimal, quad_aleg_optimal, oct_naive, sq_aleg_optimal}}};
+    use crate::{gate::Gatebb, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice, Build}, gadgets::{poseidon::{poseidon_gadget, Poseidon, poseidon_gadget_mixstrat}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget, ecmul::{add_proj, best_mul_proj, double_and_add_proj, double_and_add_proj_le, oct_suboptimal, quad_aleg_optimal, oct_naive, sq_aleg_optimal}}};
     use ff::{PrimeField, Field};
     use group::{Group, Curve};
     use halo2curves::{bn256, grumpkin, CurveAffine, CurveExt};
@@ -30,14 +30,14 @@ mod tests {
     fn test_circuit_builder() {
         let public_input_source = ExternalValue::<F>::new();
     
-        let mut circuit = Circuit::<F, Gatebb<F>>::new(2, 1);
+        let mut circuit = Circuit::<F, Gatebb<F>, Build>::new(2, 1);
     
         let sq = PolyOp::new(2, 1, 1, Rc::new(|x|vec!(x[0]*x[0])));
         let input = circuit.advice_pub(0, Advice::new(0, 1, 1, Rc::new(|_, iext|vec![iext[0]])), vec![], vec![&public_input_source])[0];
         let sq1 = circuit.apply(0, sq.clone(), vec![input]);
         let _ = circuit.apply_pub(0, sq.clone(), sq1);
     
-        circuit.finalize();
+        let mut circuit = circuit.finalize();
     
         public_input_source.set(F::from(2)).unwrap();
     
@@ -52,7 +52,7 @@ mod tests {
         let pi_ext : Vec<_> = repeat(ExternalValue::<F>::new()).take(5).collect();
         let challenge_ext = ExternalValue::<F>::new();
     
-        let mut circuit = Circuit::<F, Gatebb<F>>::new(2, 2);
+        let mut circuit = Circuit::new(2, 2);
         
         let one = Variable::Public(0,0);
     
@@ -93,7 +93,7 @@ mod tests {
             circuit.constrain(&[one, challenge, pi[k], fractions[k]], div_constr.clone());
         }
     
-        circuit.finalize();
+        let mut circuit = circuit.finalize();
     
         // construction phase ended
     
@@ -115,12 +115,12 @@ mod tests {
     fn test_poseidon_gadget(){
         let cfg = Poseidon::new();
         let pi_ext = ExternalValue::<F>::new();
-        let mut circuit = Circuit::<F, Gatebb<F>>::new(25, 1);
+        let mut circuit = Circuit::new(25, 1);
         let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
         let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
         let ret = poseidon_gadget(&mut circuit, &cfg, 1, 0, vec![pi]);
     
-        circuit.finalize();
+        let mut circuit = circuit.finalize();
     
         pi_ext.set(F::ONE).unwrap();
     
@@ -134,12 +134,12 @@ mod tests {
     fn test_poseidon_gadget_k_equals_two(){
         let cfg = Poseidon::new();
         let pi_ext = ExternalValue::<F>::new();
-        let mut circuit = Circuit::<F, Gatebb<F>>::new(25, 1);
+        let mut circuit = Circuit::new(25, 1);
         let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
         let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
         let ret = poseidon_gadget(&mut circuit, &cfg, 2, 0, vec![pi]);
     
-        circuit.finalize();
+        let mut circuit = circuit.finalize();
     
         pi_ext.set(F::ONE).unwrap();
     
@@ -153,12 +153,12 @@ mod tests {
     fn test_poseidon_gadget_mixstrat(){
         let cfg = Poseidon::new();
         let pi_ext = ExternalValue::<F>::new();
-        let mut circuit = Circuit::<F, Gatebb<F>>::new(25, 1);
+        let mut circuit = Circuit::new(25, 1);
         let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
         let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
         let ret = poseidon_gadget_mixstrat(&mut circuit, &cfg, 0, vec![pi]);
 
-        circuit.finalize();
+        let mut circuit = circuit.finalize();
 
         pi_ext.set(F::ONE).unwrap();
 
@@ -174,13 +174,13 @@ mod tests {
     
     fn test_bit_decomposition(){
         let pi_ext = ExternalValue::<F>::new();
-        let mut circuit = Circuit::<F, Gatebb<F>>::new(2, 1);
+        let mut circuit = Circuit::new(2, 1);
         let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
         let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
     
         let bits = bit_decomposition_gadget(&mut circuit, 0, 3, pi);
     
-        circuit.finalize();
+        let mut circuit = circuit.finalize();
         pi_ext.set(F::from(6)).unwrap();
         circuit.execute(0);
     
@@ -196,13 +196,13 @@ mod tests {
     
     fn test_chunk_decomposition(){
         let pi_ext = ExternalValue::<F>::new();
-        let mut circuit = Circuit::<F, Gatebb<F>>::new(4, 1);
+        let mut circuit = Circuit::new(4, 1);
         let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
         let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
     
         let chunks = bit_chunks_gadget(&mut circuit, 0, 2, 2, pi);
     
-        circuit.finalize();
+        let mut circuit = circuit.finalize();
         pi_ext.set(F::from(6)).unwrap();
         circuit.execute(0);
     
@@ -217,7 +217,7 @@ mod tests {
     
     fn test_check_poly() {
         let f = Rc::new(|x: &[F]|{vec![x[0].pow([5])]});
-        check_poly(4, 1, 1, f).unwrap();
+        check_poly(5, 1, 1, f).unwrap();
     }
     
     // #[test]
@@ -306,20 +306,20 @@ mod tests {
             
             let retr = Into::<C>::into(grumpkin::G1Affine::from_xy(tmp.0*inv, tmp.1*inv).unwrap());
     
-            assert!(retr == retl);
+            assert_eq!(retr, retl);
             let tmp = double_and_add_proj::<F,C>(pt.x, pt.y, k);
             let inv = tmp.2.invert().unwrap();
             
             let retr = Into::<C>::into(grumpkin::G1Affine::from_xy(tmp.0*inv, tmp.1*inv).unwrap());
     
-            assert!(retr == retl);
+            assert_eq!(retr, retl);
     
             let tmp = double_and_add_proj_le::<F,C>(pt.x, pt.y, k);
             let inv = tmp.2.invert().unwrap();
             
             let retr = Into::<C>::into(grumpkin::G1Affine::from_xy(tmp.0*inv, tmp.1*inv).unwrap());
     
-            assert!(retr == retl);
+            assert_eq!(retr, retl);
     
         }
     }

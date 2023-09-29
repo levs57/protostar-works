@@ -11,7 +11,7 @@ use std::{rc::Rc, iter::repeat};
 use ff::PrimeField;
 use num_traits::pow;
 
-use crate::{circuit::{Circuit, Advice}, gate::Gatebb, constraint_system::Variable};
+use crate::{circuit::{Circuit, Advice, Build}, gate::Gatebb, constraint_system::Variable};
 use crate::utils::field_precomp::FieldUtils;
 
 pub fn chunkcheck<F: PrimeField>(arg: &[F], k:usize) -> Vec<F> {
@@ -55,7 +55,7 @@ pub fn decompose<F: PrimeField>(x: F, k: usize, num_chunks: usize) -> Vec<F> {
     chunks.iter().take(num_chunks).map(|x|F::from(*x as u64)).collect()
 }
 
-pub fn bit_chunks_gadget<'a, F: PrimeField+FieldUtils>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, round: usize, num_chunks: usize, chunk_size: usize, input: Variable) -> Vec<Variable> {
+pub fn bit_chunks_gadget<'a, F: PrimeField+FieldUtils>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, round: usize, num_chunks: usize, chunk_size: usize, input: Variable) -> Vec<Variable> {
     let k = chunk_size;
     let chunks = circuit.advice(
         round,

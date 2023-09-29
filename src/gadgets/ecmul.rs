@@ -8,6 +8,7 @@ use std::{rc::Rc, marker::PhantomData};
 
 use ff::PrimeField;
 use halo2curves::CurveExt;
+use crate::circuit::Build;
 use crate::{circuit::Circuit, constraint_system::Variable, gate::Gatebb};
 use crate::utils::field_precomp::FieldUtils;
 
@@ -24,7 +25,7 @@ impl<F: PrimeField+FieldUtils, C: CurveExt<Base=F>> EcAffinePoint<F, C> {
         Self{x,y, _marker: PhantomData::<C>}
     }
 
-    pub fn new<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, x: Variable, y: Variable) -> Self{
+    pub fn new<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, x: Variable, y: Variable) -> Self{
         circuit.constrain(&[x,y], Gatebb::new(3, 2, 1, Rc::new(|args|{
             let x = args[0];
             let y = args[1];

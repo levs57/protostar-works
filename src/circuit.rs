@@ -103,15 +103,20 @@ pub enum Operation<'a, F: PrimeField> {
     Adv(AdviceAllocated<'a, F>),
 }
 
-pub trait CircuitState {}
 pub struct Build;
 pub struct Finalized;
 
-impl CircuitState for Build {}
-impl CircuitState for Finalized {}
+mod private {
+    use super::{Build, Finalized};
+
+    pub trait CircuitState {}
+
+    impl CircuitState for Build {}
+    impl CircuitState for Finalized {}
+}
 
 #[derive(Clone)]
-pub struct Circuit<'a, F: PrimeField, T:Gate<F> + From<PolyOp<'a, F>>, S: CircuitState> {
+pub struct Circuit<'a, F: PrimeField, T:Gate<F> + From<PolyOp<'a, F>>, S: private::CircuitState> {
     pub cs: CSWtns<F, T>,
     pub ops: Vec<Vec<Operation<'a, F>>>,
     pub max_degree: usize,

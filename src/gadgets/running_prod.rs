@@ -1,7 +1,6 @@
 // Nonzero elements checker.
 
-use std::{cmp::max, rc::Rc};
-
+use std::rc::Rc;
 use ff::PrimeField;
 use crate::{utils::field_precomp::FieldUtils, circuit::{Circuit, PolyOp}, gate::Gatebb, constraint_system::Variable};
 

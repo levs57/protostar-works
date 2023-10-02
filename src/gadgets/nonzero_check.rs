@@ -1,9 +1,6 @@
 use std::{rc::Rc, cmp::max};
-
 use ff::PrimeField;
-
 use crate::{utils::field_precomp::FieldUtils, circuit::{Circuit, Advice, ExternalValue}, gate::Gatebb, constraint_system::Variable, subroutine::{SubroutineDefault, Subroutine}};
-
 use super::running_prod::prod_run_gadget;
 
 /// Checks that the array of variables is nonzero.
@@ -39,15 +36,12 @@ pub struct NonzeroSubroutine<'a, F: PrimeField+FieldUtils> {
 }
 
 impl<'a, F: PrimeField+FieldUtils> Subroutine<'a, F, usize, (), Gatebb<'a, F>> for NonzeroSubroutine<'a, F> {
-    fn new(params: usize) -> Self {
-        Self { subroutine: 
-            SubroutineDefault {
-                seal: ExternalValue::new(),
-                vars: vec![],
-                params,
-                gadget: nonzero_gadget,
-            }
-        }
+
+    type InitParams = ();
+
+    fn new(circuit: &'a mut Circuit<'a, F, Gatebb<'a, F>>, dummy_value: &'a ExternalValue<F>, params: usize, _:()) -> Self {
+        let subroutine = SubroutineDefault::new(circuit, dummy_value, params, nonzero_gadget);
+        Self { subroutine }
     }
     fn push (&mut self, v: Variable) -> () {
         self.subroutine.push(v);

@@ -113,6 +113,7 @@ impl<'a, F: PrimeField + FieldUtils, T: Gate<F> + From<PolyOp<'a, F>>> Circuit<'
         prep
     }
 
+
     pub fn advice(&mut self, round: usize, adv: Advice<'a, F>, ivar: Vec<Variable>, iext: Vec<&'a ExternalValue<F>>) -> Vec<Variable> {
         assert!(!self.finalized, "Circuit is already built.");
         assert!(round < self.ops.len(), "The round is too large.",);

@@ -364,8 +364,6 @@ pub fn poseidon_mixed_strategy_end(
 pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, round: usize, state: Vec<Variable>, is_first_part:bool) -> Vec<Variable>{
     let t = if is_first_part {state.len() + 1} else {state.len()};
     
-    let c = &cfg.constants.c[t-2];
-    let m = &cfg.constants.m[t-2];
     let n_rounds_f = cfg.constants.n_rounds_f;
     let n_rounds_p = cfg.constants.n_rounds_p[t-2];
 

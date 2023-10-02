@@ -51,27 +51,6 @@ pub struct PolyOpAllocated<'a, F: PrimeField> {
 /// A value used for advices. Can be shared between multiple circuits, in order to enable layered constructions.
 pub type ExternalValue<F> = OnceCell<F>;
 
-// impl<F: PrimeField> ExternalValue<F> {
-//     pub fn new() -> Self {
-//         Self { v : Cell::new(MaybeValue::new())}
-//     }
-
-//     pub fn get(&self) -> F {
-//         let tmp = self.v.get();
-//         if tmp.flag { 
-//             tmp.value
-//         } else {
-//             panic!("Unassigned external value error.")
-//         }
-//     }
-
-//     pub fn set(&self, value: F) -> () {
-//         let tmp = self.v.get();
-//         if tmp.flag {panic!("Can not assign external value twice.")}
-//         self.v.set(MaybeValue {value, flag:true })
-//     }
-// }
-
 impl<'a, F: PrimeField> Advice<'a, F> {
     pub fn new(ivar: usize, iext:usize, o: usize, f: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'a>) -> Self{
         Self{ ivar, iext, o, f }
@@ -105,7 +84,7 @@ pub enum Operation<'a, F: PrimeField> {
 }
 
 #[derive(Clone)]
-pub struct Circuit<'a, F: PrimeField, T:Gate<F> + From<PolyOp<'a, F>>> {
+pub struct Circuit<'a, F: PrimeField + FieldUtils, T:Gate<F> + From<PolyOp<'a, F>>> {
     pub cs: CSWtns<F, T>,
     pub ops: Vec<Vec<Operation<'a, F>>>,
     pub max_degree: usize,

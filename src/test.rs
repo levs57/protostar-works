@@ -2,7 +2,7 @@
 mod tests {
     use std::{rc::Rc, iter::repeat};
 
-    use crate::{gate::Gatebb, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, poseidon_gadget_mixstrat}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget, ecmul::{add_proj, best_mul_proj, double_and_add_proj, double_and_add_proj_le, oct_suboptimal, quad_aleg_optimal, oct_naive, sq_aleg_optimal}}};
+    use crate::{gate::Gatebb, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, poseidon_gadget_mixstrat}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget, ecmul::{add_proj}}};
     use ff::{PrimeField, Field};
     use group::{Group, Curve};
     use halo2curves::{bn256, grumpkin, CurveAffine, CurveExt};
@@ -292,105 +292,5 @@ mod tests {
         let pt3 = grumpkin::G1Affine::from_xy(pt3_.0*r3_inv, pt3_.1*r3_inv).unwrap();
     
         assert!(Into::<C>::into(pt3) == pt1+pt2);
-    }
-    
-    #[test]
-    
-    fn test_mul() {
-        let pt = C::random(OsRng).to_affine();
-        for k in 1..100 {
-            let retl = pt*<C as CurveExt>::ScalarExt::from(k);
-            
-            let tmp = best_mul_proj::<F,C>(pt.x, pt.y, k);
-            let inv = tmp.2.invert().unwrap();
-            
-            let retr = Into::<C>::into(grumpkin::G1Affine::from_xy(tmp.0*inv, tmp.1*inv).unwrap());
-    
-            assert!(retr == retl);
-            let tmp = double_and_add_proj::<F,C>(pt.x, pt.y, k);
-            let inv = tmp.2.invert().unwrap();
-            
-            let retr = Into::<C>::into(grumpkin::G1Affine::from_xy(tmp.0*inv, tmp.1*inv).unwrap());
-    
-            assert!(retr == retl);
-    
-            let tmp = double_and_add_proj_le::<F,C>(pt.x, pt.y, k);
-            let inv = tmp.2.invert().unwrap();
-            
-            let retr = Into::<C>::into(grumpkin::G1Affine::from_xy(tmp.0*inv, tmp.1*inv).unwrap());
-    
-            assert!(retr == retl);
-    
-        }
-    }
-    
-    #[test]
-    
-    fn test_mul_deg() {
-        for k in (1..5).map(|x|1<<x) {
-            
-            println!("The degree of the (allegedly) optimal mixed multiplication by {} is {}",
-                k,
-                find_degree(2000, 2, 3, Rc::new(move |args| {
-                    let tmp = best_mul_proj::<F,C>(args[0], args[1], k);
-                    vec![tmp.0, tmp.1, tmp.2]
-                })).unwrap());
-    
-            println!("The degree of the double-and-add      mixed multiplication by {} is {}",
-            k,
-            find_degree(2000, 2, 3, Rc::new(move |args| {
-                let tmp = double_and_add_proj::<F,C>(args[0], args[1], k);
-                vec![tmp.0, tmp.1, tmp.2]
-            })).unwrap());
-    
-            println!("The degree of the le double-and-add   mixed multiplication by {} is {}\n",
-                k,
-                find_degree(2000, 2, 3, Rc::new(move |args| {
-                    let tmp = double_and_add_proj_le::<F,C>(args[0], args[1], k);
-                    vec![tmp.0, tmp.1, tmp.2]
-                })).unwrap());
-        }
-    }
-    
-    #[test]
-    fn test_oct_deg() {
-        for i in 0..10 {
-            for j in 0..10 {
-                match find_degree(100,
-                    2,
-                    3,
-                    Rc::new(move|args|{
-                        let x = args[0]; let y = args[1];
-                        let tmp = oct_suboptimal::<F,C>(x, y, i, j);
-                        vec![tmp.0, tmp.1, tmp.2]
-                    })) {
-                        Err(_) => (),
-                        Ok(d) => println!("For deg2={}, deg4={}, polynomial is valid, total degree = {}", j, i, d),
-                    }
-            }
-        }
-    }
-    
-    #[test]
-    fn test_oct_deg2() {
-        for i in 2..5 {
-            for j in 40..50 {
-                match find_degree(300,
-                    2,
-                    3,
-                    Rc::new(move|args|{
-                        let x = args[0]; let y = args[1];
-                        let oct = oct_naive::<F,C>(x, y);
-                        let quad = quad_aleg_optimal::<F,C>(x, y);
-                        let sq = sq_aleg_optimal::<F,C>(x, y);
-                        let scaling = (sq.2.pow([j as u64])*quad.2.pow([i as u64])).invert().unwrap();
-                        assert!(i > 0 || j > 0 || scaling  == F::ONE);
-                        vec![oct.0 * scaling, oct.1 * scaling, oct.2 * scaling]
-                    })) {
-                        Err(_) => break,
-                        Ok(d) => println!("For deg2={}, deg4={}, polynomial is valid, total degree = {}", j, i, d),
-                    }
-            }
-        }
     }
 }

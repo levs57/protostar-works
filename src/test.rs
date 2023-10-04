@@ -2,10 +2,11 @@
 mod tests {
     use std::{rc::Rc, iter::repeat};
 
-    use crate::{gate::Gatebb, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, poseidon_gadget_mixstrat}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget, ecmul::{add_proj}}};
+    use crate::{gate::Gatebb, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, poseidon_gadget_mixstrat}, bits::bit_decomposition_gadget, ecmul::{add_proj, double_proj, EcAffinePoint, escalarmul_gadget_9}, range::{limb_decompose_gadget, rangecheck, lagrange_choice, lagrange_choice_batched, choice_gadget, VarSmall}, nonzero_check::nonzero_gadget}};
     use ff::{PrimeField, Field};
     use group::{Group, Curve};
     use halo2curves::{bn256, grumpkin, CurveAffine, CurveExt};
+    use num_traits::pow;
     use rand_core::OsRng;
     use crate::utils::poly_utils::{check_poly, find_degree};
     use crate::utils::field_precomp::FieldUtils;
@@ -194,76 +195,11 @@ mod tests {
     
     #[test]
     
-    fn test_chunk_decomposition(){
-        let pi_ext = ExternalValue::<F>::new();
-        let mut circuit = Circuit::<F, Gatebb<F>>::new(4, 1);
-        let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
-        let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
-    
-        let chunks = bit_chunks_gadget(&mut circuit, 0, 2, 2, pi);
-    
-        circuit.finalize();
-        pi_ext.set(F::from(6)).unwrap();
-        circuit.execute(0);
-    
-        circuit.cs.valid_witness();
-    
-        assert!(chunks.len()==2);
-        assert!(circuit.cs.getvar(chunks[0]) == F::from(2));
-        assert!(circuit.cs.getvar(chunks[1]) == F::from(1));
-    }
-    
-    #[test]
-    
     fn test_check_poly() {
         let f = Rc::new(|x: &[F]|{vec![x[0].pow([5])]});
         check_poly(4, 1, 1, f).unwrap();
     }
-    
-    // #[test]
-    
-    // fn test_doubling_degree() {
-    //     for k in 1..5 {
-    //         let f = Rc::new(|args: &[F]|{let tmp = double_k_times_internal::<F,C>(args[0], args[1], k); vec![tmp.0, tmp.1, tmp.2]});
-    //         println!("at k={}, deg={}", k, find_degree(1000, 2, 3, f).unwrap());
-    //     }
-    // }
-    
-    // #[test]
-    
-    // fn test_double_k_times() {
-    //     let pi_x_ext = ExternalValue::<F>::new();
-    //     let pi_y_ext = ExternalValue::<F>::new();
-    //     let mut circuit = Circuit::<F, Gatebb<F>>::new(37, 1);
-    //     let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
-    
-    //     let x = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_x_ext])[0];
-    //     let y = circuit.advice_pub(0, read_pi_advice, vec![], vec![&pi_y_ext])[0];
-        
-    //     let pt = EcAffinePoint::<F, C>::new(&mut circuit, x,y);
-    
-    //     let ret = double_k_times_gadget(&mut circuit, 2, 0, pt);
-    
-    //     circuit.finalize();
-    
-    //     let randpt = C::random(OsRng).to_affine();
-    //     let randx = randpt.x;
-    //     let randy = randpt.y;
-    
-    //     pi_x_ext.set(randx).unwrap();
-    //     pi_y_ext.set(randy).unwrap();
-    
-    //     circuit.execute(0);
-    //     circuit.cs.valid_witness();
-    
-    //     let retx = circuit.cs.getvar(ret.x);
-    //     let rety = circuit.cs.getvar(ret.y);
-    
-    //     let randptproj : C = randpt.into();
-    //     let quad = randptproj.double().double().to_affine();
-    
-    //     assert!(grumpkin::G1Affine::from_xy(retx, rety).unwrap() == quad);
-    // }
+
     
     #[test]
     
@@ -279,12 +215,9 @@ mod tests {
     fn test_add() {
         let pt1 = C::random(OsRng).to_affine();
         let pt2 = C::random(OsRng).to_affine();
-    
-        let r1 = F::random(OsRng);
-        let r2 = F::random(OsRng);
-    
-        let pt1_ = (pt1.x*r1, pt1.y*r1, r1);
-        let pt2_ = (pt2.x*r2, pt2.y*r2, r2);
+        
+        let pt1_ = (pt1.x, pt1.y);
+        let pt2_ = (pt2.x, pt2.y);
     
         let pt3_ = add_proj::<F,C>(pt1_, pt2_);
     
@@ -293,4 +226,178 @@ mod tests {
     
         assert!(Into::<C>::into(pt3) == pt1+pt2);
     }
+
+    #[test]
+
+    fn test_double() {
+        let pt = C::random(OsRng).to_affine();
+        let pt_ = (pt.x, pt.y);
+        let pt2_ = double_proj::<F,C>(pt_);
+        let rinv = pt2_.2.invert().unwrap();
+        let pt2 = grumpkin::G1Affine::from_xy(pt2_.0*rinv, pt2_.1*rinv).unwrap();
+        assert!(Into::<C>::into(pt2) == pt+pt);
+
+    }
+
+    #[test]
+
+    fn test_range_check() {
+        for range in 1..10 {
+            for i in 1..10 {
+                let x = F::from(i);
+                assert!(if i < range {rangecheck(x, range) == F::ZERO} else {rangecheck(x, range) != F::ZERO});
+            }
+        }
+    }
+
+    #[test]
+
+    fn test_limb_decompose_gadget() {
+
+        let pi_ext = ExternalValue::<F>::new();
+        let mut circuit = Circuit::<F, Gatebb<F>>::new(9, 1);
+        let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
+        let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
+    
+        let limbs = limb_decompose_gadget(&mut circuit, 9, 0, 2, pi);
+    
+        circuit.finalize();
+        pi_ext.set(F::from(25)).unwrap();
+        circuit.execute(0);
+    
+        circuit.cs.valid_witness();
+    
+        assert!(limbs.len()==2);
+        assert!(circuit.cs.getvar(limbs[0].var) == F::from(7));
+        assert!(circuit.cs.getvar(limbs[1].var) == F::from(2));
+
+    }
+
+    #[test]
+
+    fn test_lagrange_choice() -> () {
+        for n in 2..12 {
+            for t in 0..n {
+                assert!(find_degree(32, 1, 1, Rc::new(move |v: &[F]| vec![lagrange_choice(v[0],t,n)])).unwrap() == (n-1) as usize);
+                for x in 0..n {
+                    if x == t {
+                        assert!(lagrange_choice(F::from(x), t, n) == F::ONE);
+                    } else {
+                        assert!(lagrange_choice(F::from(x), t, n) == F::ZERO);
+                    }
+                }
+
+            }
+        }
+    }
+
+    #[test]
+
+    fn test_lagrange_batch() -> () {
+        for n in 2..12 {
+            assert!(find_degree(32, 1, n, Rc::new(move |v: &[F]| lagrange_choice_batched(v[0], n as u64))).unwrap() == (n-1));
+            for x in 0..n {
+                let v = lagrange_choice_batched(F::from(x as u64), n as u64);
+                for t in 0..n {
+                    assert!(if t==x {v[t] == F::ONE} else {v[t] == F::ZERO})
+                }
+            }
+        }
+    }
+
+    #[test]
+
+    fn test_choice_gadget() -> () {
+
+        let mut pi_ext = vec![];
+        let pi_id_ext = ExternalValue::<F>::new();
+        for i in 0..9 {
+            pi_ext.push(vec![]);
+            for j in 0..3 {
+                pi_ext[i].push(ExternalValue::<F>::new());
+            }
+        }
+        let mut circuit = Circuit::<F, Gatebb<F>>::new(10, 1);
+        let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
+        let mut pi = vec![];
+        for i in 0..9 {
+            pi.push(vec![]);
+            for j in 0..3 {
+                pi[i].push(circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext[i][j]])[0]);
+            }
+        }
+        let pi_id = circuit.advice_pub(0, read_pi_advice, vec![], vec![&pi_id_ext])[0];
+    
+        let pi : Vec<_> = pi.iter().map(|x|x.as_ref()).collect();
+        let chosen = choice_gadget(&mut circuit, &pi, VarSmall::new_unchecked(pi_id, 9), 0);
+
+        circuit.finalize();
+        pi_id_ext.set(F::from(5)).unwrap();
+        for i in 0..9 {
+            for j in 0..3 {
+                pi_ext[i][j].set(F::random(OsRng)).unwrap();
+            }
+        }
+        circuit.execute(0);
+    
+        circuit.cs.valid_witness();
+
+        assert!(chosen.len() == 3);
+
+        for j in 0..3 {
+            assert!(circuit.cs.getvar(pi[5][j]) == circuit.cs.getvar(chosen[j]))
+        }
+    }
+
+    #[test]
+    fn test_escalarmul_gadget()->(){
+        let pi_a_ext = (ExternalValue::<F>::new(), ExternalValue::<F>::new());
+        let pi_b_ext = (ExternalValue::<F>::new(), ExternalValue::<F>::new()); // a*(1+9+...+9^{nl-1})+b=0 must be checked out of band
+        let pi_pt_ext = (ExternalValue::<F>::new(), ExternalValue::<F>::new());
+        let pi_sc_ext = ExternalValue::<F>::new();
+
+        let mut circuit = Circuit::<F, Gatebb<F>>::new(10, 1);
+
+        let read_pi = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
+
+        let x = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_a_ext.0])[0];
+        let y = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_a_ext.1])[0];
+        let a = EcAffinePoint::<F,C>::new(&mut circuit, x, y);
+        let x = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_b_ext.0])[0];
+        let y = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_b_ext.1])[0];
+        let b = EcAffinePoint::<F,C>::new(&mut circuit, x, y);
+        let x = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_pt_ext.0])[0];
+        let y = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_pt_ext.1])[0];
+        let pt = EcAffinePoint::<F,C>::new(&mut circuit, x, y);
+        let sc = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_sc_ext])[0];
+
+        let mut nonzeros = vec![];
+        let num_limbs = 3;
+
+        let scmul = escalarmul_gadget_9(&mut circuit, sc, pt, num_limbs, 0, a, b, &mut nonzeros);
+
+        nonzero_gadget(&mut circuit, &nonzeros, 9);
+        circuit.finalize();
+
+        let pi_a = C::random(OsRng).to_affine();
+        pi_a_ext.0.set(pi_a.x).unwrap(); pi_a_ext.1.set(pi_a.y).unwrap();
+
+        let pi_b = -(C::from(pi_a)*<C as CurveExt>::ScalarExt::from(1+9+81)).to_affine();
+        pi_b_ext.0.set(pi_b.x).unwrap(); pi_b_ext.1.set(pi_b.y).unwrap();
+
+        let pi_pt = C::random(OsRng).to_affine();
+        pi_pt_ext.0.set(pi_pt.x).unwrap(); pi_pt_ext.1.set(pi_pt.y).unwrap();
+
+        pi_sc_ext.set(F::from(23)).unwrap();
+
+        circuit.execute(0);
+
+        circuit.cs.valid_witness();
+
+        let answer = grumpkin::G1Affine::from_xy(circuit.cs.getvar(scmul.x), circuit.cs.getvar(scmul.y)).unwrap();
+
+        assert!(answer == (pi_pt*<C as CurveExt>::ScalarExt::from(23)).to_affine());
+    }
+
+
 }

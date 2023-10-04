@@ -5,7 +5,7 @@ pub mod commitment;
 pub mod constraint_system;
 pub mod witness;
 pub mod circuit;
-pub mod subroutine;
+// pub mod subroutine;
 pub mod gadgets;
 pub mod utils;
 pub mod test;

@@ -3,6 +3,8 @@ use halo2::arithmetic::best_fft;
 use halo2curves::bn256;
 use num_traits::pow;
 
+use super::{powers_of_omega, half_squares, inv_lagrange_prod::{inv_lagrange_prod, self}};
+
 pub trait FieldUtils where Self : PrimeField{
     /// Returns power of a primitive root of unity of order 2^logorder.
     fn roots_of_unity(power: u64, logorder: usize) -> Self;
@@ -12,6 +14,10 @@ pub trait FieldUtils where Self : PrimeField{
     fn binomial_fft(power: usize, logorder: usize) -> Vec<Self>;
     /// Multiplies the value by the small scalar.
     fn scale(&self, scale: u64) -> Self;
+    /// Returns [k/2]^2
+    fn half_square(k: u64) -> Self;
+    /// Given 0=<k<n, returns 1/\prod_{i \in 0..n; i!=k}(k-i).
+    fn inv_lagrange_prod(k: u64, n: u64) -> Self;
 }
 
 type F = bn256::Fr;
@@ -19,7 +25,7 @@ type F = bn256::Fr;
 impl FieldUtils for F {
     /// Returns power of a primitive root of unity of order 2^logorder.
     fn roots_of_unity(power: u64, logorder: usize) -> Self{
-        F::ROOT_OF_UNITY.pow([pow(2, F::S as usize - logorder)]).pow([power])
+        powers_of_omega::roots_of_unity(power, logorder)
     }
     /// Returns power of 1/2.
     fn half_pow(power: u64) -> Self {
@@ -81,4 +87,11 @@ impl FieldUtils for F {
         }
     }
 
+    fn half_square(k:u64) -> Self {
+        half_squares::half_square(k)
+    }
+
+    fn inv_lagrange_prod(k: u64, n: u64) -> Self {
+        inv_lagrange_prod::inv_lagrange_prod(k, n)
+    }
 }

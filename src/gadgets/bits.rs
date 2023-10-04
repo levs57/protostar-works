@@ -12,7 +12,6 @@ pub fn bitcheck<F: PrimeField>(arg: &[F]) -> Vec<F> {
     vec![x*x - x]
 }
 
-// This gate is homogeneous, so it DOES not take 1 as first input.
 pub fn decompcheck<F: PrimeField>(arg: &[F]) -> Vec<F> {
     
     let x = arg[0];

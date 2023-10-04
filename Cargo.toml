@@ -29,3 +29,7 @@ default = ["sanity-check"]
 [[bench]]
 name = "bench_poseidons"
 harness = false
+
+[[bench]]
+name = "bench_ecmul"
+harness = false

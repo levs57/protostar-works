@@ -13,6 +13,8 @@ mod tests {
     
     type F = bn256::Fr;
     type C = grumpkin::G1;
+
+    type Fq = <C as CurveExt>::ScalarExt;
     
     // #[test]
     
@@ -372,7 +374,7 @@ mod tests {
         let sc = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_sc_ext])[0];
 
         let mut nonzeros = vec![];
-        let num_limbs = 3;
+        let num_limbs = 81;
 
         let scmul = escalarmul_gadget_9(&mut circuit, sc, pt, num_limbs, 0, a, b, &mut nonzeros);
 
@@ -382,7 +384,10 @@ mod tests {
         let pi_a = C::random(OsRng).to_affine();
         pi_a_ext.0.set(pi_a.x).unwrap(); pi_a_ext.1.set(pi_a.y).unwrap();
 
-        let pi_b = -(C::from(pi_a)*<C as CurveExt>::ScalarExt::from(1+9+81)).to_affine();
+        //1+9+81+...+9^{num_limbs - 1} = (9^{num_limbs}-1)/8
+
+        let bscale = (Fq::from(9).pow([num_limbs as u64])-Fq::ONE)*(Fq::from(8).invert().unwrap());
+        let pi_b = -(C::from(pi_a)*bscale).to_affine();
         pi_b_ext.0.set(pi_b.x).unwrap(); pi_b_ext.1.set(pi_b.y).unwrap();
 
         let pi_pt = C::random(OsRng).to_affine();
@@ -397,6 +402,8 @@ mod tests {
         let answer = grumpkin::G1Affine::from_xy(circuit.cs.getvar(scmul.x), circuit.cs.getvar(scmul.y)).unwrap();
 
         assert!(answer == (pi_pt*<C as CurveExt>::ScalarExt::from(23)).to_affine());
+
+        println!("Total circuit size: private: {} public: {}", circuit.cs.wtns[0].privs.len(), circuit.cs.wtns[0].pubs.len());
     }
 
 

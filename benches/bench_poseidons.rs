@@ -74,17 +74,15 @@ pub fn poseidons_pseudo_fold(c: &mut Criterion) {
     let mu = F::random(OsRng); // relaxation factor
 
     let mut bench_data = Vec::<(Gatebb<F>, Vec<F>, Vec<F>, Vec<F>)>::new();
-    for cg in &circuit.cs.cs.cs {
-        for constr in &cg.entries {
-            let gate = homogenize(constr.gate.clone(), mu);
+    for constr in circuit.cs.cs.iter_constraints() {
+        let gate = homogenize(constr.gate.clone(), mu);
 
-            let a: Vec<_> = repeat_with(|| F::random(OsRng)).take(gate.i()).collect();
-            let b: Vec<_> = repeat_with(|| F::random(OsRng)).take(gate.i()).collect();
+        let a: Vec<_> = repeat_with(|| F::random(OsRng)).take(gate.i()).collect();
+        let b: Vec<_> = repeat_with(|| F::random(OsRng)).take(gate.i()).collect();
 
-            let randomness: Vec<_> = repeat_with(|| F::random(OsRng)).take(gate.d()).collect();
+        let randomness: Vec<_> = repeat_with(|| F::random(OsRng)).take(gate.d()).collect();
 
-            bench_data.push((gate, a, b, randomness));
-        }
+        bench_data.push((gate, a, b, randomness));
     }
 
     c.bench_function("poseidons pseudo fold", |b| b.iter(|| {

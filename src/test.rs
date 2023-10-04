@@ -2,7 +2,7 @@
 mod tests {
     use std::{rc::Rc, iter::repeat};
 
-    use crate::{gate::Gatebb, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice, Build}, gadgets::{poseidon::{poseidon_gadget, Poseidon, poseidon_gadget_mixstrat}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget, ecmul::{add_proj, best_mul_proj, double_and_add_proj, double_and_add_proj_le, oct_suboptimal, quad_aleg_optimal, oct_naive, sq_aleg_optimal}}};
+    use crate::{gate::Gatebb, constraint_system::{Variable, Visibility}, circuit::{Circuit, ExternalValue, PolyOp, Advice, Build}, gadgets::{poseidon::{poseidon_gadget, Poseidon, poseidon_gadget_mixstrat}, bits::bit_decomposition_gadget, bit_chunks::bit_chunks_gadget, ecmul::{add_proj, best_mul_proj, double_and_add_proj, double_and_add_proj_le, oct_suboptimal, quad_aleg_optimal, oct_naive, sq_aleg_optimal}}};
     use ff::{PrimeField, Field};
     use group::{Group, Curve};
     use halo2curves::{bn256, grumpkin, CurveAffine, CurveExt};
@@ -43,7 +43,8 @@ mod tests {
     
         circuit.execute(0);
     
-        println!("{:?}", circuit.cs.getvar(Variable::Public(0,2)).to_repr());
+        let var = Variable { visibility: Visibility::Public, round: 0, index: 2 };
+        assert_eq!(F::from(16), circuit.cs.getvar(var));
     }
     
     #[test]
@@ -54,7 +55,7 @@ mod tests {
     
         let mut circuit = Circuit::new(2, 2);
         
-        let one = Variable::Public(0,0);
+        let one = Circuit::<F, Gatebb<F>, Build>::one();
     
         let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));
         

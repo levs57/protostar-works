@@ -57,7 +57,7 @@ Witness sizes for Poseidons of different arity compared to R1CS witness sizes:
 | 10    | 132         | 470  |
 
 
-Here, one can see that our advantage in witness size even increases slightly with arity (from 3.1 to roughly 3.6); though the circuit involves the gate of relatively large degree 25. Provided no other useful gates of similar degree are found, this will likely be not that viable from recursion overhead.
+Here, one can see that our advantage in witness size even increases slightly with arity (from 3.1 to roughly 3.6); though the circuit involves the gate of relatively large degree 25. Provided no other useful gates of similar degree are found, this will likely be not that viable because of the recursion overhead.
 
 ## Using the library
 

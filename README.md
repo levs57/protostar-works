@@ -12,7 +12,7 @@ then build it.
 
 Main prover work in protostar consists of two components - MSM of witness size, and computation of the cross-terms (which requires to run d times every constraint of degree d). As currently execution of gates is not parallelized (and we just want to get sense of the relative costs of these two operations) we are benching everything in a single thread.
 
-Test are done on a laptop with the following specs:
+Tests were done on a laptop with the following specs:
 #### Intel(R) Core(TM) i7-7700 CPU @ 3.60GHz   3.60 GHz
 
 Parallelization will slightly skew it towards MSM being heavier (because Pippinger algorithm does not parallelize perfectly, and execution of constraints on random vectors does), but in practice we will likely have circuits of reasonably large size, which will offset this.

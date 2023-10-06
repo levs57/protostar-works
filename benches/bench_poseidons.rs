@@ -62,6 +62,8 @@ pub fn assemble_poseidon_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>
     circuit.execute(0);
 
     circuit.cs.valid_witness();
+
+    println!("Total circuit size: private: {} public: {}", circuit.cs.wtns[0].privs.len(), circuit.cs.wtns[0].pubs.len());
 }
 
 pub fn poseidons_pseudo_fold(c: &mut Criterion) {
@@ -109,5 +111,5 @@ pub fn poseidons_msm(c: &mut Criterion) {
     c.bench_function("poseidons msm", |b| b.iter(|| circuit.cs.commit(&ck)));
 }
 
-criterion_group!(benches, poseidons_pseudo_fold, poseidons_msm);
-criterion_main!(benches);
+criterion_group!(poseidon, poseidons_pseudo_fold, poseidons_msm);
+criterion_main!(poseidon);

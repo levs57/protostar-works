@@ -4,11 +4,12 @@ use criterion::{Criterion, criterion_main, criterion_group, black_box};
 use ff::Field;
 use group::{Group, Curve};
 use halo2curves::{bn256, grumpkin, CurveAffine, CurveExt};
-use protostar_works::{circuit::{ExternalValue, Circuit, Advice}, gate::{Gatebb, Gate}, gadgets::{ecmul::{EcAffinePoint, escalarmul_gadget_9}, nonzero_check::nonzero_gadget}, utils::poly_utils::bits_le};
+use protostar_works::{circuit::{ExternalValue, Circuit, Advice}, gate::{Gatebb, Gate}, gadgets::{ecmul::{EcAffinePoint, escalarmul_gadget_9}, nonzero_check::nonzero_gadget}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit};
 use rand_core::OsRng;
 
 type F = bn256::Fr;
 type C = grumpkin::G1;
+type G = bn256::G1Affine;
 
 type Fq = <C as CurveExt>::ScalarExt;
 
@@ -49,36 +50,34 @@ pub fn evaluate_on_random_linear_combinations(gate: &impl Gate<F>, a: &Vec<F>, b
 
 }
 
-fn ecmul_pseudo_fold(c: &mut Criterion) {
-    let pi_a_ext = (ExternalValue::<F>::new(), ExternalValue::<F>::new());
-    let pi_b_ext = (ExternalValue::<F>::new(), ExternalValue::<F>::new()); // a*(1+9+...+9^{nl-1})+b=0 must be checked out of band
-    let pi_pt_ext = (ExternalValue::<F>::new(), ExternalValue::<F>::new());
-    let pi_sc_ext = ExternalValue::<F>::new();
-
-    let mut circuit = Circuit::<F, Gatebb<F>>::new(10, 1);
+pub fn assemble_ecmul_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, pi: &'a [ExternalValue<F>]) {
+    let pi_a_ext = (&pi[0], &pi[1]);
+    let pi_b_ext = (&pi[2], &pi[3]); // a*(1+9+...+9^{nl-1})+b=0 must be checked out of band
+    let pi_pt_ext = (&pi[4], &pi[5]);
+    let pi_sc_ext = &pi[6];
 
     let read_pi = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
 
     let x = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_a_ext.0])[0];
     let y = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_a_ext.1])[0];
-    let a = EcAffinePoint::<F,C>::new(&mut circuit, x, y);
+    let a = EcAffinePoint::<F,C>::new(circuit, x, y);
 
     let x = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_b_ext.0])[0];
     let y = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_b_ext.1])[0];
-    let b = EcAffinePoint::<F,C>::new(&mut circuit, x, y);
+    let b = EcAffinePoint::<F,C>::new(circuit, x, y);
 
     let x = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_pt_ext.0])[0];
     let y = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_pt_ext.1])[0];
-    let pt = EcAffinePoint::<F,C>::new(&mut circuit, x, y);
+    let pt = EcAffinePoint::<F,C>::new(circuit, x, y);
 
     let sc = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_sc_ext])[0];
 
     let mut nonzeros = vec![];
     let num_limbs = 40;
 
-    let scmul = escalarmul_gadget_9(&mut circuit, sc, pt, num_limbs, 0, a, b, &mut nonzeros);
+    let scmul = escalarmul_gadget_9(circuit, sc, pt, num_limbs, 0, a, b, &mut nonzeros);
 
-    nonzero_gadget(&mut circuit, &nonzeros, 9);
+    nonzero_gadget(circuit, &nonzeros, 9);
     circuit.finalize();
 
     let pi_a = C::random(OsRng).to_affine();
@@ -95,11 +94,7 @@ fn ecmul_pseudo_fold(c: &mut Criterion) {
 
     pi_sc_ext.set(F::from(23)).unwrap();
 
-    println!("Executing...");
-
     circuit.execute(0);
-
-    println!("Validating...");
 
     circuit.cs.valid_witness();
 
@@ -108,6 +103,13 @@ fn ecmul_pseudo_fold(c: &mut Criterion) {
     assert!(answer == (pi_pt*<C as CurveExt>::ScalarExt::from(23)).to_affine());
 
     println!("Total circuit size: private: {} public: {}", circuit.cs.wtns[0].privs.len(), circuit.cs.wtns[0].pubs.len());
+}
+
+pub fn ecmul_pseudo_fold(c: &mut Criterion) {
+    let pi = vec![ExternalValue::new(); 7];
+
+    let mut circuit = Circuit::<F, Gatebb<F>>::new(10, 1);
+    assemble_ecmul_circuit(&mut circuit, &pi);
 
     let mu = F::random(OsRng); // relaxation factor
 
@@ -130,5 +132,20 @@ fn ecmul_pseudo_fold(c: &mut Criterion) {
     }));
 }
 
-criterion_group!(benches, ecmul_pseudo_fold);
-criterion_main!(benches);
+pub fn ecmul_msm(c: &mut Criterion) {
+    let pi = vec![ExternalValue::new(); 7];
+
+    let mut circuit = Circuit::<F, Gatebb<F>>::new(10, 1);
+    assemble_ecmul_circuit(&mut circuit, &pi);
+
+    let mut ck = Vec::with_capacity(circuit.cs.wtns.len());
+    for rw in &circuit.cs.wtns {
+        let rck: CkRound<G> = rw.privs.iter().map(|_| G::random(OsRng)).collect();
+        ck.push(rck);
+    }
+
+    c.bench_function("ecmul msm", |b| b.iter(|| circuit.cs.commit(&ck)));
+}
+
+criterion_group!(ecmul, ecmul_pseudo_fold, ecmul_msm);
+criterion_main!(ecmul);

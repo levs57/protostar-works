@@ -44,8 +44,8 @@ impl<F: PrimeField, G: CurveAffine<ScalarExt=F>> CommitmentKey<G> for CkRound<G>
     type Target = CtRound<F, G>;
 
     fn commit(&self, wtns: &Self::Scalars) -> Self::Target {
-        let pubs = wtns.pubs.iter().map(|x|x.unwrap()).collect();
-        let scalars : Vec<_> = wtns.privs.iter().map(|x|x.unwrap()).collect();
+        let pubs = wtns.pubs.iter().map(|x|x.expect("public input should be initialized")).collect();
+        let scalars : Vec<_> = wtns.privs.iter().map(|x|x.expect("witness should be initialized")).collect();
         let pt = best_multiexp(&scalars, &self).into();
         CtRound{pubs, pt}
     }

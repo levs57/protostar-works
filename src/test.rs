@@ -2,11 +2,10 @@
 mod tests {
     use std::{rc::Rc, iter::repeat};
 
-    use crate::{gate::Gatebb, constraint_system::Variable, circuit::{Circuit, ExternalValue, PolyOp, Advice}, gadgets::{poseidon::{poseidon_gadget, Poseidon, poseidon_gadget_mixstrat}, bits::bit_decomposition_gadget, ecmul::{add_proj, double_proj, EcAffinePoint, escalarmul_gadget_9}, range::{limb_decompose_gadget, rangecheck, lagrange_choice, lagrange_choice_batched, choice_gadget, VarSmall}, nonzero_check::nonzero_gadget}};
+    use crate::{gate::Gatebb, constraint_system::{Variable, Visibility}, circuit::{Circuit, ExternalValue, PolyOp, Advice, Build}, gadgets::{poseidon::{poseidon_gadget, Poseidon, poseidon_gadget_mixstrat}, bits::bit_decomposition_gadget, ecmul::{add_proj, double_proj, EcAffinePoint, escalarmul_gadget_9}, range::{rangecheck, limb_decompose_gadget, lagrange_choice, lagrange_choice_batched, VarSmall, choice_gadget}, nonzero_check::nonzero_gadget}};
     use ff::{PrimeField, Field};
     use group::{Group, Curve};
     use halo2curves::{bn256, grumpkin, CurveAffine, CurveExt};
-    use num_traits::pow;
     use rand_core::OsRng;
     use crate::utils::poly_utils::{check_poly, find_degree};
     use crate::utils::field_precomp::FieldUtils;
@@ -33,20 +32,21 @@ mod tests {
     fn test_circuit_builder() {
         let public_input_source = ExternalValue::<F>::new();
     
-        let mut circuit = Circuit::<F, Gatebb<F>>::new(2, 1);
+        let mut circuit = Circuit::<F, Gatebb<F>, Build>::new(2, 1);
     
         let sq = PolyOp::new(2, 1, 1, Rc::new(|x|vec!(x[0]*x[0])));
         let input = circuit.advice_pub(0, Advice::new(0, 1, 1, Rc::new(|_, iext|vec![iext[0]])), vec![], vec![&public_input_source])[0];
         let sq1 = circuit.apply(0, sq.clone(), vec![input]);
         let _ = circuit.apply_pub(0, sq.clone(), sq1);
     
-        circuit.finalize();
+        let mut circuit = circuit.finalize();
     
         public_input_source.set(F::from(2)).unwrap();
     
         circuit.execute(0);
     
-        println!("{:?}", circuit.cs.getvar(Variable::Public(0,2)).to_repr());
+        let var = Variable { visibility: Visibility::Public, round: 0, index: 2 };
+        assert_eq!(F::from(16), circuit.cs.getvar(var));
     }
     
     #[test]
@@ -55,9 +55,9 @@ mod tests {
         let pi_ext : Vec<_> = repeat(ExternalValue::<F>::new()).take(5).collect();
         let challenge_ext = ExternalValue::<F>::new();
     
-        let mut circuit = Circuit::<F, Gatebb<F>>::new(2, 2);
+        let mut circuit = Circuit::new(2, 2);
         
-        let one = Variable::Public(0,0);
+        let one = circuit.one();
     
         let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));
         
@@ -96,7 +96,7 @@ mod tests {
             circuit.constrain(&[one, challenge, pi[k], fractions[k]], div_constr.clone());
         }
     
-        circuit.finalize();
+        let mut circuit = circuit.finalize();
     
         // construction phase ended
     
@@ -118,12 +118,12 @@ mod tests {
     fn test_poseidon_gadget(){
         let cfg = Poseidon::new();
         let pi_ext = ExternalValue::<F>::new();
-        let mut circuit = Circuit::<F, Gatebb<F>>::new(25, 1);
+        let mut circuit = Circuit::new(25, 1);
         let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
         let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
         let ret = poseidon_gadget(&mut circuit, &cfg, 1, 0, vec![pi]);
     
-        circuit.finalize();
+        let mut circuit = circuit.finalize();
     
         pi_ext.set(F::ONE).unwrap();
     
@@ -137,12 +137,12 @@ mod tests {
     fn test_poseidon_gadget_k_equals_two(){
         let cfg = Poseidon::new();
         let pi_ext = ExternalValue::<F>::new();
-        let mut circuit = Circuit::<F, Gatebb<F>>::new(25, 1);
+        let mut circuit = Circuit::new(25, 1);
         let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
         let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
         let ret = poseidon_gadget(&mut circuit, &cfg, 2, 0, vec![pi]);
     
-        circuit.finalize();
+        let mut circuit = circuit.finalize();
     
         pi_ext.set(F::ONE).unwrap();
     
@@ -156,12 +156,12 @@ mod tests {
     fn test_poseidon_gadget_mixstrat(){
         let cfg = Poseidon::new();
         let pi_ext = ExternalValue::<F>::new();
-        let mut circuit = Circuit::<F, Gatebb<F>>::new(25, 1);
+        let mut circuit = Circuit::new(25, 1);
         let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
         let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
         let ret = poseidon_gadget_mixstrat(&mut circuit, &cfg, 0, vec![pi]);
 
-        circuit.finalize();
+        let mut circuit = circuit.finalize();
 
         pi_ext.set(F::ONE).unwrap();
 
@@ -177,13 +177,13 @@ mod tests {
     
     fn test_bit_decomposition(){
         let pi_ext = ExternalValue::<F>::new();
-        let mut circuit = Circuit::<F, Gatebb<F>>::new(2, 1);
+        let mut circuit = Circuit::new(2, 1);
         let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
         let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
     
         let bits = bit_decomposition_gadget(&mut circuit, 0, 3, pi);
     
-        circuit.finalize();
+        let mut circuit = circuit.finalize();
         pi_ext.set(F::from(6)).unwrap();
         circuit.execute(0);
     
@@ -199,7 +199,7 @@ mod tests {
     
     fn test_check_poly() {
         let f = Rc::new(|x: &[F]|{vec![x[0].pow([5])]});
-        check_poly(4, 1, 1, f).unwrap();
+        check_poly(5, 1, 1, f).unwrap();
     }
 
     
@@ -257,13 +257,13 @@ mod tests {
     fn test_limb_decompose_gadget() {
 
         let pi_ext = ExternalValue::<F>::new();
-        let mut circuit = Circuit::<F, Gatebb<F>>::new(9, 1);
+        let mut circuit = Circuit::new(9, 1);
         let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
         let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
     
         let limbs = limb_decompose_gadget(&mut circuit, 9, 0, 2, pi);
     
-        circuit.finalize();
+        let mut circuit = circuit.finalize();
         pi_ext.set(F::from(25)).unwrap();
         circuit.execute(0);
     
@@ -315,11 +315,11 @@ mod tests {
         let pi_id_ext = ExternalValue::<F>::new();
         for i in 0..9 {
             pi_ext.push(vec![]);
-            for j in 0..3 {
+            for _ in 0..3 {
                 pi_ext[i].push(ExternalValue::<F>::new());
             }
         }
-        let mut circuit = Circuit::<F, Gatebb<F>>::new(10, 1);
+        let mut circuit = Circuit::new(10, 1);
         let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
         let mut pi = vec![];
         for i in 0..9 {
@@ -333,7 +333,7 @@ mod tests {
         let pi : Vec<_> = pi.iter().map(|x|x.as_ref()).collect();
         let chosen = choice_gadget(&mut circuit, &pi, VarSmall::new_unchecked(pi_id, 9), 0);
 
-        circuit.finalize();
+        let mut circuit = circuit.finalize();
         pi_id_ext.set(F::from(5)).unwrap();
         for i in 0..9 {
             for j in 0..3 {
@@ -358,7 +358,7 @@ mod tests {
         let pi_pt_ext = (ExternalValue::<F>::new(), ExternalValue::<F>::new());
         let pi_sc_ext = ExternalValue::<F>::new();
 
-        let mut circuit = Circuit::<F, Gatebb<F>>::new(10, 1);
+        let mut circuit = Circuit::new(10, 1);
 
         let read_pi = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
 
@@ -379,7 +379,7 @@ mod tests {
         let scmul = escalarmul_gadget_9(&mut circuit, sc, pt, num_limbs, 0, a, b, &mut nonzeros);
 
         nonzero_gadget(&mut circuit, &nonzeros, 9);
-        circuit.finalize();
+        let mut circuit = circuit.finalize();
 
         let pi_a = C::random(OsRng).to_affine();
         pi_a_ext.0.set(pi_a.x).unwrap(); pi_a_ext.1.set(pi_a.y).unwrap();

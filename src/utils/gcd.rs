@@ -119,10 +119,7 @@ mod tests {
             ret2.push(tmp.0 - tmp.1);
         }
 
-        println!("-------------------------------------------------");
-        println!("{:?}", (2..20).collect::<Vec<_>>());
-        println!("{:?}", ret1);
-        println!("{:?}", ret2);
+        assert_eq!(ret1, ret2);
     }
 
     // w = 3x^2, s = yz, b=x y^2 z

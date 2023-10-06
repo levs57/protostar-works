@@ -4,7 +4,7 @@ use std::{rc::Rc, iter::repeat};
 
 use ff::PrimeField;
 
-use crate::{circuit::{Circuit, Advice}, gate::Gatebb, constraint_system::Variable};
+use crate::{circuit::{Circuit, Advice, Build}, gate::Gatebb, constraint_system::Variable};
 use crate::utils::field_precomp::FieldUtils;
 
 pub fn bitcheck<F: PrimeField>(arg: &[F]) -> Vec<F> {
@@ -23,7 +23,7 @@ pub fn decompcheck<F: PrimeField>(arg: &[F]) -> Vec<F> {
     vec![acc-x]
 }
 
-pub fn bit_decomposition_gadget<'a, F: PrimeField+FieldUtils>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, round: usize, num_bits: usize, input: Variable) -> Vec<Variable> {
+pub fn bit_decomposition_gadget<'a, F: PrimeField+FieldUtils>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, round: usize, num_bits: usize, input: Variable) -> Vec<Variable> {
     let bits = circuit.advice(
         round,
         Advice::new(1, 0, num_bits, Rc::new({

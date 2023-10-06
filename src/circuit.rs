@@ -1,9 +1,8 @@
-use std::{rc::Rc, cell::OnceCell};
+use std::{rc::Rc, cell::OnceCell, marker::PhantomData};
 
 use ff::PrimeField;
 
-use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind}, utils::poly_utils::check_poly};
-use crate::utils::field_precomp::FieldUtils;
+use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind, Visibility, CS}, utils::poly_utils::check_poly};
 
 
 #[derive(Clone)]
@@ -83,44 +82,58 @@ pub enum Operation<'a, F: PrimeField> {
     Adv(AdviceAllocated<'a, F>),
 }
 
+pub struct Build;
+pub struct Finalized;
+
+mod private {
+    use super::{Build, Finalized};
+
+    pub trait CircuitState {}
+
+    impl CircuitState for Build {}
+    impl CircuitState for Finalized {}
+}
+
 #[derive(Clone)]
-pub struct Circuit<'a, F: PrimeField + FieldUtils, T:Gate<F> + From<PolyOp<'a, F>>> {
+pub struct Circuit<'a, F: PrimeField, T:Gate<F> + From<PolyOp<'a, F>>, S: private::CircuitState> {
     pub cs: CSWtns<F, T>,
     pub ops: Vec<Vec<Operation<'a, F>>>,
     pub max_degree: usize,
-    pub finalized: bool,
     pub round_counter : usize,
+    _state_marker: PhantomData<S>,
 }
 
-impl<'a, F: PrimeField + FieldUtils, T: Gate<F> + From<PolyOp<'a, F>>> Circuit<'a, F, T>{
+impl<'a, F, T> Circuit<'a, F, T, Build>
+where
+    F: PrimeField,
+    T: Gate<F> + From<PolyOp<'a, F>>,
+{
     pub fn new(max_degree: usize, num_rounds: usize) -> Self {
-        let mut cs = ConstraintSystem::new(num_rounds);
-        cs.add_constr_group(CommitKind::Zero, 1);
-        cs.add_constr_group(CommitKind::Group, max_degree);
+        let cs = ConstraintSystem::new(num_rounds, max_degree);
         let mut prep = Self{
                 cs : CSWtns::new(cs),
                 ops: vec![vec![];num_rounds],
                 max_degree,
-                finalized: false,
                 round_counter : 0,
+                _state_marker: PhantomData,
             };
+
         let adv = Advice::new(0,0,1, Rc::new(|_,_|vec![F::ONE]));
         let tmp = prep.advice_pub(0, adv, vec![], vec![]);
-        match tmp[0] {
-            Variable::Public(0,0) => (),
-            _ => panic!("One has allocated incorrectly. This should never fail. Abort mission."),
-        };
+
+        assert!(tmp[0] == prep.one(),
+            "One has allocated incorrectly. This should never fail. Abort mission.");
+
         prep
     }
 
 
     pub fn advice(&mut self, round: usize, adv: Advice<'a, F>, ivar: Vec<Variable>, iext: Vec<&'a ExternalValue<F>>) -> Vec<Variable> {
-        assert!(!self.finalized, "Circuit is already built.");
         assert!(round < self.ops.len(), "The round is too large.",);
         assert!(ivar.len() == adv.ivar, "Incorrect amount of inputs at operation {} ; {}", round, self.ops[round].len());
         assert!(iext.len() == adv.iext, "Incorrect amount of advice inputs at operation {} ; {}", round, self.ops[round].len());
         for v in &ivar {
-            assert!(v.round() <= round, "Argument of an operation {} ; {} is in round {}", round, self.ops[round].len(), v.round())
+            assert!(v.round <= round, "Argument of an operation {} ; {} is in round {}", round, self.ops[round].len(), v.round)
         }
 
         let mut output = vec![];
@@ -136,7 +149,7 @@ impl<'a, F: PrimeField + FieldUtils, T: Gate<F> + From<PolyOp<'a, F>>> Circuit<'
         assert!(ivar.len() == adv.ivar, "Incorrect amount of inputs at operation {} ; {}", round, self.ops[round].len());
         assert!(iext.len() == adv.iext, "Incorrect amount of advice inputs at operation {} ; {}", round, self.ops[round].len());
         for v in &ivar {
-            assert!(v.round() <= round, "Argument of an operation {} ; {} is in round {}", round, self.ops[round].len(), v.round())
+            assert!(v.round <= round, "Argument of an operation {} ; {} is in round {}", round, self.ops[round].len(), v.round)
         }
         let mut output = vec![];
         for _ in 0..adv.o {
@@ -147,11 +160,10 @@ impl<'a, F: PrimeField + FieldUtils, T: Gate<F> + From<PolyOp<'a, F>>> Circuit<'
     }
 
     pub fn apply(&mut self, round: usize, polyop: PolyOp<'a, F>, i: Vec<Variable>) -> Vec<Variable> {
-        assert!(!self.finalized, "Circuit is already built.");
         assert!(round < self.ops.len(), "The round is too large.",);
         assert!(i.len() == polyop.i, "Incorrect amount of inputs at operation {}", self.ops.len());
         for v in &i {
-            assert!(v.round() <= round, "Argument of an operation {} ; {} is in round {}", round, self.ops[round].len(), v.round())
+            assert!(v.round <= round, "Argument of an operation {} ; {} is in round {}", round, self.ops[round].len(), v.round)
         }
         let mut output = vec![];
         for _ in 0..polyop.o {
@@ -164,9 +176,9 @@ impl<'a, F: PrimeField + FieldUtils, T: Gate<F> + From<PolyOp<'a, F>>> Circuit<'
         if polyop.d == 0 {panic!("Operation {} has degree 0, which is banned.", self.ops.len())}
         if polyop.d > self.max_degree {panic!("Degree of operation {} is too large!", self.ops.len())};
         if polyop.d == 1 {
-            self.cs.cs.cs[0].constrain(&gate_io, T::from(polyop.clone()));
+            self.cs.cs.constrain(CommitKind::Zero, &gate_io, T::from(polyop.clone()));
         } else {
-            self.cs.cs.cs[1].constrain(&gate_io, T::from(polyop.clone()));
+            self.cs.cs.constrain(CommitKind::Group, &gate_io, T::from(polyop.clone()));
         }
         
         self.ops[round].push(Operation::Poly(polyop.allocate(i, output.clone())));
@@ -175,11 +187,10 @@ impl<'a, F: PrimeField + FieldUtils, T: Gate<F> + From<PolyOp<'a, F>>> Circuit<'
     }
 
     pub fn apply_pub(&mut self, round : usize, polyop: PolyOp<'a, F>, i: Vec<Variable>) -> Vec<Variable> {
-        assert!(!self.finalized, "Circuit is already built.");
         assert!(round < self.ops.len(), "The round is too large.",);
         assert!(i.len() == polyop.i, "Incorrect amount of inputs at operation {}", self.ops.len());
         for v in &i {
-            assert!(v.round() <= round, "Argument of an operation {} ; {} is in round {}", round, self.ops[round].len(), v.round())
+            assert!(v.round <= round, "Argument of an operation {} ; {} is in round {}", round, self.ops[round].len(), v.round)
         }
         let mut output = vec![];
         for _ in 0..polyop.o {
@@ -192,9 +203,9 @@ impl<'a, F: PrimeField + FieldUtils, T: Gate<F> + From<PolyOp<'a, F>>> Circuit<'
         if polyop.d == 0 {panic!("Operation {} has degree 0, which is banned.", self.ops.len())}
         if polyop.d > self.max_degree {panic!("Degree of operation {} is too large!", self.ops.len())};
         if polyop.d == 1 {
-            self.cs.cs.cs[0].constrain(&gate_io, T::from(polyop.clone()));
+            self.cs.cs.constrain(CommitKind::Zero, &gate_io, T::from(polyop.clone()));
         } else {
-            self.cs.cs.cs[1].constrain(&gate_io, T::from(polyop.clone()));
+            self.cs.cs.constrain(CommitKind::Group, &gate_io, T::from(polyop.clone()));
         }
         
         self.ops[round].push(Operation::Poly(polyop.allocate(i, output.clone())));
@@ -203,23 +214,37 @@ impl<'a, F: PrimeField + FieldUtils, T: Gate<F> + From<PolyOp<'a, F>>> Circuit<'
     }
 
     pub fn constrain(&mut self, inputs: &[Variable], gate: T) -> (){
-        if gate.d() == 0 {panic!("Trying to constrain with gate of degree 0.")};
-        let mut tmp = 1;
-        if gate.d() == 1 {tmp = 0}
-        self.cs.cs.cs[tmp].constrain(inputs, gate);
+        assert!(gate.d() > 0, "Trying to constrain with gate of degree 0.");
+
+        let kind = if gate.d() == 1 { CommitKind::Zero } else { CommitKind::Group };
+        self.cs.cs.constrain(kind, inputs, gate);
     }
 
 
-    pub fn finalize(&mut self) -> () {
-        assert!(!self.finalized, "Circuit is already built.");
-        self.finalized = true;
+    pub fn finalize(self) -> Circuit<'a, F, T, Finalized> {
+        Circuit {
+            cs: self.cs,
+            ops: self.ops,
+            max_degree: self.max_degree,
+            round_counter: self.round_counter,
+            _state_marker: PhantomData,
+        }
     }
 
+    pub fn one(&self) -> Variable {
+        Variable { visibility: Visibility::Public, round: 0, index: 0 }
+    }
+}
+
+impl<'a, F, T> Circuit<'a, F, T, Finalized>
+where
+    F: PrimeField,
+    T: Gate<F> + From<PolyOp<'a, F>>,
+{
     /// Executes the circuit up from the current program counter to round k.
     pub fn execute(&mut self, round: usize) -> () {
-        assert!(self.finalized, "Must finalize circuit before executing it.");
         if self.round_counter > round {
-            panic!("Execution is at round finished round {}, attempt to execute up to round {}", self.round_counter, round)
+            panic!("Execution is already at round {}, attempt to execute up to round {}", self.round_counter, round)
             }
         while self.round_counter <= round {
             for op in &self.ops[self.round_counter]{
@@ -241,9 +266,5 @@ impl<'a, F: PrimeField + FieldUtils, T: Gate<F> + From<PolyOp<'a, F>>> Circuit<'
             }
             self.round_counter += 1;
         }
-    }
-
-    pub fn one(&self) -> Variable {
-        Variable::Public(0, 0)
     }
 }

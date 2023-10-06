@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::rc::Rc;
 
 use ff::PrimeField;
@@ -15,6 +16,11 @@ pub struct Gatebb<'a, F : PrimeField> {
     f : Rc<dyn Fn(&[F]) -> Vec<F> + 'a>,
 }
 
+impl<'a, F: PrimeField> Debug for Gatebb<'a, F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Gatebb").field("d", &self.d).field("i", &self.i).field("o", &self.o).field("f", &"<anonymous>").finish()
+    }
+}
 
 impl<'a, F: PrimeField> Gatebb<'a, F> {
     pub fn new(d: usize, i: usize, o: usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self {
@@ -26,7 +32,7 @@ impl<'a, F: PrimeField> Gatebb<'a, F> {
     }
 
 }
-pub trait Gate<F : PrimeField> : Clone {
+pub trait Gate<F : PrimeField> : Clone + Debug {
     /// Returns degree.
     fn d(&self) -> usize;
     /// Returns input size.

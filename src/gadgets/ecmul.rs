@@ -7,8 +7,8 @@
 use std::{rc::Rc, marker::PhantomData};
 
 use ff::{PrimeField, BatchInvert};
-use halo2curves::{CurveExt, CurveAffine};
-use crate::circuit::{PolyOp, Advice};
+use halo2curves::CurveExt;
+use crate::circuit::{PolyOp, Advice, Build};
 use crate::{circuit::Circuit, constraint_system::Variable, gate::Gatebb};
 use crate::utils::field_precomp::FieldUtils;
 
@@ -29,7 +29,7 @@ impl<F: PrimeField+FieldUtils, C: CurveExt<Base=F>> EcAffinePoint<F, C> {
         Self{x,y, _marker: PhantomData::<C>}
     }
 
-    pub fn new<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, x: Variable, y: Variable) -> Self{
+    pub fn new<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, x: Variable, y: Variable) -> Self{
         circuit.constrain(&[x,y], Gatebb::new(3, 2, 1, Rc::new(|args|{
             let x = args[0];
             let y = args[1];
@@ -82,7 +82,7 @@ pub fn add_proj<F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(pt1: (F,F), pt2: 
 
 /// Gadget checking that pt1, pt2 and -pt3 points lie in the same line and do not coincide.
 pub fn eclin_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
-    circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
+    circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>,
     pt1: EcAffinePoint<F,C>,
     pt2: EcAffinePoint<F,C>,
     pt3: EcAffinePoint<F,C>, 
@@ -126,7 +126,7 @@ pub fn eclin_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
 /// Gadget which checks that a line passing through a pair of points pt1 and -pt2 is tangent in pt1,
 /// and that they do not coincide.
 pub fn ectangent_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
-    circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
+    circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>,
     pt1: EcAffinePoint<F,C>,
     pt2: EcAffinePoint<F,C>,
     nonzeros: &mut Vec<Variable>,
@@ -168,7 +168,7 @@ pub fn ectangent_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
 /// Addition gadget. If you need batch inversion at witness generation step, use eclin instead,
 /// and compute advice separately.
 pub fn ecadd_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
-    circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
+    circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>,
     pt1: EcAffinePoint<F,C>,
     pt2: EcAffinePoint<F,C>,
     nonzeros: &mut Vec<Variable>,
@@ -199,7 +199,7 @@ pub fn ecadd_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
 /// Doubling gadget. If you need batch inversion during witness generation, use ectangent instead
 /// and compute advice separately.
 pub fn ecdouble_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
-    circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
+    circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>,
     pt: EcAffinePoint<F,C>,
     nonzeros: &mut Vec<Variable>,
     round: usize
@@ -231,7 +231,7 @@ pub fn ecdouble_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
 /// In practice these points typically should be given as public inputs, and constrained by the decider.
 /// base9 - version
 pub fn escalarmul_gadget_9<'a, F: PrimeField + FieldUtils, C: CurveExt<Base=F>>(
-    circuit: &mut Circuit<'a, F, Gatebb<'a,F>>,
+    circuit: &mut Circuit<'a, F, Gatebb<'a,F>, Build>,
     sc: Variable,
     pt: EcAffinePoint<F,C>,
     num_limbs: usize,

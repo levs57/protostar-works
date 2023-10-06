@@ -3,8 +3,8 @@ use std::{rc::Rc, iter::repeat_with};
 use criterion::{Criterion, criterion_main, criterion_group, black_box};
 use ff::Field;
 use group::{Group, Curve};
-use halo2curves::{bn256, grumpkin, CurveAffine, CurveExt};
-use protostar_works::{circuit::{ExternalValue, Circuit, Advice}, gate::{Gatebb, Gate}, gadgets::{ecmul::{EcAffinePoint, escalarmul_gadget_9}, nonzero_check::nonzero_gadget}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit};
+use halo2curves::{bn256, grumpkin, CurveExt};
+use protostar_works::{circuit::{ExternalValue, Circuit, Advice, Build}, gate::{Gatebb, Gate}, gadgets::{ecmul::{EcAffinePoint, escalarmul_gadget_9}, nonzero_check::nonzero_gadget}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit};
 use rand_core::OsRng;
 
 type F = bn256::Fr;
@@ -50,7 +50,7 @@ pub fn evaluate_on_random_linear_combinations(gate: &impl Gate<F>, a: &Vec<F>, b
 
 }
 
-pub fn assemble_ecmul_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, pi: &'a [ExternalValue<F>]) {
+pub fn assemble_ecmul_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, pi: &'a [ExternalValue<F>], num_limbs: usize) {
     let pi_a_ext = (&pi[0], &pi[1]);
     let pi_b_ext = (&pi[2], &pi[3]); // a*(1+9+...+9^{nl-1})+b=0 must be checked out of band
     let pi_pt_ext = (&pi[4], &pi[5]);
@@ -73,12 +73,25 @@ pub fn assemble_ecmul_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, p
     let sc = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_sc_ext])[0];
 
     let mut nonzeros = vec![];
-    let num_limbs = 40;
 
-    let scmul = escalarmul_gadget_9(circuit, sc, pt, num_limbs, 0, a, b, &mut nonzeros);
+    escalarmul_gadget_9(circuit, sc, pt, num_limbs, 0, a, b, &mut nonzeros);
 
     nonzero_gadget(circuit, &nonzeros, 9);
-    circuit.finalize();
+}
+
+pub fn ecmul_pseudo_fold(c: &mut Criterion) {
+    let pi = vec![ExternalValue::new(); 7];
+    let num_limbs = 40;
+
+    let mut circuit = Circuit::new(10, 1);
+    assemble_ecmul_circuit(&mut circuit, &pi, num_limbs);
+    
+    let mut circuit = circuit.finalize();
+
+    let pi_a_ext = (&pi[0], &pi[1]);
+    let pi_b_ext = (&pi[2], &pi[3]); // a*(1+9+...+9^{nl-1})+b=0 must be checked out of band
+    let pi_pt_ext = (&pi[4], &pi[5]);
+    let pi_sc_ext = &pi[6];
 
     let pi_a = C::random(OsRng).to_affine();
     pi_a_ext.0.set(pi_a.x).unwrap(); pi_a_ext.1.set(pi_a.y).unwrap();
@@ -97,34 +110,20 @@ pub fn assemble_ecmul_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, p
     circuit.execute(0);
 
     circuit.cs.valid_witness();
-
-    let answer = grumpkin::G1Affine::from_xy(circuit.cs.getvar(scmul.x), circuit.cs.getvar(scmul.y)).unwrap();
-
-    assert!(answer == (pi_pt*<C as CurveExt>::ScalarExt::from(23)).to_affine());
-
     println!("Total circuit size: private: {} public: {}", circuit.cs.wtns[0].privs.len(), circuit.cs.wtns[0].pubs.len());
-}
-
-pub fn ecmul_pseudo_fold(c: &mut Criterion) {
-    let pi = vec![ExternalValue::new(); 7];
-
-    let mut circuit = Circuit::<F, Gatebb<F>>::new(10, 1);
-    assemble_ecmul_circuit(&mut circuit, &pi);
 
     let mu = F::random(OsRng); // relaxation factor
 
     let mut bench_data = Vec::<(Gatebb<F>, Vec<F>, Vec<F>, Vec<F>)>::new();
-    for cg in &circuit.cs.cs.cs {
-        for constr in &cg.entries {
-            let gate = homogenize(constr.gate.clone(), mu);
+    for constr in circuit.cs.cs.iter_constraints() {
+        let gate = homogenize(constr.gate.clone(), mu);
 
-            let a: Vec<_> = repeat_with(|| F::random(OsRng)).take(gate.i()).collect();
-            let b: Vec<_> = repeat_with(|| F::random(OsRng)).take(gate.i()).collect();
+        let a: Vec<_> = repeat_with(|| F::random(OsRng)).take(gate.i()).collect();
+        let b: Vec<_> = repeat_with(|| F::random(OsRng)).take(gate.i()).collect();
 
-            let randomness: Vec<_> = repeat_with(|| F::random(OsRng)).take(gate.d()).collect();
+        let randomness: Vec<_> = repeat_with(|| F::random(OsRng)).take(gate.d()).collect();
 
-            bench_data.push((gate, a, b, randomness));
-        }
+        bench_data.push((gate, a, b, randomness));
     }
 
     c.bench_function("ecmul pseudo fold", |b| b.iter(|| {
@@ -134,9 +133,36 @@ pub fn ecmul_pseudo_fold(c: &mut Criterion) {
 
 pub fn ecmul_msm(c: &mut Criterion) {
     let pi = vec![ExternalValue::new(); 7];
+    let num_limbs = 40;
 
-    let mut circuit = Circuit::<F, Gatebb<F>>::new(10, 1);
-    assemble_ecmul_circuit(&mut circuit, &pi);
+    let mut circuit = Circuit::new(10, 1);
+    assemble_ecmul_circuit(&mut circuit, &pi, num_limbs);
+
+    let mut circuit = circuit.finalize();
+
+    let pi_a_ext = (&pi[0], &pi[1]);
+    let pi_b_ext = (&pi[2], &pi[3]); // a*(1+9+...+9^{nl-1})+b=0 must be checked out of band
+    let pi_pt_ext = (&pi[4], &pi[5]);
+    let pi_sc_ext = &pi[6];
+
+    let pi_a = C::random(OsRng).to_affine();
+    pi_a_ext.0.set(pi_a.x).unwrap(); pi_a_ext.1.set(pi_a.y).unwrap();
+
+    //1+9+81+...+9^{num_limbs - 1} = (9^{num_limbs}-1)/8
+
+    let bscale = (Fq::from(9).pow([num_limbs as u64])-Fq::ONE)*(Fq::from(8).invert().unwrap());
+    let pi_b = -(C::from(pi_a)*bscale).to_affine();
+    pi_b_ext.0.set(pi_b.x).unwrap(); pi_b_ext.1.set(pi_b.y).unwrap();
+
+    let pi_pt = C::random(OsRng).to_affine();
+    pi_pt_ext.0.set(pi_pt.x).unwrap(); pi_pt_ext.1.set(pi_pt.y).unwrap();
+
+    pi_sc_ext.set(F::from(23)).unwrap();
+
+    circuit.execute(0);
+
+    circuit.cs.valid_witness();
+    println!("Total circuit size: private: {} public: {}", circuit.cs.wtns[0].privs.len(), circuit.cs.wtns[0].pubs.len());
 
     let mut ck = Vec::with_capacity(circuit.cs.wtns.len());
     for rw in &circuit.cs.wtns {

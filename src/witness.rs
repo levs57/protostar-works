@@ -1,7 +1,9 @@
+use std::iter::repeat;
+
 use ff::PrimeField;
 use halo2curves::CurveAffine;
 
-use crate::{gate::Gate, constraint_system::{ConstraintSystem, Variable, CS, Visibility}, commitment::{CommitmentKey, CkWtns, CkRound, CtRound, ErrGroup, CkRelaxed}};
+use crate::{gate::Gate, constraint_system::{ConstraintSystem, Variable, CS, Visibility}, commitment::{CommitmentKey, CkWtns, CtRound, ErrGroup, CkRelaxed}};
 
 #[derive(Clone)]
 pub struct RoundWtns<F: PrimeField> {
@@ -55,27 +57,18 @@ impl<F:PrimeField, G: Gate<F>> CSWtns<F, G>{
         w.expect("just asserted")
     }
 
-    // TODO: these two should also return &[Variable]
-    pub fn alloc_pub_internal(&mut self, r: usize) -> Variable {
-        self.wtns[r].pubs.push(None);
-        self.cs.alloc_in_round(r, Visibility::Public, 1)[0]
+    pub fn alloc_in_round(&mut self, round: usize, visibility: Visibility, size: usize) -> Vec<Variable> {
+        let w = match visibility {
+            Visibility::Public => &mut self.wtns[round].pubs,
+            Visibility::Private => &mut self.wtns[round].privs,
+        };
+
+        w.extend(repeat(None).take(size));
+        self.cs.alloc_in_round(round, visibility, size)
     }
 
-    pub fn alloc_priv_internal(&mut self, r: usize) -> Variable {
-        self.wtns[r].privs.push(None);
-        self.cs.alloc_in_round(r, Visibility::Private, 1)[0]
-    }
-
-    pub fn alloc_pub(&mut self) -> Variable {
-        self.alloc_pub_internal(self.cs.last_round())
-    }
-
-    pub fn alloc_priv(&mut self) -> Variable {
-        self.alloc_priv_internal(self.cs.last_round())
-    }
-
-    pub fn round_commit<Gr>(&self, round: usize, ck: CkRound<Gr>) -> CtRound<F, Gr> where Gr:CurveAffine<ScalarExt=F>{
-        ck.commit(&self.wtns[round])
+    pub fn alloc(&mut self, visibility: Visibility, size: usize) -> Vec<Variable> {
+        self.alloc_in_round(self.cs.last_round(), visibility, size)
     }
 
     // pub fn relax(self) -> CSWtnsRelaxed<F, G> {

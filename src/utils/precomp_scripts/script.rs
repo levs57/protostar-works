@@ -8,7 +8,7 @@ use crate::utils::field_precomp::FieldUtils;
 
 type F = bn256::Fr;
 
-#[test]
+// #[test]
 fn precompute_roots_of_unity() -> (){
     let mut s : String = "".to_string();
     s+="use halo2curves::{bn256::Fr as F, serde::SerdeObject};\n";
@@ -31,7 +31,7 @@ fn precompute_roots_of_unity() -> (){
     f.write_all(s.as_bytes()).expect("Unable to write data");
 }
 
-#[test]
+// #[test]
 fn precompute_half_squares() -> (){
     let mut s : String = "".to_string();
     s+="use halo2curves::{bn256::Fr as F, serde::SerdeObject};\n";
@@ -61,8 +61,7 @@ fn inv_lagrange_prod(k: u64, n: u64) -> F {
     ret
 }
 
-#[test]
-
+// #[test]
 fn precompute_inv_lagrange_prod() -> () {
     let mut s : String = "".to_string();
     s+="use halo2curves::{bn256::Fr as F, serde::SerdeObject};\n";

@@ -110,13 +110,13 @@ where
 {
     pub fn new(max_degree: usize, num_rounds: usize) -> Self {
         let cs = ConstraintSystem::new(num_rounds, max_degree);
-        let mut prep = Self{
+        let mut prep = Self {
                 cs : CSWtns::new(cs),
-                ops: vec![vec![];num_rounds],
+                ops: vec![vec![]; num_rounds],
                 max_degree,
-                round_counter : 0,
+                round_counter: 0,
                 _state_marker: PhantomData,
-            };
+        };
 
         let adv = Advice::new(0,0,1, Rc::new(|_,_|vec![F::ONE]));
         let tmp = prep.advice_pub(0, adv, vec![], vec![]);
@@ -127,97 +127,72 @@ where
         prep
     }
 
+    pub fn advice_internal(&mut self, visibility: Visibility, round: usize, advice: Advice<'a, F>, input: Vec<Variable>, aux: Vec<&'a ExternalValue<F>>) -> Vec<Variable> {
+        assert!(round < self.ops.len(), "The round is too large.");
 
-    pub fn advice(&mut self, round: usize, adv: Advice<'a, F>, ivar: Vec<Variable>, iext: Vec<&'a ExternalValue<F>>) -> Vec<Variable> {
-        assert!(round < self.ops.len(), "The round is too large.",);
-        assert!(ivar.len() == adv.ivar, "Incorrect amount of inputs at operation {} ; {}", round, self.ops[round].len());
-        assert!(iext.len() == adv.iext, "Incorrect amount of advice inputs at operation {} ; {}", round, self.ops[round].len());
-        for v in &ivar {
-            assert!(v.round <= round, "Argument of an operation {} ; {} is in round {}", round, self.ops[round].len(), v.round)
+        let op_index = self.ops[round].len();
+
+        for v in &input {
+            assert!(v.round <= round, "Argument {:?} of operation #{} is in round larger than the operation itself ({})", v, op_index, round);
         }
 
-        let mut output = vec![];
-        for _ in 0..adv.o {
-            output.push( self.cs.alloc_priv_internal(round) );
-        }
-        self.ops[round].push(Operation::Adv(adv.allocate(ivar, iext, output.clone())));
+        assert!(input.len() == advice.ivar, "Incorrect amount of input vars at operation #{} (round {})", op_index, round);
+        assert!(aux.len() == advice.iext, "Incorrect amount of external vals at operation #{} (round {})", op_index, round);
+
+        let output = self.cs.alloc_in_round(round, visibility, advice.o);
+        self.ops[round].push(Operation::Adv(advice.allocate(input, aux, output.clone())));
+
         output
     }
 
-    pub fn advice_pub(&mut self, round: usize, adv: Advice<'a, F>, ivar: Vec<Variable>, iext: Vec<&'a ExternalValue<F>>) -> Vec<Variable> {
-        assert!(round < self.ops.len(), "The round is too large.",);
-        assert!(ivar.len() == adv.ivar, "Incorrect amount of inputs at operation {} ; {}", round, self.ops[round].len());
-        assert!(iext.len() == adv.iext, "Incorrect amount of advice inputs at operation {} ; {}", round, self.ops[round].len());
-        for v in &ivar {
-            assert!(v.round <= round, "Argument of an operation {} ; {} is in round {}", round, self.ops[round].len(), v.round)
-        }
-        let mut output = vec![];
-        for _ in 0..adv.o {
-            output.push( self.cs.alloc_pub_internal(round) );
-        }
-        self.ops[round].push(Operation::Adv(adv.allocate(ivar, iext, output.clone())));
-        output
+
+    pub fn advice(&mut self, round: usize, advice: Advice<'a, F>, input: Vec<Variable>, aux: Vec<&'a ExternalValue<F>>) -> Vec<Variable> {
+        self.advice_internal(Visibility::Private, round, advice, input, aux)
     }
 
-    pub fn apply(&mut self, round: usize, polyop: PolyOp<'a, F>, i: Vec<Variable>) -> Vec<Variable> {
-        assert!(round < self.ops.len(), "The round is too large.",);
-        assert!(i.len() == polyop.i, "Incorrect amount of inputs at operation {}", self.ops.len());
-        for v in &i {
-            assert!(v.round <= round, "Argument of an operation {} ; {} is in round {}", round, self.ops[round].len(), v.round)
-        }
-        let mut output = vec![];
-        for _ in 0..polyop.o {
-            output.push( self.cs.alloc_priv_internal(round) );
+    pub fn advice_pub(&mut self, round: usize, advice: Advice<'a, F>, input: Vec<Variable>, aux: Vec<&'a ExternalValue<F>>) -> Vec<Variable> {
+        self.advice_internal(Visibility::Public, round, advice, input, aux)
+    }
+
+    fn apply_internal(&mut self, visibility: Visibility, round : usize, polyop: PolyOp<'a, F>, input: Vec<Variable>) -> Vec<Variable> {
+        assert!(round < self.ops.len(), "The round is too large.");
+
+        let op_index = self.ops[round].len();
+
+        for v in &input {
+            assert!(v.round <= round, "Argument {:?} of operation #{} is in round larger than the operation itself ({})", v, op_index, round);
         }
 
-        let mut gate_io = vec![];
-        gate_io.append(&mut i.clone());
+        assert!(polyop.d > 0, "Operation #{} has degree 0", op_index);
+        assert!(polyop.d <= self.max_degree, "Degree of operation #{} is too large", op_index);
+
+        assert!(input.len() == polyop.i, "Incorrect amount of inputs at operation #{} (round {})", op_index, round);
+
+        let output = self.cs.alloc_in_round(round, visibility, polyop.o);
+        self.ops[round].push(Operation::Poly(polyop.clone().allocate(input.clone(), output.clone())));
+
+        let mut gate_io = input;  // do not move input into new buffer
         gate_io.append(&mut output.clone());
-        if polyop.d == 0 {panic!("Operation {} has degree 0, which is banned.", self.ops.len())}
-        if polyop.d > self.max_degree {panic!("Degree of operation {} is too large!", self.ops.len())};
-        if polyop.d == 1 {
-            self.cs.cs.constrain(CommitKind::Zero, &gate_io, T::from(polyop.clone()));
-        } else {
-            self.cs.cs.constrain(CommitKind::Group, &gate_io, T::from(polyop.clone()));
-        }
-        
-        self.ops[round].push(Operation::Poly(polyop.allocate(i, output.clone())));
 
+        self.constrain(&gate_io, polyop.into());
+        
         output
     }
 
-    pub fn apply_pub(&mut self, round : usize, polyop: PolyOp<'a, F>, i: Vec<Variable>) -> Vec<Variable> {
-        assert!(round < self.ops.len(), "The round is too large.",);
-        assert!(i.len() == polyop.i, "Incorrect amount of inputs at operation {}", self.ops.len());
-        for v in &i {
-            assert!(v.round <= round, "Argument of an operation {} ; {} is in round {}", round, self.ops[round].len(), v.round)
-        }
-        let mut output = vec![];
-        for _ in 0..polyop.o {
-            output.push( self.cs.alloc_pub_internal(round) );
-        }
-
-        let mut gate_io = vec![];
-        gate_io.append(&mut i.clone());
-        gate_io.append(&mut output.clone());
-        if polyop.d == 0 {panic!("Operation {} has degree 0, which is banned.", self.ops.len())}
-        if polyop.d > self.max_degree {panic!("Degree of operation {} is too large!", self.ops.len())};
-        if polyop.d == 1 {
-            self.cs.cs.constrain(CommitKind::Zero, &gate_io, T::from(polyop.clone()));
-        } else {
-            self.cs.cs.constrain(CommitKind::Group, &gate_io, T::from(polyop.clone()));
-        }
-        
-        self.ops[round].push(Operation::Poly(polyop.allocate(i, output.clone())));
-
-        output
+    pub fn apply(&mut self, round: usize, polyop: PolyOp<'a, F>, input: Vec<Variable>) -> Vec<Variable> {
+        self.apply_internal(Visibility::Private, round, polyop, input)
     }
 
-    pub fn constrain(&mut self, inputs: &[Variable], gate: T) -> (){
+    pub fn apply_pub(&mut self, round : usize, polyop: PolyOp<'a, F>, input: Vec<Variable>) -> Vec<Variable> {
+        self.apply_internal(Visibility::Public, round, polyop, input)
+    }
+
+    // TODO: pass input by value since we clone it down the stack either way
+    pub fn constrain(&mut self, input: &[Variable], gate: T) -> (){
         assert!(gate.d() > 0, "Trying to constrain with gate of degree 0.");
 
         let kind = if gate.d() == 1 { CommitKind::Zero } else { CommitKind::Group };
-        self.cs.cs.constrain(kind, inputs, gate);
+        self.cs.cs.constrain(kind, input, gate);
     }
 
 
@@ -243,24 +218,25 @@ where
 {
     /// Executes the circuit up from the current program counter to round k.
     pub fn execute(&mut self, round: usize) -> () {
-        if self.round_counter > round {
-            panic!("Execution is already at round {}, attempt to execute up to round {}", self.round_counter, round)
-            }
+        assert!(self.round_counter <= round, "Execution is already at round {}, tried to execute up to round {}", self.round_counter, round);
+
         while self.round_counter <= round {
-            for op in &self.ops[self.round_counter]{
+            for op in &self.ops[self.round_counter] {
                 match op {
                     Operation::Poly(polyop) => {
-                        let input : Vec<_> = polyop.i.iter().map(|x|self.cs.getvar(*x)).collect();
-                        let output = (&polyop.op.f)(&input);
-                        polyop.o.iter().zip(output.iter()).map(|(i,v)| self.cs.setvar(*i, *v)).count();
+                        let input : Vec<_> = polyop.i.iter().map(|&v| self.cs.getvar(v)).collect();
+
+                        let output = (polyop.op.f)(&input);
+
+                        polyop.o.iter().zip(output.iter()).for_each(|(&var, &value)| self.cs.setvar(var, value));
                     }
                     Operation::Adv(adv) => {
-                        let input : Vec<_> = adv.ivar.iter().map(|x|self.cs.getvar(*x)).collect();
-                        let input_ext : Vec<_> = adv.iext.iter().map(|x|*x.get().unwrap()).collect();
-                        let output = (&adv.adv.f)(&input, &input_ext);
-                        adv.o.iter().zip(output.iter()).map(|(i,v)| {
-                            self.cs.setvar(*i, *v)
-                        }).count();
+                        let input : Vec<_> = adv.ivar.iter().map(|&v| self.cs.getvar(v)).collect();
+                        let aux : Vec<_> = adv.iext.iter().map(|&x| *x.get().unwrap()).collect();
+
+                        let output = (adv.adv.f)(&input, &aux);
+
+                        adv.o.iter().zip(output.iter()).for_each(|(&var, &value)| self.cs.setvar(var, value));
                     }
                 }
             }

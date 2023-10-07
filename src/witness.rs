@@ -46,6 +46,7 @@ impl<F:PrimeField, G: Gate<F>> CSWtns<F, G>{
         *w = Some(value);
     }
 
+    // TODO: probably remove getvar & setvar, think of an api to get circuit's output variables (see this method references)
     pub fn getvar(&self, var: Variable) -> F {
         let w = match var {
             Variable { visibility: Visibility::Public, round: r, index: i } => self.wtns[r].pubs[i],
@@ -55,6 +56,16 @@ impl<F:PrimeField, G: Gate<F>> CSWtns<F, G>{
         assert!(w.is_some(), "Use of unassigned variable: {:?}", var);
 
         w.expect("just asserted")
+    }
+
+    pub fn get_vars(&self, vars: &[Variable]) -> Vec<F> {
+        vars.iter().map(|&v| self.getvar(v)).collect()
+    }
+
+    pub fn set_vars(&mut self, vars: &[(Variable, F)]) {
+        for &(var, value) in vars {
+            self.setvar(var, value);
+        }
     }
 
     pub fn alloc_in_round(&mut self, round: usize, visibility: Visibility, size: usize) -> Vec<Variable> {

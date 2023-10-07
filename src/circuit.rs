@@ -1,8 +1,10 @@
-use std::{rc::Rc, cell::OnceCell, marker::PhantomData};
+use std::{rc::Rc, cell::OnceCell, marker::PhantomData, iter::repeat_with};
 
 use ff::PrimeField;
 
-use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind, Visibility, CS}, utils::poly_utils::check_poly};
+use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind, Visibility, CS}, utils::poly_utils::check_poly, circuit::circuit_operations::{AttachedAdvice, AttachedPolynomialAdvice}};
+
+use self::circuit_operations::CircuitOperation;
 
 
 #[derive(Clone)]
@@ -17,10 +19,6 @@ impl<'a, F:PrimeField> PolyOp<'a, F> {
     pub fn new(d: usize, i: usize, o: usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self{
         check_poly(d, i, o, f.clone()).unwrap(); 
         Self { d, i, o, f }
-    }
-
-    pub fn allocate(self, i: Vec<Variable>, o: Vec<Variable>) -> PolyOpAllocated<'a, F> {
-        PolyOpAllocated { op : self, i, o }
     }
 }
 
@@ -40,25 +38,8 @@ impl<'a, F: PrimeField> From<PolyOp<'a, F>> for Gatebb<'a, F>{
     }
 }
 
-#[derive(Clone)]
-pub struct PolyOpAllocated<'a, F: PrimeField> {
-    op: PolyOp<'a, F>,
-    i: Vec<Variable>,
-    o: Vec<Variable>,
-}
-
 /// A value used for advices. Can be shared between multiple circuits, in order to enable layered constructions.
 pub type ExternalValue<F> = OnceCell<F>;
-
-impl<'a, F: PrimeField> Advice<'a, F> {
-    pub fn new(ivar: usize, iext:usize, o: usize, f: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'a>) -> Self{
-        Self{ ivar, iext, o, f }
-    }
-
-    pub fn allocate(self: Advice<'a, F>, ivar: Vec<Variable>, iext: Vec<&'a ExternalValue<F>>, o: Vec<Variable>) -> AdviceAllocated<'a, F> {
-        AdviceAllocated { adv : self , ivar, iext, o }
-    }
- }
 
  #[derive(Clone)]
  pub struct Advice<'a, F: PrimeField> {
@@ -68,19 +49,70 @@ impl<'a, F: PrimeField> Advice<'a, F> {
     pub f: Rc<dyn Fn(&[F], &[F])-> Vec<F> + 'a>,
 }
 
-#[derive(Clone)]
-pub struct AdviceAllocated<'a, F: PrimeField> {
-    adv: Advice<'a, F>,
-    ivar: Vec<Variable>,
-    iext: Vec<&'a ExternalValue<F>>,
-    o: Vec<Variable>,
- }
-
- #[derive(Clone)]
-pub enum Operation<'a, F: PrimeField> {
-    Poly(PolyOpAllocated<'a, F>),
-    Adv(AdviceAllocated<'a, F>),
+impl<'a, F: PrimeField> Advice<'a, F> {
+    pub fn new(ivar: usize, iext: usize, o: usize, f: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'a>) -> Self {
+        Self { ivar, iext, o, f }
+    }
 }
+
+pub mod circuit_operations {
+    use std::rc::Rc;
+
+    use ff::PrimeField;
+
+    use crate::{constraint_system::Variable, gate::Gate, witness::CSWtns};
+
+    use super::ExternalValue;
+
+    pub trait CircuitOperation<F: PrimeField, G: Gate<F>> {
+        fn execute(&self, witness: &mut CSWtns<F, G>);
+    }
+
+    pub struct AttachedAdvice<'circuit, F> {
+        input: Vec<Variable>,
+        aux: Vec<&'circuit ExternalValue<F>>,
+        output: Vec<Variable>,
+        closure: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'circuit>,
+    }
+
+    impl<'circuit, F> AttachedAdvice<'circuit, F> {
+        pub fn new(input: Vec<Variable>, aux: Vec<&'circuit ExternalValue<F>>, output: Vec<Variable>, closure: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'circuit>) -> Self {
+            Self { input, aux, output, closure }
+        }
+    }
+
+    impl<'circuit, F: PrimeField, G: Gate<F>> CircuitOperation<F, G> for AttachedAdvice<'circuit, F> {
+        fn execute(&self, witness: &mut CSWtns<F, G>) {
+            let input = witness.get_vars(&self.input);
+            let aux: Vec<_> = self.aux.iter().map(|ev| *ev.get().expect("external values should be set before execution")).collect();
+            let output = (self.closure)(&input, &aux);
+            let value_set: Vec<_> = self.output.iter().cloned().zip(output).collect();
+            witness.set_vars(&value_set);
+        }
+    }
+
+    pub struct AttachedPolynomialAdvice<'circuit, F> {
+        input: Vec<Variable>,
+        output: Vec<Variable>,
+        closure: Rc<dyn Fn(&[F]) -> Vec<F> + 'circuit>,
+    }
+
+    impl<'circuit, F> AttachedPolynomialAdvice<'circuit, F> {
+        pub fn new(input: Vec<Variable>, output: Vec<Variable>, closure: Rc<dyn Fn(&[F]) -> Vec<F> + 'circuit>) -> Self {
+            Self { input, output, closure }
+        }
+    }
+
+    impl<'circuit, F: PrimeField, G: Gate<F>> CircuitOperation<F, G> for AttachedPolynomialAdvice<'circuit, F> {
+        fn execute(&self, witness: &mut CSWtns<F, G>) {
+            let input = witness.get_vars(&self.input);
+            let output = (self.closure)(&input);
+            let value_set: Vec<_> = self.output.iter().cloned().zip(output).collect();
+            witness.set_vars(&value_set);
+        }
+    }
+}
+
 
 pub struct Build;
 pub struct Finalized;
@@ -94,10 +126,9 @@ mod private {
     impl CircuitState for Finalized {}
 }
 
-#[derive(Clone)]
-pub struct Circuit<'a, F: PrimeField, T:Gate<F> + From<PolyOp<'a, F>>, S: private::CircuitState> {
+pub struct Circuit<'circuit, F: PrimeField, T: Gate<F> + From<PolyOp<'circuit, F>>, S: private::CircuitState> {
     pub cs: CSWtns<F, T>,
-    pub ops: Vec<Vec<Operation<'a, F>>>,
+    pub ops: Vec<Vec<Box<dyn CircuitOperation<F, T> + 'circuit>>>,
     pub max_degree: usize,
     pub round_counter : usize,
     _state_marker: PhantomData<S>,
@@ -112,7 +143,7 @@ where
         let cs = ConstraintSystem::new(num_rounds, max_degree);
         let mut prep = Self {
                 cs : CSWtns::new(cs),
-                ops: vec![vec![]; num_rounds],
+                ops: repeat_with(|| Vec::default()).take(num_rounds).collect(),  // this particular Vec::default() is !Clone
                 max_degree,
                 round_counter: 0,
                 _state_marker: PhantomData,
@@ -140,7 +171,8 @@ where
         assert!(aux.len() == advice.iext, "Incorrect amount of external vals at operation #{} (round {})", op_index, round);
 
         let output = self.cs.alloc_in_round(round, visibility, advice.o);
-        self.ops[round].push(Operation::Adv(advice.allocate(input, aux, output.clone())));
+        let operation = Box::new(AttachedAdvice::new(input, aux, output.clone(), advice.f.clone()));
+        self.ops[round].push(operation);
 
         output
     }
@@ -168,7 +200,8 @@ where
         assert!(input.len() == polyop.i, "Incorrect amount of inputs at operation #{} (round {})", op_index, round);
 
         let output = self.cs.alloc_in_round(round, visibility, polyop.o);
-        self.ops[round].push(Operation::Poly(polyop.clone().allocate(input.clone(), output.clone())));
+        let operation = Box::new(AttachedPolynomialAdvice::new(input.clone(), output.clone(), polyop.f.clone()));
+        self.ops[round].push(operation);
 
         let mut gate_io = input;  // do not move input into new buffer
         gate_io.extend(output.iter().cloned());
@@ -224,24 +257,8 @@ where
         assert!(self.round_counter <= round, "Execution is already at round {}, tried to execute up to round {}", self.round_counter, round);
 
         while self.round_counter <= round {
-            for op in &self.ops[self.round_counter] {
-                match op {
-                    Operation::Poly(polyop) => {
-                        let input: Vec<_> = polyop.i.iter().map(|&v| self.cs.getvar(v)).collect();
-
-                        let output = (polyop.op.f)(&input);
-
-                        polyop.o.iter().zip(output.iter()).for_each(|(&var, &value)| self.cs.setvar(var, value));
-                    }
-                    Operation::Adv(adv) => {
-                        let input: Vec<_> = adv.ivar.iter().map(|&v| self.cs.getvar(v)).collect();
-                        let aux: Vec<_> = adv.iext.iter().map(|&x| *x.get().unwrap()).collect();
-
-                        let output = (adv.adv.f)(&input, &aux);
-
-                        adv.o.iter().zip(output.iter()).for_each(|(&var, &value)| self.cs.setvar(var, value));
-                    }
-                }
+            for op in self.ops[self.round_counter].iter() {
+                op.execute(&mut self.cs);
             }
             self.round_counter += 1;
         }

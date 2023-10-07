@@ -6,7 +6,10 @@ use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable,
 
 use self::circuit_operations::CircuitOperation;
 
-
+/// A circuit advice that is guaranteed to be a polynomial function
+///
+/// Note that while `Gate` expects its output to be zero,
+/// this type does not for it would be a pretty boring advice.
 #[derive(Clone)]
 pub struct PolyOp<'a, F:PrimeField>{
     pub d: usize,
@@ -26,6 +29,7 @@ impl<'a, F:PrimeField> PolyOp<'a, F> {
 
 impl<'a, F: PrimeField> From<PolyOp<'a, F>> for Gatebb<'a, F>{
     fn from(value: PolyOp<'a, F>) -> Self {
+        // we basically move the rhs (output) to the left
         let d = value.d;
         let i = value.i + value.o;
         let o = value.o;
@@ -40,9 +44,15 @@ impl<'a, F: PrimeField> From<PolyOp<'a, F>> for Gatebb<'a, F>{
     }
 }
 
-/// A value used for advices. Can be shared between multiple circuits, in order to enable layered constructions.
+/// An external value used in circuit.
+///
+/// This can be loaded as a public input or used as an auxiliary value in advices. 
+/// Can also be shared between multiple circuits in order to enable layered constructions.
 pub type ExternalValue<F> = OnceCell<F>;
 
+/// A (possibly non-polynomial) circuit advice
+///
+/// Closure inside an advice may depend on some auxiliary values.
  #[derive(Clone)]
  pub struct Advice<'a, F: PrimeField> {
     pub ivar: usize,
@@ -89,7 +99,9 @@ pub mod circuit_operations {
         fn execute(&self, witness: &mut CSWtns<F, G>) {
             let input = witness.get_vars(&self.input);
             let aux: Vec<_> = self.aux.iter().map(|ev| *ev.get().expect("external values should be set before execution")).collect();
+
             let output = (self.closure)(&input, &aux);
+
             let value_set: Vec<_> = self.output.iter().cloned().zip(output).collect();
             witness.set_vars(&value_set);
         }
@@ -110,7 +122,9 @@ pub mod circuit_operations {
     impl<'circuit, F: PrimeField, G: Gate<F>> CircuitOperation<F, G> for AttachedPolynomialAdvice<'circuit, F> {
         fn execute(&self, witness: &mut CSWtns<F, G>) {
             let input = witness.get_vars(&self.input);
+
             let output = (self.closure)(&input);
+
             let value_set: Vec<_> = self.output.iter().cloned().zip(output).collect();
             witness.set_vars(&value_set);
         }

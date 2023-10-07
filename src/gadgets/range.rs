@@ -192,12 +192,12 @@ pub fn limb_decompose_gadget<'a, F: PrimeField+FieldUtils>(
             1,
             0,
             num_limbs,
-            Rc::new(move |args,_|{
+            move |args,_| {
                 let x = args[0];
                 let limbs = limbs(x, base);
                 assert!(limbs.len()<=num_limbs, "The value has too many limbs.");
                 limbs.into_iter().map(|x|F::from(x as u64)).chain(repeat(F::ZERO)).take(num_limbs).collect()
-            })
+            }
         ),
         vec![input],
         vec![]
@@ -244,7 +244,7 @@ pub fn choice_gadget<'a, F: PrimeField+FieldUtils> (
         n,
         n*q+1,
         q,
-        Rc::new(move |args: &[F]|{
+        move |args: &[F]| {
             let (variants, index) = args.split_at(n*q);
             let index = index[0];
             let choice_coeffs = lagrange_choice_batched(index, n as u64);
@@ -255,7 +255,7 @@ pub fn choice_gadget<'a, F: PrimeField+FieldUtils> (
                 }
             }
             ret
-        })
+        }
     );
 
     circuit.apply(round, choice_poly, v)

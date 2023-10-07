@@ -49,7 +49,7 @@ pub fn evaluate_on_random_linear_combinations(gate: &impl Gate<F>, a: &Vec<F>, b
 }
 
 pub fn assemble_poseidon_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, cfg: &'a Poseidon, pi: &'a ExternalValue<F>) {
-    let load_pi_advice_head = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));
+    let load_pi_advice_head = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);
     let mut acc = circuit.advice_pub(0, load_pi_advice_head, vec![], vec![pi])[0];
 
     for _ in 0..1000 {

@@ -16,8 +16,10 @@ pub struct PolyOp<'a, F:PrimeField>{
 }
 
 impl<'a, F:PrimeField> PolyOp<'a, F> {
-    pub fn new(d: usize, i: usize, o: usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Self{
-        check_poly(d, i, o, f.clone()).unwrap(); 
+    pub fn new(d: usize, i: usize, o: usize, f: impl Fn(&[F]) -> Vec<F> + 'a) -> Self {
+        let f =  Rc::new(f);
+        check_poly(d, i, o, f.clone()).unwrap();
+
         Self { d, i, o, f }
     }
 }
@@ -50,7 +52,9 @@ pub type ExternalValue<F> = OnceCell<F>;
 }
 
 impl<'a, F: PrimeField> Advice<'a, F> {
-    pub fn new(ivar: usize, iext: usize, o: usize, f: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'a>) -> Self {
+    pub fn new(ivar: usize, iext: usize, o: usize, f: impl Fn(&[F], &[F]) -> Vec<F> + 'a) -> Self {
+        let f = Rc::new(f);
+
         Self { ivar, iext, o, f }
     }
 }
@@ -149,7 +153,7 @@ where
                 _state_marker: PhantomData,
         };
 
-        let adv = Advice::new(0, 0, 1, Rc::new(|_, _| vec![F::ONE]));
+        let adv = Advice::new(0, 0, 1, |_, _| vec![F::ONE]);
         let tmp = prep.advice_pub(0, adv, vec![], vec![]);
 
         assert!(tmp[0] == prep.one(),
@@ -228,7 +232,7 @@ where
     }
 
     pub fn load_pi(&'a mut self, round: usize, pi: &'a ExternalValue<F>) -> Variable {
-        let adv = Advice::new(0, 1, 1, Rc::new(move |_, ext| vec![ext[0]]));
+        let adv = Advice::new(0, 1, 1, move |_, ext| vec![ext[0]]);
         self.advice_pub(round, adv, vec![], vec![&pi])[0]
     }
 

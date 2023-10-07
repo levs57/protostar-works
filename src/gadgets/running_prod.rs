@@ -1,6 +1,5 @@
 // Nonzero elements checker.
 
-use std::rc::Rc;
 use ff::PrimeField;
 use crate::{utils::field_precomp::FieldUtils, circuit::{Circuit, PolyOp, Build}, gate::Gatebb, constraint_system::Variable};
 
@@ -10,11 +9,7 @@ pub fn prod_flat_gadget<'a, F: PrimeField + FieldUtils> (circuit: &mut Circuit<'
     let l = input.len();
     if l == 0 {return circuit.one()} // product of 0 elements is 1
     if l == 1 {return input[0]}
-    let prod_all = PolyOp::new(l, l, 1,
-        Rc::new(
-            |args| vec![args.iter().fold(F::ONE, |acc, upd| acc*upd)]
-        )
-    );
+    let prod_all = PolyOp::new(l, l, 1, |args| vec![args.iter().fold(F::ONE, |acc, upd| acc*upd)]);
     circuit.apply(round, prod_all, input)[0]
 }
 

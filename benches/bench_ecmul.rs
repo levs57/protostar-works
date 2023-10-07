@@ -56,7 +56,7 @@ pub fn assemble_ecmul_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Bu
     let pi_pt_ext = (&pi[4], &pi[5]);
     let pi_sc_ext = &pi[6];
 
-    let read_pi = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
+    let read_pi = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
 
     let x = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_a_ext.0])[0];
     let y = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_a_ext.1])[0];

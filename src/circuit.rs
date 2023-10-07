@@ -118,7 +118,7 @@ where
                 _state_marker: PhantomData,
         };
 
-        let adv = Advice::new(0,0,1, Rc::new(|_,_|vec![F::ONE]));
+        let adv = Advice::new(0, 0, 1, Rc::new(|_, _| vec![F::ONE]));
         let tmp = prep.advice_pub(0, adv, vec![], vec![]);
 
         assert!(tmp[0] == prep.one(),
@@ -144,7 +144,6 @@ where
 
         output
     }
-
 
     pub fn advice(&mut self, round: usize, advice: Advice<'a, F>, input: Vec<Variable>, aux: Vec<&'a ExternalValue<F>>) -> Vec<Variable> {
         self.advice_internal(Visibility::Private, round, advice, input, aux)
@@ -172,7 +171,7 @@ where
         self.ops[round].push(Operation::Poly(polyop.clone().allocate(input.clone(), output.clone())));
 
         let mut gate_io = input;  // do not move input into new buffer
-        gate_io.append(&mut output.clone());
+        gate_io.extend(output.iter().cloned());
 
         self.constrain(&gate_io, polyop.into());
         
@@ -188,13 +187,17 @@ where
     }
 
     // TODO: pass input by value since we clone it down the stack either way
-    pub fn constrain(&mut self, input: &[Variable], gate: T) -> (){
+    pub fn constrain(&mut self, input: &[Variable], gate: T) {
         assert!(gate.d() > 0, "Trying to constrain with gate of degree 0.");
 
         let kind = if gate.d() == 1 { CommitKind::Zero } else { CommitKind::Group };
         self.cs.cs.constrain(kind, input, gate);
     }
 
+    pub fn load_pi(&'a mut self, round: usize, pi: &'a ExternalValue<F>) -> Variable {
+        let adv = Advice::new(0, 1, 1, Rc::new(move |_, ext| vec![ext[0]]));
+        self.advice_pub(round, adv, vec![], vec![&pi])[0]
+    }
 
     pub fn finalize(self) -> Circuit<'a, F, T, Finalized> {
         Circuit {
@@ -217,22 +220,22 @@ where
     T: Gate<F> + From<PolyOp<'a, F>>,
 {
     /// Executes the circuit up from the current program counter to round k.
-    pub fn execute(&mut self, round: usize) -> () {
+    pub fn execute(&mut self, round: usize) {
         assert!(self.round_counter <= round, "Execution is already at round {}, tried to execute up to round {}", self.round_counter, round);
 
         while self.round_counter <= round {
             for op in &self.ops[self.round_counter] {
                 match op {
                     Operation::Poly(polyop) => {
-                        let input : Vec<_> = polyop.i.iter().map(|&v| self.cs.getvar(v)).collect();
+                        let input: Vec<_> = polyop.i.iter().map(|&v| self.cs.getvar(v)).collect();
 
                         let output = (polyop.op.f)(&input);
 
                         polyop.o.iter().zip(output.iter()).for_each(|(&var, &value)| self.cs.setvar(var, value));
                     }
                     Operation::Adv(adv) => {
-                        let input : Vec<_> = adv.ivar.iter().map(|&v| self.cs.getvar(v)).collect();
-                        let aux : Vec<_> = adv.iext.iter().map(|&x| *x.get().unwrap()).collect();
+                        let input: Vec<_> = adv.ivar.iter().map(|&v| self.cs.getvar(v)).collect();
+                        let aux: Vec<_> = adv.iext.iter().map(|&x| *x.get().unwrap()).collect();
 
                         let output = (adv.adv.f)(&input, &aux);
 

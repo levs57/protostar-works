@@ -11,7 +11,7 @@ type F = bn256::Fr;
 #[test]
 fn precompute_roots_of_unity() -> (){
     let mut s : String = "".to_string();
-    s+="use halo2curves::{bn256::Fr as F, serde::SerdeObject};\n";
+    s+="use halo2::halo2curves::{bn256::Fr as F, serde::SerdeObject};\n";
     s+="pub fn roots_of_unity(power: u64, logorder: usize) -> F {\n";
     s+="  match logorder {\n";
     for logorder in 0..10 {
@@ -34,7 +34,7 @@ fn precompute_roots_of_unity() -> (){
 #[test]
 fn precompute_half_squares() -> (){
     let mut s : String = "".to_string();
-    s+="use halo2curves::{bn256::Fr as F, serde::SerdeObject};\n";
+    s+="use halo2::halo2curves::{bn256::Fr as F, serde::SerdeObject};\n";
     s+="pub fn half_square(k:u64) -> F {\n";
     s+="    match k {\n";
     for i in 0..50 {
@@ -47,28 +47,30 @@ fn precompute_half_squares() -> (){
     f.write_all(s.as_bytes()).expect("Unable to write data");
 }
 
+fn felt_from_i64(x: i64) -> F {
+    let is_neg = x<0;
+    let mut ret = F::from(abs(x) as u64);
+    if is_neg {ret = -ret}
+    ret
+}
+
 fn inv_lagrange_prod(k: u64, n: u64) -> F {
     assert!(k<n);
-    let mut acc : i64 = 1;
+    let mut ret = F::ONE;
     for i in 0..n{
-        if i != k {acc *= k as i64 - i as i64}
+        if i != k {ret *= felt_from_i64(k as i64 - i as i64)}
     }
-    let is_neg = acc<0;
-
-    let mut ret = F::from(abs(acc) as u64).invert().unwrap();
-    if is_neg {ret = -ret}
-
-    ret
+    ret.invert().unwrap()
 }
 
 #[test]
 
 fn precompute_inv_lagrange_prod() -> () {
     let mut s : String = "".to_string();
-    s+="use halo2curves::{bn256::Fr as F, serde::SerdeObject};\n";
+    s+="use halo2::halo2curves::{bn256::Fr as F, serde::SerdeObject};\n";
     s+="pub fn inv_lagrange_prod(k: u64, n: u64) -> F {\n";
     s+="    match (k, n) {\n";
-    for n in 2..20 {
+    for n in 2..30 {
     for k in 0..n {
     s+=&format!("        ({},{}) => F::from_raw_bytes_unchecked(&{:?}),\n", k, n, inv_lagrange_prod(k, n).to_raw_bytes());
     }

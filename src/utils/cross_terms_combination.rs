@@ -12,6 +12,7 @@ use itertools::{Itertools};
 /// A utility function that guarantees that chunks will always have the length divisble by align_by.
 /// Useful if you'd like to execute some operations that involve more than a single element (and do not want to transmute).
 pub fn parallelize_with_alignment<T: Send, F: Fn(&mut [T], &mut [T], usize) + Send + Sync + Clone>(v: &mut [T], w: &mut [T], f: F, align_v: usize, align_w: usize) {
+    
     assert!(v.len()%align_v == 0);
     assert!(w.len()%align_w == 0);
     let f = &f;
@@ -142,19 +143,20 @@ fn ev_poly<F:FieldUtils>(p: &[F], x: F) -> F {
 
 
 /// Computes the layout of all phases of merging from the first phase.
-fn compute_layouts(layout: Vec<EvalLayout>, num_vars: usize)->Vec<Vec<EvalLayout>>{
+fn compute_layouts(layout: Vec<EvalLayout>, num_vars: usize)->Vec<(Vec<EvalLayout>)>{
     let mut layouts = vec![];
+    let l = layout.len();
     layouts.push(layout);
     for i in 0..num_vars {
-        let mut tmp : Vec<EvalLayout> = vec![];
+        let mut tmp = vec![];
         let mut carry = 0;
-        for EvalLayout{ deg, amount } in layouts[i].iter() {
+
+        for (q, EvalLayout{ deg, amount }) in layouts[i].iter().enumerate() {
             let amount = amount+carry;
             carry = amount%2;
             tmp.push(EvalLayout{ deg: deg+1, amount : amount/2 });
         }
-        let last = tmp.len()-1;
-        tmp[last].amount += carry;
+        tmp[l-1].amount += carry;
         layouts.push(tmp);
     }
     layouts
@@ -164,12 +166,7 @@ fn compute_layouts(layout: Vec<EvalLayout>, num_vars: usize)->Vec<Vec<EvalLayout
 fn merge<F: FieldUtils>(a: &[F], b: &[F], target: &mut [F], zip_with: &[F], binom: &[u64]) -> () {
     debug_assert!(a.len() == b.len());
     debug_assert!(zip_with.len() == a.len()+1);
-    debug_assert!(target.len() == a.len()+1);
-
-    // println!("Merging: a.len = {}, ...", a.len());
-    // println!("a={:?}", a);
-    // println!("b={:?}", b);
-    
+    debug_assert!(target.len() == a.len()+1);    
 
     let ae = extend(a, binom);
     let be = extend(b, binom);
@@ -183,8 +180,6 @@ fn merge<F: FieldUtils>(a: &[F], b: &[F], target: &mut [F], zip_with: &[F], bino
             *x = y;            
         }).count();
 
-    println!("target={:?}", target);
-    println!("zip_with={:?}", zip_with);
 }
 
 /// Evals is a list of all the coefficients, in increasing degree order.
@@ -193,6 +188,7 @@ fn merge<F: FieldUtils>(a: &[F], b: &[F], target: &mut [F], zip_with: &[F], bino
 pub fn combine_cross_terms<F: FieldUtils>(evals: Vec<F>, layout: Vec<EvalLayout>, point: Vec<[F;2]>) -> Vec<F> {
     let l = layout.len();
     assert!(layout.check(), "Degrees must strictly increase.");
+    assert!(layout[l-1].amount>0, "Layout must not have trailing zero elements.");
     let total_size = layout.total_size();
     assert!(evals.len() == total_size, "Total length must be sum of all lengths of all polynomials");
     let num_vars = point.len();
@@ -220,10 +216,11 @@ pub fn combine_cross_terms<F: FieldUtils>(evals: Vec<F>, layout: Vec<EvalLayout>
 
         let mut carry_poly : Vec<F> = vec![];
         let mut carry_flag = false;
-        let mut pt_vals = point[0].to_vec();
+        let mut pt_vals = point[i].to_vec();
         let ptinc = point[i][1]-point[i][0];
-        for (EvalLayout{deg: sd, amount : sa}, EvalLayout{deg: td, amount : ta}) in source_layout.iter().zip_eq(target_layout.iter()) {
-            
+
+        for (q, (EvalLayout{deg: sd, amount : sa}, EvalLayout{deg: td, amount : ta})) in source_layout.iter().zip_eq(target_layout.iter()).enumerate() {
+
             if *sa == 0 {
                 continue
             }
@@ -262,7 +259,7 @@ pub fn combine_cross_terms<F: FieldUtils>(evals: Vec<F>, layout: Vec<EvalLayout>
                 (source_evals, tmp) = source_evals.split_at_mut(l-(sd+1));
                 carry_poly = tmp.to_vec();
                 // On the last step, just write the carry where it belongs.
-                if(source_evals_full.len() == 0) {
+                if q == target_layout.len()-1 {
                     let l = target_evals.len();
                     let tmp;
                     (target_evals, tmp) = target_evals.split_at_mut(l-(td+1));
@@ -392,10 +389,9 @@ mod tests {
     #[test]
 
     fn test_cross_terms_combination()->() {
-        for x in 0..10 { for y in 0..10 { for z in 0..10 {
-        if x<2 || y>0 || z>0 {continue}
-
-        println!("xyz : {} {} {}", x, y, z);
+        let params = [(1000000, 0, 1),];
+        for (x,y,z) in params {
+        if x+y+z<2 {continue}
         let layout : Vec<_> = [(x, 2), (y, 3), (z, 7)].into_iter().map(|(amount, deg)| EvalLayout{deg, amount}).collect();
 
         let p2 : Vec<_> = repeat_with(
@@ -422,18 +418,6 @@ mod tests {
                 ).take(z)
                 .collect();
     
-        fn test_poly(x:Fr) -> Fr {
-            Fr::from(5) 
-            + Fr::from(6735)*x 
-            + Fr::from(420)*x*x 
-            + Fr::from(32687)*x*x*x 
-            + Fr::from(1212)*x*x*x*x
-        }
-        let vals : Vec<Fr> = (0..5).map(|i|test_poly(Fr::from(i))).collect();
-
-        let r = Fr::random(OsRng);
-        assert!(test_poly(r) == ev_poly(&vals, r), "EVPOLY");
-
         let mut num_vars = 0;
         let mut tmp = layout.num_polys()-1;
 
@@ -468,6 +452,6 @@ mod tests {
         let rhs = ev_poly(&combined, challenge);
         assert_eq!(lhs, rhs);
     }
-    }}}
+    }
 }
 

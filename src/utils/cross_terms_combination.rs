@@ -200,11 +200,8 @@ pub fn combine_cross_terms<F: FieldUtils>(evals: Vec<F>, layout: Vec<EvalLayout>
         let mut source_evals_full = s[0].as_mut_slice();
         let mut target_evals_full = t[0].as_mut_slice();
 
-        let mut source_offset = 0;
-        let mut target_offset = 0;
         let mut carry_poly : Vec<F> = vec![];
         let mut carry_flag = false;
-        let mut poly_id = 0;
         let mut pt_vals = vec![point[i].0, point[i].1];
         let ptinc = point[i].1-point[i].0;
         for (EvalLayout{deg: sd, amount : sa}, EvalLayout{deg: td, amount : ta}) in source_layout.iter().zip(target_layout.iter()) {

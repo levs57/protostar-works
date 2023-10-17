@@ -172,7 +172,7 @@ fn merge<F: FieldUtils>(a: &[F], b: &[F], target: &mut [F], zip_with: &[F], bino
 /// Evals is a list of all the coefficients, in increasing degree order.
 /// Layout is pairs (degree, amount) - what is the amount of polynomials of degree d.
 /// Point is a sequence of challenges, given in evaluation form - i.e. these are actually values of a_i(t) in 0 and 1.
-pub fn combine_cross_terms<F: FieldUtils>(evals: Vec<F>, layout: Vec<EvalLayout>, point: Vec<(F,F)>) -> Vec<F> {
+pub fn combine_cross_terms<F: FieldUtils>(evals: Vec<F>, layout: Vec<EvalLayout>, point: Vec<[F;2]>) -> Vec<F> {
     let l = layout.len();
     assert!(layout.check(), "Degrees must strictly increase.");
     let total_size = layout.total_size();
@@ -202,8 +202,8 @@ pub fn combine_cross_terms<F: FieldUtils>(evals: Vec<F>, layout: Vec<EvalLayout>
 
         let mut carry_poly : Vec<F> = vec![];
         let mut carry_flag = false;
-        let mut pt_vals = vec![point[i].0, point[i].1];
-        let ptinc = point[i].1-point[i].0;
+        let mut pt_vals = point[0].to_vec();
+        let ptinc = point[i][1]-point[i][0];
         for (EvalLayout{deg: sd, amount : sa}, EvalLayout{deg: td, amount : ta}) in source_layout.iter().zip(target_layout.iter()) {
             
             if *sa == 0 {
@@ -287,8 +287,9 @@ mod tests {
     use ff::Field;
     use halo2::{halo2curves::bn256};
     use rand::random;
+    use rand_core::OsRng;
 
-    use crate::{utils::cross_terms_combination::{compute_binomial_coefficients, extend, parallelize_with_alignment, compute_layouts}, commitment::CkErrTarget};
+    use crate::{utils::{cross_terms_combination::{compute_binomial_coefficients, extend, parallelize_with_alignment, compute_layouts, SanitizeLayout}, field_precomp::FieldUtils}, commitment::CkErrTarget, gadgets::range::lagrange_choice_batched};
 
     use super::{combine_cross_terms, EvalLayout};
 
@@ -336,5 +337,83 @@ mod tests {
         let layout = [(33, 2), (17, 3), (7, 7)].into_iter().map(|(amount, deg)| EvalLayout{deg, amount}).collect();
         println!("{:?}", compute_layouts(layout, 6));
     }
+
+
+    #[test]
+
+    fn test_cross_terms_combination()->() {
+        let layout : Vec<_> = [(33, 2), (17, 3), (7, 7)].into_iter().map(|(amount, deg)| EvalLayout{deg, amount}).collect();
+
+        let p2 : Vec<_> = repeat_with(
+            ||repeat_with(
+                ||Fr::random(OsRng))
+                .take(3)
+                .collect::<Vec<Fr>>()
+            ).take(33)
+            .collect();
+
+            let p3 : Vec<_> = repeat_with(
+            ||repeat_with(
+                ||Fr::random(OsRng))
+                .take(4)
+                .collect::<Vec<Fr>>()
+            ).take(17)
+            .collect();
+
+            let p7 : Vec<_> = repeat_with(
+                ||repeat_with(
+                    ||Fr::random(OsRng))
+                    .take(8)
+                    .collect::<Vec<Fr>>()
+                ).take(7)
+                .collect();
+    
+        fn ev_poly<F:FieldUtils>(p: &[F], x: F) -> F {
+            lagrange_choice_batched(x, p.len() as u64)
+                .into_iter()
+                .zip(p.iter())
+                .fold(F::ZERO,|acc, (a, b)|acc+a*b)
+        }
+
+        let mut num_vars = 0;
+        let mut tmp = layout.num_polys();
+        while tmp>0 { num_vars+=1; tmp>>=1}
+
+        let pts : Vec<_> = repeat_with(||[Fr::random(OsRng), Fr::random(OsRng)]).take(num_vars).collect();
+        
+        let challenge = Fr::random(OsRng);
+
+
+        let pts_evals : Vec<_> = pts.iter().map(|l|ev_poly(l, challenge)).collect();
+
+        let p2_evals = p2.iter().map(|p| ev_poly(p, challenge));
+        let p3_evals = p3.iter().map(|p| ev_poly(p, challenge));
+        let p7_evals = p7.iter().map(|p| ev_poly(p, challenge));
+
+
+        let p_evals = p2_evals.chain(p3_evals).chain(p7_evals);
+
+        let hypercube_evals = (0..1<<num_vars).map(|i| { 
+            let mut b = i;
+            let mut ret = Fr::ONE;
+            for j in 0..num_vars {
+                if b%2 == 1 {ret *= pts_evals[j]};
+                b>>=1;
+            }
+            ret
+        });
+
+        let lhs = p_evals.zip(hypercube_evals).fold(Fr::ZERO, |acc, (x,y)| acc+x*y);
+
+        let evals : Vec<_> = p2.into_iter().flatten().chain(p3.into_iter().flatten()).chain(p7.into_iter().flatten()).collect();
+
+        let combined = combine_cross_terms(evals, layout, pts);
+
+        let rhs = ev_poly(&combined, challenge);
+
+        assert_eq!(lhs, rhs);
+
+    }
+
 }
 

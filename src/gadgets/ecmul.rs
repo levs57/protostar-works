@@ -7,7 +7,7 @@
 use std::{rc::Rc, marker::PhantomData};
 
 use ff::{PrimeField, BatchInvert};
-use halo2curves::CurveExt;
+use halo2::halo2curves::CurveExt;
 use crate::circuit::{PolyOp, Advice, Build};
 use crate::{circuit::Circuit, constraint_system::Variable, gate::Gatebb};
 use crate::utils::field_precomp::FieldUtils;

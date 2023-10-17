@@ -1,5 +1,5 @@
 use ff::PrimeField;
-use halo2curves::CurveAffine;
+use halo2::halo2curves::CurveAffine;
 
 use crate::{gate::Gate, constraint_system::{ConstraintSystem, Variable, CS, Visibility}, commitment::{CommitmentKey, CkWtns, CkRound, CtRound, ErrGroup, CkRelaxed}};
 

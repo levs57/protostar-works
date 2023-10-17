@@ -1,4 +1,4 @@
-use halo2curves::{bn256::Fr as F, serde::SerdeObject};
+use halo2::halo2curves::{bn256::Fr as F, serde::SerdeObject};
 pub fn half_square(k:u64) -> F {
     match k {
        0 => F::from_raw_bytes_unchecked(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),

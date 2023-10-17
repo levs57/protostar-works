@@ -1,6 +1,6 @@
 use ff::{Field, PrimeField};
 use halo2::arithmetic::best_fft;
-use halo2curves::bn256;
+use halo2::halo2curves::bn256;
 use num_traits::pow;
 
 use super::{powers_of_omega, half_squares, inv_lagrange_prod};

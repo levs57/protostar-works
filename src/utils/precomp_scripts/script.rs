@@ -1,7 +1,7 @@
 use std::{fs::File, io::Write};
 
 use ff::{PrimeField, Field};
-use halo2curves::{bn256, serde::SerdeObject};
+use halo2::halo2curves::{bn256, serde::SerdeObject};
 use num_traits::{pow, abs};
 
 use crate::utils::field_precomp::FieldUtils;

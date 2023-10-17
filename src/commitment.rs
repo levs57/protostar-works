@@ -1,6 +1,6 @@
 use ff::PrimeField;
 use halo2::arithmetic::best_multiexp;
-use halo2curves::CurveAffine;
+use halo2::halo2curves::CurveAffine;
 use crate::witness::RoundWtns;
 
 /// A simple commitment key.

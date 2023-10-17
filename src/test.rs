@@ -5,7 +5,7 @@ mod tests {
     use crate::{gate::Gatebb, constraint_system::{Variable, Visibility}, circuit::{Circuit, ExternalValue, PolyOp, Advice, Build}, gadgets::{poseidon::{poseidon_gadget, Poseidon, poseidon_gadget_mixstrat}, bits::bit_decomposition_gadget, ecmul::{add_proj, double_proj, EcAffinePoint, escalarmul_gadget_9}, range::{rangecheck, limb_decompose_gadget, lagrange_choice, lagrange_choice_batched, VarSmall, choice_gadget}, nonzero_check::nonzero_gadget}};
     use ff::{PrimeField, Field};
     use group::{Group, Curve};
-    use halo2curves::{bn256, grumpkin, CurveAffine, CurveExt};
+    use halo2::halo2curves::{bn256, grumpkin, CurveAffine, CurveExt};
     use rand_core::OsRng;
     use crate::utils::poly_utils::{check_poly, find_degree};
     use crate::utils::field_precomp::FieldUtils;

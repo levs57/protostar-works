@@ -1,4 +1,4 @@
-use halo2curves::{bn256::Fr as F, serde::SerdeObject};
+use halo2::halo2curves::{bn256::Fr as F, serde::SerdeObject};
 pub fn inv_lagrange_prod(k: u64, n: u64) -> F {
     match (k, n) {
         (0,2) => F::from_raw_bytes_unchecked(&[6, 0, 0, 160, 119, 193, 75, 151, 103, 163, 88, 218, 178, 113, 55, 241, 46, 18, 8, 9, 71, 162, 225, 81, 250, 192, 41, 71, 177, 214, 89, 34]),

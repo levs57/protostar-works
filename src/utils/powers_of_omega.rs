@@ -1,4 +1,4 @@
-use halo2curves::{bn256::Fr as F, serde::SerdeObject};
+use halo2::halo2curves::{bn256::Fr as F, serde::SerdeObject};
 pub fn roots_of_unity(power: u64, logorder: usize) -> F {
   match logorder {
   0 => 

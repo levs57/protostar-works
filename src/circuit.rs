@@ -11,15 +11,15 @@ use self::circuit_operations::CircuitOperation;
 /// Note that while `Gate` expects its output to be zero,
 /// this type does not for it would be a pretty boring advice.
 #[derive(Clone)]
-pub struct PolyOp<'a, F:PrimeField>{
+pub struct PolyOp<'closure, F: PrimeField>{
     pub d: usize,
     pub i: usize,
     pub o: usize,
-    pub f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>,
+    pub f: Rc<dyn Fn(&[F]) -> Vec<F> + 'closure>,
 }
 
-impl<'a, F:PrimeField> PolyOp<'a, F> {
-    pub fn new(d: usize, i: usize, o: usize, f: impl Fn(&[F]) -> Vec<F> + 'a) -> Self {
+impl<'closure, F:PrimeField> PolyOp<'closure, F> {
+    pub fn new(d: usize, i: usize, o: usize, f: impl Fn(&[F]) -> Vec<F> + 'closure) -> Self {
         let f =  Rc::new(f);
         check_poly(d, i, o, f.clone()).unwrap();
 
@@ -27,8 +27,9 @@ impl<'a, F:PrimeField> PolyOp<'a, F> {
     }
 }
 
-impl<'a, F: PrimeField> From<PolyOp<'a, F>> for Gatebb<'a, F>{
-    fn from(value: PolyOp<'a, F>) -> Self {
+// TODO: impl Gate for PolyOp when CSWitness will support dyn dispatch
+impl<'closure, F: PrimeField> From<PolyOp<'closure, F>> for Gatebb<'closure, F>{
+    fn from(value: PolyOp<'closure, F>) -> Self {
         // we basically move the rhs (output) to the left
         let d = value.d;
         let i = value.i + value.o;
@@ -54,15 +55,15 @@ pub type ExternalValue<F> = OnceCell<F>;
 ///
 /// Closure inside an advice may depend on some auxiliary values.
  #[derive(Clone)]
- pub struct Advice<'a, F: PrimeField> {
+ pub struct Advice<'closure, F: PrimeField> {
     pub ivar: usize,
     pub iext: usize,
     pub o: usize,
-    pub f: Rc<dyn Fn(&[F], &[F])-> Vec<F> + 'a>,
+    pub f: Rc<dyn Fn(&[F], &[F])-> Vec<F> + 'closure>,
 }
 
-impl<'a, F: PrimeField> Advice<'a, F> {
-    pub fn new(ivar: usize, iext: usize, o: usize, f: impl Fn(&[F], &[F]) -> Vec<F> + 'a) -> Self {
+impl<'closure, F: PrimeField> Advice<'closure, F> {
+    pub fn new(ivar: usize, iext: usize, o: usize, f: impl Fn(&[F], &[F]) -> Vec<F> + 'closure) -> Self {
         let f = Rc::new(f);
 
         Self { ivar, iext, o, f }
@@ -82,20 +83,20 @@ pub mod circuit_operations {
         fn execute(&self, witness: &mut CSWtns<F, G>);
     }
 
-    pub struct AttachedAdvice<'circuit, F> {
+    pub struct AttachedAdvice<'advice, F> {
         input: Vec<Variable>,
-        aux: Vec<&'circuit ExternalValue<F>>,
+        aux: Vec<&'advice ExternalValue<F>>,
         output: Vec<Variable>,
-        closure: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'circuit>,
+        closure: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'advice>,
     }
 
-    impl<'circuit, F> AttachedAdvice<'circuit, F> {
-        pub fn new(input: Vec<Variable>, aux: Vec<&'circuit ExternalValue<F>>, output: Vec<Variable>, closure: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'circuit>) -> Self {
+    impl<'advice, F> AttachedAdvice<'advice, F> {
+        pub fn new(input: Vec<Variable>, aux: Vec<&'advice ExternalValue<F>>, output: Vec<Variable>, closure: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'advice>) -> Self {
             Self { input, aux, output, closure }
         }
     }
 
-    impl<'circuit, F: PrimeField, G: Gate<F>> CircuitOperation<F, G> for AttachedAdvice<'circuit, F> {
+    impl<'advice, F: PrimeField, G: Gate<F>> CircuitOperation<F, G> for AttachedAdvice<'advice, F> {
         fn execute(&self, witness: &mut CSWtns<F, G>) {
             let input = witness.get_vars(&self.input);
             let aux: Vec<_> = self.aux.iter().map(|ev| *ev.get().expect("external values should be set before execution")).collect();
@@ -107,19 +108,19 @@ pub mod circuit_operations {
         }
     }
 
-    pub struct AttachedPolynomialAdvice<'circuit, F> {
+    pub struct AttachedPolynomialAdvice<'closure, F> {
         input: Vec<Variable>,
         output: Vec<Variable>,
-        closure: Rc<dyn Fn(&[F]) -> Vec<F> + 'circuit>,
+        closure: Rc<dyn Fn(&[F]) -> Vec<F> + 'closure>,
     }
 
-    impl<'circuit, F> AttachedPolynomialAdvice<'circuit, F> {
-        pub fn new(input: Vec<Variable>, output: Vec<Variable>, closure: Rc<dyn Fn(&[F]) -> Vec<F> + 'circuit>) -> Self {
+    impl<'closure, F> AttachedPolynomialAdvice<'closure, F> {
+        pub fn new(input: Vec<Variable>, output: Vec<Variable>, closure: Rc<dyn Fn(&[F]) -> Vec<F> + 'closure>) -> Self {
             Self { input, output, closure }
         }
     }
 
-    impl<'circuit, F: PrimeField, G: Gate<F>> CircuitOperation<F, G> for AttachedPolynomialAdvice<'circuit, F> {
+    impl<'closure, F: PrimeField, G: Gate<F>> CircuitOperation<F, G> for AttachedPolynomialAdvice<'closure, F> {
         fn execute(&self, witness: &mut CSWtns<F, G>) {
             let input = witness.get_vars(&self.input);
 
@@ -130,7 +131,6 @@ pub mod circuit_operations {
         }
     }
 }
-
 
 pub struct Build;
 pub struct Finalized;
@@ -144,18 +144,18 @@ mod private {
     impl CircuitState for Finalized {}
 }
 
-pub struct Circuit<'circuit, F: PrimeField, T: Gate<F> + From<PolyOp<'circuit, F>>, S: private::CircuitState> {
-    pub cs: CSWtns<F, T>,
-    pub ops: Vec<Vec<Box<dyn CircuitOperation<F, T> + 'circuit>>>,
-    pub max_degree: usize,
-    pub round_counter : usize,
+pub struct Circuit<'circuit, F: PrimeField, G: Gate<F> + From<PolyOp<'circuit, F>>, S: private::CircuitState> {
+    pub cs: CSWtns<F, G>,
+    ops: Vec<Vec<Box<dyn CircuitOperation<F, G> + 'circuit>>>,
+    max_degree: usize,
+    round_counter : usize,
     _state_marker: PhantomData<S>,
 }
 
-impl<'a, F, T> Circuit<'a, F, T, Build>
+impl<'circuit, F, G> Circuit<'circuit, F, G, Build>
 where
     F: PrimeField,
-    T: Gate<F> + From<PolyOp<'a, F>>,
+    G: Gate<F> + From<PolyOp<'circuit, F>>,
 {
     pub fn new(max_degree: usize, num_rounds: usize) -> Self {
         let cs = ConstraintSystem::new(num_rounds, max_degree);
@@ -167,16 +167,16 @@ where
                 _state_marker: PhantomData,
         };
 
-        let adv = Advice::new(0, 0, 1, |_, _| vec![F::ONE]);
-        let tmp = prep.advice_pub(0, adv, vec![], vec![]);
+        let load_one = Advice::new(0, 0, 1, |_, _| vec![F::ONE]);
+        let one = prep.advice_pub(0, load_one, vec![], vec![])[0];
 
-        assert!(tmp[0] == prep.one(),
+        assert!(one == prep.one(),
             "One has allocated incorrectly. This should never fail. Abort mission.");
 
         prep
     }
 
-    pub fn advice_internal(&mut self, visibility: Visibility, round: usize, advice: Advice<'a, F>, input: Vec<Variable>, aux: Vec<&'a ExternalValue<F>>) -> Vec<Variable> {
+    fn advice_internal(&mut self, visibility: Visibility, round: usize, advice: Advice<'circuit, F>, input: Vec<Variable>, aux: Vec<&'circuit ExternalValue<F>>) -> Vec<Variable> {
         assert!(round < self.ops.len(), "The round is too large.");
 
         let op_index = self.ops[round].len();
@@ -195,15 +195,15 @@ where
         output
     }
 
-    pub fn advice(&mut self, round: usize, advice: Advice<'a, F>, input: Vec<Variable>, aux: Vec<&'a ExternalValue<F>>) -> Vec<Variable> {
+    pub fn advice(&mut self, round: usize, advice: Advice<'circuit, F>, input: Vec<Variable>, aux: Vec<&'circuit ExternalValue<F>>) -> Vec<Variable> {
         self.advice_internal(Visibility::Private, round, advice, input, aux)
     }
 
-    pub fn advice_pub(&mut self, round: usize, advice: Advice<'a, F>, input: Vec<Variable>, aux: Vec<&'a ExternalValue<F>>) -> Vec<Variable> {
+    pub fn advice_pub(&mut self, round: usize, advice: Advice<'circuit, F>, input: Vec<Variable>, aux: Vec<&'circuit ExternalValue<F>>) -> Vec<Variable> {
         self.advice_internal(Visibility::Public, round, advice, input, aux)
     }
 
-    fn apply_internal(&mut self, visibility: Visibility, round : usize, polyop: PolyOp<'a, F>, input: Vec<Variable>) -> Vec<Variable> {
+    fn apply_internal(&mut self, visibility: Visibility, round : usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>) -> Vec<Variable> {
         assert!(round < self.ops.len(), "The round is too large.");
 
         let op_index = self.ops[round].len();
@@ -229,28 +229,28 @@ where
         output
     }
 
-    pub fn apply(&mut self, round: usize, polyop: PolyOp<'a, F>, input: Vec<Variable>) -> Vec<Variable> {
+    pub fn apply(&mut self, round: usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>) -> Vec<Variable> {
         self.apply_internal(Visibility::Private, round, polyop, input)
     }
 
-    pub fn apply_pub(&mut self, round : usize, polyop: PolyOp<'a, F>, input: Vec<Variable>) -> Vec<Variable> {
+    pub fn apply_pub(&mut self, round : usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>) -> Vec<Variable> {
         self.apply_internal(Visibility::Public, round, polyop, input)
     }
 
     // TODO: pass input by value since we clone it down the stack either way
-    pub fn constrain(&mut self, input: &[Variable], gate: T) {
+    pub fn constrain(&mut self, input: &[Variable], gate: G) {
         assert!(gate.d() > 0, "Trying to constrain with gate of degree 0.");
 
         let kind = if gate.d() == 1 { CommitKind::Zero } else { CommitKind::Group };
         self.cs.cs.constrain(kind, input, gate);
     }
 
-    pub fn load_pi(&'a mut self, round: usize, pi: &'a ExternalValue<F>) -> Variable {
+    pub fn load_pi(&'circuit mut self, round: usize, pi: &'circuit ExternalValue<F>) -> Variable {
         let adv = Advice::new(0, 1, 1, move |_, ext| vec![ext[0]]);
         self.advice_pub(round, adv, vec![], vec![&pi])[0]
     }
 
-    pub fn finalize(self) -> Circuit<'a, F, T, Finalized> {
+    pub fn finalize(self) -> Circuit<'circuit, F, G, Finalized> {
         Circuit {
             cs: self.cs,
             ops: self.ops,
@@ -265,17 +265,17 @@ where
     }
 }
 
-impl<'a, F, T> Circuit<'a, F, T, Finalized>
+impl<'circuit, F, G> Circuit<'circuit, F, G, Finalized>
 where
     F: PrimeField,
-    T: Gate<F> + From<PolyOp<'a, F>>,
+    G: Gate<F> + From<PolyOp<'circuit, F>>,
 {
     /// Executes the circuit up from the current program counter to round k.
     pub fn execute(&mut self, round: usize) {
         assert!(self.round_counter <= round, "Execution is already at round {}, tried to execute up to round {}", self.round_counter, round);
 
         while self.round_counter <= round {
-            for op in self.ops[self.round_counter].iter() {
+            for op in &self.ops[self.round_counter] {
                 op.execute(&mut self.cs);
             }
             self.round_counter += 1;

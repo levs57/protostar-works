@@ -3,11 +3,10 @@
 // This is a bit similar to protogalaxy; main reason why we are doing it is to skip a commitment
 // to an additional round.
 
-use std::{iter::{repeat_with, once}, mem::MaybeUninit, fmt::Display, fmt::Debug};
-use crate::gadgets::range::lagrange_choice_batched;
+use std::{iter::{once, zip}, fmt::Debug};
 
 use super::field_precomp::FieldUtils;
-use itertools::{Itertools};
+use itertools::Itertools;
 
 /// A utility function that guarantees that chunks will always have the length divisble by align_by.
 /// Useful if you'd like to execute some operations that involve more than a single element (and do not want to transmute).
@@ -19,8 +18,8 @@ pub fn parallelize_with_alignment<T: Send, F: Fn(&mut [T], &mut [T], usize) + Se
     let total_iters = v.len()/align_v;
     assert!(total_iters == w.len()/align_w);
     let num_threads = rayon_core::current_num_threads();
-    let base_chunk_size = (total_iters / num_threads);
-    let cutoff_chunk_id = (total_iters % num_threads);
+    let base_chunk_size = total_iters / num_threads;
+    let cutoff_chunk_id = total_iters % num_threads;
     let split_pos = cutoff_chunk_id * (base_chunk_size + 1);
     let (v_hi, v_lo) = v.split_at_mut(split_pos*align_v);
     let (w_hi, w_lo) = w.split_at_mut(split_pos*align_w);
@@ -73,9 +72,10 @@ fn compute_binomial_coefficients(up_to: usize) -> Vec<Vec<u64>> {
 /// Assumes that binom is a list of binomial coefficients of length 1 larger than vals
 /// (d-th index in the pascal triangle)
 fn extend<F:FieldUtils> (vals: &[F], binom: &[u64]) -> F {
-    assert!(vals.len()+1 == binom.len());
-    let mut ret = vals.iter().zip(binom.iter())
-        .map(|(v,c)|v.scale(*c))
+    assert!(vals.len() + 1 == binom.len());
+
+    let ret = vals.iter().zip(binom.iter())
+        .map(|(v, c)| v.scale(*c))
         .enumerate()
         .fold(F::ZERO, |acc, (i, upd)| {
             if i%2==0 {
@@ -84,8 +84,8 @@ fn extend<F:FieldUtils> (vals: &[F], binom: &[u64]) -> F {
                 acc - upd
             }
         });
-    if vals.len()%2==0 {ret = -ret}
-    ret
+
+    if vals.len() % 2 == 0 { -ret } else { ret }
 }
 
 #[derive(Clone)]
@@ -94,15 +94,9 @@ pub struct EvalLayout {
     pub amount : usize,
 }
 
-impl Display for EvalLayout{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(d:{})*{}", self.deg, self.amount)
-    }
-}
-
 impl Debug for EvalLayout{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(d:{})*{}", self.deg, self.amount)
+        write!(f, "(d: {}) * {}", self.deg, self.amount)
     }
 }
 
@@ -134,16 +128,8 @@ impl SanitizeLayout for Vec<EvalLayout> {
     }
 }
 
-fn ev_poly<F:FieldUtils>(p: &[F], x: F) -> F {
-    lagrange_choice_batched(x, p.len() as u64)
-        .into_iter()
-        .zip_eq(p.iter())
-        .fold(F::ZERO,|acc, (a, b)|acc+a*b)
-}
-
-
 /// Computes the layout of all phases of merging from the first phase.
-fn compute_layouts(layout: Vec<EvalLayout>, num_vars: usize)->Vec<(Vec<EvalLayout>)>{
+fn compute_layouts(layout: Vec<EvalLayout>, num_vars: usize)->Vec<Vec<EvalLayout>>{
     let mut layouts = vec![];
     let l = layout.len();
     layouts.push(layout);
@@ -151,7 +137,7 @@ fn compute_layouts(layout: Vec<EvalLayout>, num_vars: usize)->Vec<(Vec<EvalLayou
         let mut tmp = vec![];
         let mut carry = 0;
 
-        for (q, EvalLayout{ deg, amount }) in layouts[i].iter().enumerate() {
+        for EvalLayout{ deg, amount } in &layouts[i] {
             let amount = amount+carry;
             carry = amount%2;
             tmp.push(EvalLayout{ deg: deg+1, amount : amount/2 });
@@ -204,7 +190,7 @@ pub fn combine_cross_terms<F: FieldUtils>(evals: Vec<F>, layout: Vec<EvalLayout>
     let layouts = compute_layouts(layout, num_vars);
     let mut evals = vec![evals];
     for i in 0..num_vars {
-        evals.push(vec![F::ZERO; layouts[i+1].total_size()]); // TODO : replace with MaybeUninit? :)
+        evals.push(vec![F::ZERO; layouts[i+1].total_size()]); // TODO : replace with MaybeUninit? :) upd: please no.
     }
     for i in 0..num_vars {
         let source_layout = &layouts[i];
@@ -297,19 +283,28 @@ pub fn combine_cross_terms<F: FieldUtils>(evals: Vec<F>, layout: Vec<EvalLayout>
 
     evals[num_vars].clone()
 }
+
+#[cfg(test)]
 mod tests {
-    use std::iter::{repeat_with, repeat};
+    use std::iter::repeat_with;
     use ff::Field;
-    use halo2::{halo2curves::bn256};
+    use halo2::halo2curves::bn256;
     use itertools::Itertools;
-    use rand::random;
     use rand_core::OsRng;
 
-    use crate::{utils::{cross_terms_combination::{compute_binomial_coefficients, extend, parallelize_with_alignment, compute_layouts, SanitizeLayout, ev_poly}, field_precomp::FieldUtils}, commitment::CkErrTarget, gadgets::range::lagrange_choice_batched};
+
+    use crate::{utils::{cross_terms_combination::{parallelize_with_alignment, compute_binomial_coefficients, extend, compute_layouts, SanitizeLayout}, field_precomp::FieldUtils}, gadgets::range::lagrange_choice_batched};
 
     use super::{combine_cross_terms, EvalLayout, merge};
 
     type Fr = bn256::Fr;
+    
+    fn ev_poly<F: FieldUtils>(p: &[F], x: F) -> F {
+        lagrange_choice_batched(x, p.len() as u64)
+            .into_iter()
+            .zip_eq(p.iter())
+            .fold(F::ZERO,|acc, (a, b)|acc+a*b)
+    }
 
     #[test]
     fn test_parallelize_with_alignment() -> () {
@@ -319,8 +314,8 @@ mod tests {
         let mut arr2 : Vec<_> = (0..13*5).collect();
 
         parallelize_with_alignment(&mut arr1, &mut arr2, |chunk_v, chunk_w, offset|{
-            chunk_v.iter_mut().enumerate().map(|(i,x)|*x-=(i+offset*7)).count();
-            chunk_w.iter_mut().enumerate().map(|(i,x)|*x-=(i+offset*5)).count();
+            chunk_v.iter_mut().enumerate().map(|(i, x)| *x -= (i + offset * 7)).count();
+            chunk_w.iter_mut().enumerate().map(|(i, x)| *x -= (i + offset * 5)).count();
         }, 7, 5);
 
         for v in arr1 {assert!(v==0)}
@@ -445,7 +440,7 @@ mod tests {
 
         let lhs = p_evals.iter().zip(hypercube_evals).fold(Fr::ZERO, |acc, (x,y)| acc+x*y);
 
-        let evals : Vec<_> = p2.into_iter().flatten().chain(p3.into_iter().flatten()).chain(p7.into_iter().flatten()).collect();
+        let evals : Vec<_> = p2.into_iter().chain(p3).chain(p7).flatten().collect();
         let combined = combine_cross_terms(evals, layout, pts);
         let rhs = ev_poly(&combined, challenge);
 

@@ -15,9 +15,7 @@ pub fn nonzero_gadget<'a, F: PrimeField + FieldUtils> (circuit: &mut Circuit<'a,
     }
     
     let prod = prod_run_gadget(circuit, input.to_vec(), round, rate);
-    let adv_invert = Advice::new(1, 0, 1,
-        Rc::new(|arg: &[F], _| vec![arg[0].invert().unwrap()])
-    );
+    let adv_invert = Advice::new(1, 0, 1, |arg: &[F], _| vec![arg[0].invert().unwrap()]);
 
     let prod_inv = circuit.advice(round, adv_invert, vec![prod], vec![])[0];
 

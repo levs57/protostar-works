@@ -114,9 +114,9 @@ pub fn eclin_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
                 3,
                 3,
                 1,
-                Rc::new(|args|{
+                |args| {
                     vec![(args[0]-args[1])*(args[0]-args[2])*(args[1]-args[2])]
-                })
+                }
             ), 
             vec![pt1.x,pt2.x,pt3.x]
         )[0]
@@ -155,9 +155,9 @@ pub fn ectangent_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
                 1,
                 3,
                 1,
-                Rc::new(move |args|{
+                move |args| {
                     vec![args[0]-args[1]]
-                })
+                }
             ), 
             vec![pt1.x,pt2.x]
         )[0]
@@ -180,11 +180,11 @@ pub fn ecadd_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
             4,
             0,
             2,
-            Rc::new(move |args, _|{
+            move |args, _| {
                 let (x,y,z) = add_proj::<F,C>((args[0], args[1]), (args[2], args[3]));
                 let zinv = z.invert().unwrap();
                 vec![x*zinv, y*zinv]
-            })
+            }
         ),
         vec![pt1.x, pt1.y, pt2.x, pt2.y],
         vec![]
@@ -210,11 +210,11 @@ pub fn ecdouble_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
             4,
             0,
             2,
-            Rc::new(move |args, _|{
+            move |args, _| {
                 let (x,y,z) = double_proj::<F,C>((args[0], args[1]));
                 let zinv = z.invert().unwrap();
                 vec![x*zinv, y*zinv]
-            })
+            }
         ),
         vec![pt.x, pt.y],
         vec![]
@@ -273,7 +273,7 @@ pub fn escalarmul_gadget_9<'a, F: PrimeField + FieldUtils, C: CurveExt<Base=F>>(
         2*num_limbs,
         0,
         8*(num_limbs-1),
-        Rc::new(move |args, _|{
+        move |args, _| {
             let mut pts = vec![];
             for i in 0..num_limbs {
                 pts.push(C::new_jacobian(args[2*i], args[2*i+1], F::ONE).unwrap());
@@ -372,8 +372,7 @@ pub fn escalarmul_gadget_9<'a, F: PrimeField + FieldUtils, C: CurveExt<Base=F>>(
             }
 
             ret // layout: 2(nl-1) accumulators, 2(nl-1) x3, 2(nl-1) x9, 2*(nl-1) scalefactors
-        })
-    );
+    });
 
     let advices = circuit.advice(
         round,

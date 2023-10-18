@@ -34,8 +34,8 @@ mod tests {
     
         let mut circuit = Circuit::<F, Gatebb<F>, Build>::new(2, 1);
     
-        let sq = PolyOp::new(2, 1, 1, Rc::new(|x|vec!(x[0]*x[0])));
-        let input = circuit.advice_pub(0, Advice::new(0, 1, 1, Rc::new(|_, iext|vec![iext[0]])), vec![], vec![&public_input_source])[0];
+        let sq = PolyOp::new(2, 1, 1, |x| vec!(x[0]*x[0]));
+        let input = circuit.advice_pub(0, Advice::new(0, 1, 1, |_, iext| vec![iext[0]]), vec![], vec![&public_input_source])[0];
         let sq1 = circuit.apply(0, sq.clone(), vec![input]);
         let _ = circuit.apply_pub(0, sq.clone(), sq1);
     
@@ -59,7 +59,7 @@ mod tests {
         
         let one = circuit.one();
     
-        let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));
+        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);
         
     
         let mut pi = vec![];
@@ -71,11 +71,11 @@ mod tests {
     
         let challenge = circuit.advice_pub(1, read_pi_advice.clone(), vec![], vec![&challenge_ext])[0];
     
-        let division_advice = Advice::new(2, 0, 1, Rc::new(|ivar : &[F], _| {
+        let division_advice = Advice::new(2, 0, 1, |ivar : &[F], _| {
             let ch = ivar[0];
             let x = ivar[1];
             vec![(x-ch).invert().unwrap()]
-        }));
+        });
     
         let mut fractions = vec![];
         for k in 0..5 {
@@ -119,7 +119,7 @@ mod tests {
         let cfg = Poseidon::new();
         let pi_ext = ExternalValue::<F>::new();
         let mut circuit = Circuit::new(25, 1);
-        let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
+        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
         let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
         let ret = poseidon_gadget(&mut circuit, &cfg, 1, 0, vec![pi]);
     
@@ -138,7 +138,7 @@ mod tests {
         let cfg = Poseidon::new();
         let pi_ext = ExternalValue::<F>::new();
         let mut circuit = Circuit::new(25, 1);
-        let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
+        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
         let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
         let ret = poseidon_gadget(&mut circuit, &cfg, 2, 0, vec![pi]);
     
@@ -157,7 +157,7 @@ mod tests {
         let cfg = Poseidon::new();
         let pi_ext = ExternalValue::<F>::new();
         let mut circuit = Circuit::new(25, 1);
-        let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
+        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
         let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
         let ret = poseidon_gadget_mixstrat(&mut circuit, &cfg, 0, vec![pi]);
 
@@ -178,7 +178,7 @@ mod tests {
     fn test_bit_decomposition(){
         let pi_ext = ExternalValue::<F>::new();
         let mut circuit = Circuit::new(2, 1);
-        let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
+        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
         let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
     
         let bits = bit_decomposition_gadget(&mut circuit, 0, 3, pi);
@@ -258,7 +258,7 @@ mod tests {
 
         let pi_ext = ExternalValue::<F>::new();
         let mut circuit = Circuit::new(9, 1);
-        let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
+        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
         let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
     
         let limbs = limb_decompose_gadget(&mut circuit, 9, 0, 2, pi);
@@ -320,7 +320,7 @@ mod tests {
             }
         }
         let mut circuit = Circuit::new(10, 1);
-        let read_pi_advice = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
+        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
         let mut pi = vec![];
         for i in 0..9 {
             pi.push(vec![]);
@@ -360,7 +360,7 @@ mod tests {
 
         let mut circuit = Circuit::new(10, 1);
 
-        let read_pi = Advice::new(0,1,1, Rc::new(|_, iext: &[F]| vec![iext[0]]));    
+        let read_pi = Advice::new(0,1,1, |_, iext: &[F]| vec![iext[0]]);    
 
         let x = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_a_ext.0])[0];
         let y = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_a_ext.1])[0];

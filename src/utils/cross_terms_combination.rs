@@ -428,14 +428,6 @@ mod tests {
         let challenge = Fr::random(OsRng);
 
         let pts_evals : Vec<_> = pts.iter().map(|l|ev_poly(l, challenge)).collect();
-
-        let p2_evals = p2.iter().map(|p| ev_poly(p, challenge));
-        let p3_evals = p3.iter().map(|p| ev_poly(p, challenge));
-        let p7_evals = p7.iter().map(|p| ev_poly(p, challenge));
-
-
-        let p_evals : Vec<_> = p2_evals.chain(p3_evals).chain(p7_evals).collect();
-
         let hypercube_evals = (0..1<<num_vars).map(|i| { 
             let mut b = i;
             let mut ret = Fr::ONE;
@@ -446,10 +438,17 @@ mod tests {
             ret
         });
 
+        let p2_evals = p2.iter().map(|p| ev_poly(p, challenge));
+        let p3_evals = p3.iter().map(|p| ev_poly(p, challenge));
+        let p7_evals = p7.iter().map(|p| ev_poly(p, challenge));
+        let p_evals : Vec<_> = p2_evals.chain(p3_evals).chain(p7_evals).collect();
+
         let lhs = p_evals.iter().zip(hypercube_evals).fold(Fr::ZERO, |acc, (x,y)| acc+x*y);
+
         let evals : Vec<_> = p2.into_iter().flatten().chain(p3.into_iter().flatten()).chain(p7.into_iter().flatten()).collect();
         let combined = combine_cross_terms(evals, layout, pts);
         let rhs = ev_poly(&combined, challenge);
+
         assert_eq!(lhs, rhs);
     }
     }

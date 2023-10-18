@@ -3,7 +3,7 @@ use std::{rc::Rc, iter::repeat_with};
 use criterion::{Criterion, criterion_main, criterion_group, black_box};
 use ff::Field;
 use group::{Group, Curve};
-use halo2curves::{bn256, grumpkin, CurveExt};
+use halo2::halo2curves::{bn256, grumpkin, CurveExt};
 use protostar_works::{circuit::{ExternalValue, Circuit, Advice, Build}, gate::{Gatebb, Gate}, gadgets::{ecmul::{EcAffinePoint, escalarmul_gadget_9}, nonzero_check::nonzero_gadget}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit};
 use rand_core::OsRng;
 

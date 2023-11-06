@@ -188,17 +188,34 @@ pub fn combine_cross_terms<F: FieldUtils>(evals: Vec<F>, layout: Vec<EvalLayout>
     assert!(num_polys > 1<<(num_vars-1), "Too many dimensions.");
     let binoms = compute_binomial_coefficients(30);
     let layouts = compute_layouts(layout, num_vars);
-    let mut evals = vec![evals];
-    for i in 0..num_vars {
-        evals.push(vec![F::ZERO; layouts[i+1].total_size()]); // TODO : replace with MaybeUninit? :) upd: please no.
+
+    struct Evals<F> {
+        data: [Vec<F>; 2],
+        current: usize,
     }
+    let mut data = Evals {
+        data: [evals, vec![F::ZERO; layouts[1].total_size()]],
+        current: 0,
+    };
+
+    impl<F> Evals<F> {
+        fn get_st_pair(&mut self, i: usize) -> (&mut [F], &mut [F]) {
+            let ([a], [b]) = self.data.split_at_mut(1) else { unreachable!() };
+            let res;
+            if self.current == 0 {
+                res = (a.as_mut_slice(), b.as_mut_slice());
+            } else {
+                res = (b.as_mut_slice(), a.as_mut_slice());
+            }
+            self.current = (self.current + 1) % 2;
+            return res;
+        }
+    }
+
     for i in 0..num_vars {
         let source_layout = &layouts[i];
         let target_layout = &layouts[i+1];
-        let source_target_pair = &mut evals[i..i+2];
-        let (s,t) = source_target_pair.split_at_mut(1);
-        let mut source_evals_full = s[0].as_mut_slice();
-        let mut target_evals_full = t[0].as_mut_slice();
+        let (mut source_evals_full, mut target_evals_full) = data.get_st_pair(i);
 
         let mut carry_poly : Vec<F> = vec![];
         let mut carry_flag = false;
@@ -281,7 +298,8 @@ pub fn combine_cross_terms<F: FieldUtils>(evals: Vec<F>, layout: Vec<EvalLayout>
         }
     }
 
-    evals[num_vars].clone()
+    data.data[data.current].clone()
+    // evals[num_vars].clone()
 }
 
 #[cfg(test)]

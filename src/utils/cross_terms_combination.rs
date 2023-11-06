@@ -4,6 +4,7 @@
 // to an additional round.
 
 use std::{iter::{once, zip}, fmt::Debug};
+use std::alloc::Layout;
 
 use super::field_precomp::FieldUtils;
 use itertools::Itertools;
@@ -168,6 +169,39 @@ fn merge<F: FieldUtils>(a: &[F], b: &[F], target: &mut [F], zip_with: &[F], bino
 
 }
 
+/// Struct to store last 2 layers of cross terms.
+struct Evals<F: FieldUtils> {
+    layouts_size: Vec<usize>,
+    data: [Vec<F>; 2],
+    current: usize
+}
+
+impl<F: FieldUtils> Evals<F> {
+    fn new(layouts: &Vec<Vec<EvalLayout>>, initial: Vec<F>) -> Self {
+        Evals {
+            data: [initial, vec![]],
+            layouts_size: layouts.iter().map(|l| l.total_size()).collect(),
+            current: 1
+        }
+    }
+
+    fn get_source_target_pair(&mut self, i: usize) -> (&mut [F], &mut [F]) {
+        let next = i + 1;
+        self.data[next % 2] = vec![F::ZERO; self.layouts_size[next]];
+        let ([a], [b]) = self.data.split_at_mut(1) else { unreachable!() };
+        self.current = next % 2;
+        return if next % 2 == 0 {
+            (b.as_mut_slice(), a.as_mut_slice())
+        } else {
+            (a.as_mut_slice(), b.as_mut_slice())
+        }
+    }
+
+    fn result(&mut self) -> Vec<F> {
+        self.data[self.current].clone()
+    }
+}
+
 /// Evals is a list of all the coefficients, in increasing degree order.
 /// Layout is pairs (degree, amount) - what is the amount of polynomials of degree d.
 /// Point is a sequence of challenges, given in evaluation form - i.e. these are actually values of a_i(t) in 0 and 1.
@@ -189,33 +223,12 @@ pub fn combine_cross_terms<F: FieldUtils>(evals: Vec<F>, layout: Vec<EvalLayout>
     let binoms = compute_binomial_coefficients(30);
     let layouts = compute_layouts(layout, num_vars);
 
-    struct Evals<F> {
-        data: [Vec<F>; 2],
-        current: usize,
-    }
-    let mut data = Evals {
-        data: [evals, vec![F::ZERO; layouts[1].total_size()]],
-        current: 0,
-    };
-
-    impl<F> Evals<F> {
-        fn get_st_pair(&mut self, i: usize) -> (&mut [F], &mut [F]) {
-            let ([a], [b]) = self.data.split_at_mut(1) else { unreachable!() };
-            let res;
-            if self.current == 0 {
-                res = (a.as_mut_slice(), b.as_mut_slice());
-            } else {
-                res = (b.as_mut_slice(), a.as_mut_slice());
-            }
-            self.current = (self.current + 1) % 2;
-            return res;
-        }
-    }
+    let mut data = Evals::new(&layouts, evals);
 
     for i in 0..num_vars {
         let source_layout = &layouts[i];
         let target_layout = &layouts[i+1];
-        let (mut source_evals_full, mut target_evals_full) = data.get_st_pair(i);
+        let (mut source_evals_full, mut target_evals_full) = data.get_source_target_pair(i);
 
         let mut carry_poly : Vec<F> = vec![];
         let mut carry_flag = false;
@@ -298,7 +311,7 @@ pub fn combine_cross_terms<F: FieldUtils>(evals: Vec<F>, layout: Vec<EvalLayout>
         }
     }
 
-    data.data[data.current].clone()
+    data.result()
     // evals[num_vars].clone()
 }
 

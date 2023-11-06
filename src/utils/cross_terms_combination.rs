@@ -4,7 +4,6 @@
 // to an additional round.
 
 use std::{iter::{once, zip}, fmt::Debug};
-use std::alloc::Layout;
 
 use super::field_precomp::FieldUtils;
 use itertools::Itertools;

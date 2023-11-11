@@ -2,7 +2,7 @@ use std::rc::Rc;
 use elsa::map::FrozenMap;
 use ff::PrimeField;
 use crate::gate::Gatebb;
-use crate::utils::field_precomp::FieldUtils;
+use crate::utils::field_utils::FieldUtils;
 use gate_macro::make_gate;
 
 #[make_gate]

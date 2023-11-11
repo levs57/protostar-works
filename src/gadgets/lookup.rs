@@ -11,7 +11,7 @@ use ff::{PrimeField, BatchInvert};
 use itertools::Itertools;
 use num_bigint::BigUint;
 
-use crate::{constraint_system::Variable, utils::field_precomp::FieldUtils,
+use crate::{constraint_system::Variable, utils::field_utils::FieldUtils,
     circuit::{Circuit, ExternalValue, Advice},
     gate::Gatebb,
     gadgets::{lc::{sum_gadget, inner_prod, sum_arr}, input::input, arith::eq_gadget}};

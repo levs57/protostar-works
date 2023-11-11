@@ -10,7 +10,7 @@ use ff::{PrimeField, BatchInvert};
 use halo2::halo2curves::CurveExt;
 use crate::circuit::{PolyOp, Advice};
 use crate::{circuit::Circuit, constraint_system::Variable, gate::Gatebb};
-use crate::utils::field_precomp::FieldUtils;
+use crate::utils::field_utils::FieldUtils;
 
 use super::range::{limb_decompose_gadget, choice_gadget};
 

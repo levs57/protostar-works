@@ -1,6 +1,6 @@
 use std::{rc::Rc, cmp::max};
 use ff::PrimeField;
-use crate::{utils::field_precomp::FieldUtils, circuit::{Circuit, Advice}, gate::Gatebb, constraint_system::Variable};
+use crate::{utils::field_utils::FieldUtils, circuit::{Circuit, Advice}, gate::Gatebb, constraint_system::Variable};
 use super::running_prod::prod_run_gadget;
 use crate::gatelib::nonzero_check;
 

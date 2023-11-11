@@ -4,7 +4,7 @@ use ff::{PrimeField, Field};
 use halo2::halo2curves::{bn256, serde::SerdeObject};
 use num_traits::{pow, abs};
 
-use crate::utils::field_precomp::FieldUtils;
+use crate::utils::field_utils::FieldUtils;
 
 type F = bn256::Fr;
 

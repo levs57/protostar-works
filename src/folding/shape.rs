@@ -5,7 +5,7 @@ use std::iter::repeat;
 use ff::PrimeField;
 use halo2::halo2curves::{CurveExt, CurveAffine, bn256};
 use itertools::Itertools;
-use crate::utils::field_precomp::FieldUtils;
+use crate::utils::field_utils::FieldUtils;
 
 /// Encode value as field elements.
 pub trait FEncoding <F: PrimeField> {

@@ -34,7 +34,7 @@ mod tests {
     use halo2::halo2curves::{bn256, grumpkin, CurveAffine, CurveExt};
     use rand_core::OsRng;
     use crate::utils::poly_utils::{check_poly, find_degree};
-    use crate::utils::field_precomp::FieldUtils;
+    use crate::utils::field_utils::FieldUtils;
     
     type F = bn256::Fr;
     type C = grumpkin::G1;

@@ -4,7 +4,7 @@ use std::rc::Rc;
 use ff::PrimeField;
 
 use crate::utils::poly_utils::check_poly;
-use crate::utils::field_precomp::FieldUtils;
+use crate::utils::field_utils::FieldUtils;
 
 
 #[derive(Clone)]

@@ -3,7 +3,7 @@ use halo2::arithmetic::best_fft;
 use halo2::halo2curves::bn256;
 use num_traits::pow;
 
-use super::{powers_of_omega, half_squares, inv_lagrange_prod};
+use crate::precomputes::{powers_of_omega, half_squares, inv_lagrange_prod};
 
 pub trait FieldUtils where Self : PrimeField{
     /// Returns power of a primitive root of unity of order 2^logorder.

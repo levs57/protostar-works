@@ -1,7 +1,7 @@
 // Nonzero elements checker.
 
 use ff::PrimeField;
-use crate::{utils::field_precomp::FieldUtils, circuit::{Circuit, PolyOp}, gate::Gatebb, constraint_system::Variable};
+use crate::{utils::field_utils::FieldUtils, circuit::{Circuit, PolyOp}, gate::Gatebb, constraint_system::Variable};
 
 
 /// Outputs the product of an array in a single polynomial.

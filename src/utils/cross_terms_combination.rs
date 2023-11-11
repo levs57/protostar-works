@@ -3,9 +3,9 @@
 // This is a bit similar to protogalaxy; main reason why we are doing it is to skip a commitment
 // to an additional round.
 
-use std::{iter::{once, zip}, fmt::Debug};
+use std::{iter::once, fmt::Debug};
 
-use super::field_precomp::FieldUtils;
+use super::field_utils::FieldUtils;
 use itertools::Itertools;
 
 /// A utility function that guarantees that chunks will always have the length divisble by align_by.
@@ -323,7 +323,7 @@ mod tests {
     use rand_core::OsRng;
 
 
-    use crate::{utils::{cross_terms_combination::{parallelize_with_alignment, compute_binomial_coefficients, extend, compute_layouts, SanitizeLayout}, field_precomp::FieldUtils}, gadgets::range::lagrange_choice_batched};
+    use crate::{utils::{cross_terms_combination::{parallelize_with_alignment, compute_binomial_coefficients, extend, compute_layouts, SanitizeLayout}, field_utils::FieldUtils}, gadgets::range::lagrange_choice_batched};
 
     use super::{combine_cross_terms, EvalLayout, merge};
 

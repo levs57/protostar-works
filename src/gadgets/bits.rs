@@ -5,7 +5,7 @@ use std::{rc::Rc, iter::repeat};
 use ff::PrimeField;
 
 use crate::{circuit::{Circuit, Advice}, gate::Gatebb, constraint_system::Variable};
-use crate::utils::field_precomp::FieldUtils;
+use crate::utils::field_utils::FieldUtils;
 
 pub fn bitcheck<F: PrimeField>(arg: &[F]) -> Vec<F> {
     let x = arg[0];

@@ -1,7 +1,7 @@
 use std::{rc::Rc, iter::repeat};
 
 use ff::PrimeField;
-use crate::{utils::field_precomp::FieldUtils, gate::Gatebb, circuit::{Circuit, Advice, PolyOp}, constraint_system::Variable};
+use crate::{utils::field_utils::FieldUtils, gate::Gatebb, circuit::{Circuit, Advice, PolyOp}, constraint_system::Variable};
 use num_bigint::{self, BigUint};
 
 #[derive(Clone, Copy)]

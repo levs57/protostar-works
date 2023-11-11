@@ -6,7 +6,7 @@ use crate::{circuit::{Advice}};
 use halo2::halo2curves::bn256;
 use crate::{circuit::{Circuit, PolyOp}, constraint_system::Variable, gate::Gatebb};
 use num_traits::pow;
-use crate::utils::field_precomp::FieldUtils;
+use crate::utils::field_utils::FieldUtils;
 use super::poseidon_constants;
 
 

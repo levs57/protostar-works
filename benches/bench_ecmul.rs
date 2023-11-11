@@ -170,11 +170,11 @@ pub fn ecmul_msm(c: &mut Criterion) {
     instance.valid_witness();
     println!("Total circuit size: private: {} public: {}", instance.cs.wtns[0].privs.len(), instance.cs.wtns[0].pubs.len());
 
-    let ck: Vec<CkRound<_>> = instance.cs.witness_spec().round_specs.iter().map(|round_spec| {
-        let rck: Vec<_> = repeat_with(|| G::random(OsRng)).take(round_spec.1).collect();
-
-        CkRound(rck)
-    }).collect();
+    let mut ck = Vec::with_capacity(instance.cs.wtns.len());
+    for rw in &instance.cs.wtns {
+        let rck: Vec<G> = rw.privs.iter().map(|_| G::random(OsRng)).collect();
+        ck.push(CkRound(rck));
+    }
 
     c.bench_function("ecmul msm", |b| b.iter(|| instance.cs.commit(&ck)));
 }

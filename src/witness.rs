@@ -4,12 +4,21 @@ use std::marker::PhantomData;
 use ff::PrimeField;
 use halo2::halo2curves::CurveAffine;
 
-use crate::{gate::Gate, constraint_system::{ConstraintSystem, Variable, CS, Visibility, WitnessSpec}, commitment::{CommitmentKey, CkWtns, CtRound, ErrGroup, CkRelaxed}, circuit::ExternalValue};
+use crate::{gate::Gate, constraint_system::{ConstraintSystem, Variable, CS, Visibility, WitnessSpec, RoundWitnessSpec}, commitment::{CommitmentKey, CkWtns, CtRound, ErrGroup, CkRelaxed}, circuit::ExternalValue};
 
 #[derive(Clone)]
 pub struct RoundWtns<F: PrimeField> {
     pub pubs: Vec<Option<F>>,
     pub privs: Vec<Option<F>>,
+}
+
+impl<F: PrimeField> RoundWtns<F> {
+    pub fn with_spec(spec: RoundWitnessSpec) -> Self {
+        let pubs = vec![None; spec.0];
+        let privs = vec![None; spec.1];
+
+        RoundWtns { pubs, privs }
+    }
 }
 
 /// Trait which outputs full commitment (i.e. verifier view of an instance) from a fully populated commitment system.
@@ -58,7 +67,7 @@ impl<'c, F:PrimeField, G: Gate<'c, F>> CSWtns<'c, F, G>{
         *w = Some(value);
     }
 
-    // TODO: probably remove getvar & setvar, think of an api to get circuit's output variables (see this method references)
+    // TODO: think of an api to get circuit's output variables (see this method's references)
     pub fn getvar(&self, var: Variable) -> F {
         let w = match var {
             Variable { visibility: Visibility::Public, round: r, index: i } => self.wtns[r].pubs[i],

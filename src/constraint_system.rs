@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use ff::PrimeField;
 
-use crate::{gate::Gate, circuit::ExternalValue};
+use crate::{gate::Gate, circuit::ExternalValue, witness::CSWtns};
 
 /// Constraint commitment kind.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -40,6 +40,16 @@ pub struct Constraint<'c, F: PrimeField, G: Gate<'c, F>>{
     _marker: PhantomData<&'c F>,
 }
 
+// impl<'c, F: PrimeField, G: Gate<'c, F>> Constraint<'c, F, G> {
+//     pub fn is_satisfied(&self, wtns: &CSWtns<'c, F, G>) -> bool {
+//         let input_values: Vec<_> = self.inputs.iter().map(|&x| wtns.getvar(x)).collect();
+//         let result = self.gate.exec(&input_values);
+
+//         result.iter().all(|&output| output == F::ZERO)
+//     }
+// }
+
+
 /// Constraints are grouped by their CommitKind.
 /// 
 /// Currently this struct has some additional information. This will probably
@@ -74,7 +84,7 @@ impl<'c, F: PrimeField, G: Gate<'c, F>> ConstraintGroup<'c, F, G> {
 /// Round witness shape specification: the amount of public and private variables respectively
 /// 
 /// Any witness used for this constraint system has to at least comply with the spec.
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct RoundWitnessSpec(pub usize, pub usize);
 
 /// Witness shape specification: a collection of specifications for each round
@@ -94,7 +104,7 @@ pub trait CS<'c, F: PrimeField, G: Gate<'c, F>> {
         self.num_rounds() - 1
     }
 
-    fn new_round(&mut self);
+    fn new_round(&mut self) -> usize;
 
     fn witness_spec(&self) -> &WitnessSpec;
 
@@ -150,8 +160,10 @@ impl<'c, F: PrimeField, G: Gate<'c, F>> CS<'c, F, G> for ConstraintSystem<'c, F,
         self.spec.round_specs.len()
     }
 
-    fn new_round(&mut self) {
-        self.spec.round_specs.push(RoundWitnessSpec::default())
+    fn new_round(&mut self) -> usize {
+        self.spec.round_specs.push(RoundWitnessSpec::default());
+
+        self.last_round()
     }
 
     fn witness_spec(&self) -> &WitnessSpec {

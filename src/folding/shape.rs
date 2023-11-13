@@ -3,82 +3,31 @@
 use std::iter::repeat;
 
 use ff::PrimeField;
-use halo2curves::CurveExt;
+use halo2::halo2curves::{CurveExt, CurveAffine};
+use itertools::Itertools;
+use crate::utils::field_precomp::FieldUtils;
 
-use crate::{utils::field_precomp::FieldUtils, commitment::CtS};
-
-
-pub trait Shape : Clone + Eq {}
-pub trait IntoShape {
-    type TargetShape : Shape;
-
-    fn shape_of(&self) -> Self::TargetShape;
-}
-pub trait Relaxed : IntoShape {}
-
-pub trait Strict {
-    type RelaxationTarget : Relaxed;
-
-    fn relax(&self) -> Self::RelaxationTarget;
-}
-pub trait Strategy : Strict {
-    fn shape_of(&self) -> <<T as Strict>::RelaxationTarget as IntoShape>::TargetShape;
+/// The shape of a circuit.
+pub struct Shape {
+    num_pubs: Vec<usize>,
+    num_constraints: usize,
+    max_degree: usize,
 }
 
-
-impl<T:Strict+DefaultStrategy> IntoShape for T {
-    type TargetShape = <<T as Strict>::RelaxationTarget as IntoShape>::TargetShape;
-
-    fn shape_of(&self) -> Self::TargetShape {
-        self.relax().shape_of()
-    }
+//pub struct CommittedInstance<F: PrimeField + FieldUtils, C: CurveAffine<ScalarExt=F>>
+pub struct ProtostarCommitment<F: PrimeField + FieldUtils, C: CurveAffine<ScalarExt=F>> {
+    pubs: Vec<Vec<F>>,
+    round_commitments: Vec<C>,
+    protostar_challenges: Vec<F>,
+    max_degree: usize,
 }
 
-pub trait VerifierView {
-    type ToShape : Shape;
-    type ToRelaxed : RelaxedVerifierView;
-
-    fn shape_of(&self) -> Self::ToShape;
-
-    fn is_of_shape(&self, shape : &Self::ToShape) -> bool {
-        self.shape_of() == *shape
+impl<F: PrimeField + FieldUtils, C: CurveAffine<ScalarExt=F>> ProtostarCommitment<F,C> {
+    pub fn of_shape(&self, shape: Shape) {
+        self.pubs.iter().zip_eq(shape.num_pubs.iter()).map(|(x,y)|assert_eq!(x.len(), *y)).count();
     }
 
-    fn relax(self) -> Self::ToRelaxed;
-}
+    pub fn fold(&self, other: Self) {
 
-pub trait RelaxedVerifierView {
-    type ToShape: Shape;
-    
-    fn shape_of(&self) -> Self::ToShape;
-
-    fn is_of_shape(&self, shape : &Self::ToShape) -> bool {
-        self.shape_of() == *shape
     }
-}
-
-impl<T: RelaxedVerifierView> VerifierView for T {
-    type ToShape = <Self as RelaxedVerifierView>::ToShape;
-    type ToRelaxed = Self;
-
-    fn shape_of(&self) -> Self::ToShape {
-        self.shape_of()
-    }
-
-    fn is_of_shape(&self, shape : &Self::ToShape) -> bool {
-        self.is_of_shape(shape)
-    }
-
-    fn relax(self) -> Self::ToRelaxed {
-        self
-    }
-}
-
-pub trait ProverView {
-    type ToVerifierView: VerifierView;
-    type ToRelaxed: RelaxedProverView;
-}
-
-pub trait RelaxedProverView {
-    
 }

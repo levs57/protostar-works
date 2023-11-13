@@ -2,7 +2,33 @@
 mod tests {
     use std::{rc::Rc, iter::repeat};
 
-    use crate::{gate::Gatebb, constraint_system::{Variable, Visibility}, circuit::{Circuit, ExternalValue, PolyOp, Advice, Build}, gadgets::{poseidon::{poseidon_gadget, Poseidon, poseidon_gadget_mixstrat}, bits::bit_decomposition_gadget, ecmul::{add_proj, double_proj, EcAffinePoint, escalarmul_gadget_9}, range::{rangecheck, limb_decompose_gadget, lagrange_choice, lagrange_choice_batched, VarSmall, choice_gadget}, nonzero_check::nonzero_gadget}};
+    use crate::{
+        gate::Gatebb,
+        constraint_system::{Variable, Visibility},
+        circuit::{Circuit, ExternalValue, PolyOp, Advice, Build},
+        gadgets::{
+            poseidon::{Poseidon,
+                poseidon_gadget_mixstrat,
+                poseidon_gadget_internal
+            },
+            bits::bit_decomposition_gadget,
+            ecmul::{
+                add_proj,
+                double_proj,
+                EcAffinePoint,
+                escalarmul_gadget_9
+            },
+            range::{
+                rangecheck,
+                limb_decompose_gadget,
+                lagrange_choice,
+                lagrange_choice_batched,
+                VarSmall,
+                choice_gadget
+            },
+            nonzero_check::nonzero_gadget
+        }
+    };
     use ff::{PrimeField, Field};
     use group::{Group, Curve};
     use halo2::halo2curves::{bn256, grumpkin, CurveAffine, CurveExt};
@@ -121,7 +147,7 @@ mod tests {
         let mut circuit = Circuit::new(25, 1);
         let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
         let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
-        let ret = poseidon_gadget(&mut circuit, &cfg, 1, 0, vec![pi]);
+        let ret = poseidon_gadget_internal(&mut circuit, &cfg, 1, 0, vec![pi]);
     
         let mut circuit = circuit.finalize();
     
@@ -140,7 +166,7 @@ mod tests {
         let mut circuit = Circuit::new(25, 1);
         let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
         let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
-        let ret = poseidon_gadget(&mut circuit, &cfg, 2, 0, vec![pi]);
+        let ret = poseidon_gadget_internal(&mut circuit, &cfg, 2, 0, vec![pi]);
     
         let mut circuit = circuit.finalize();
     

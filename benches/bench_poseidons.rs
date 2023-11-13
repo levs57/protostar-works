@@ -3,7 +3,7 @@ use std::{rc::Rc, iter::repeat_with};
 use criterion::{criterion_group, criterion_main, Criterion};
 use ff::Field;
 use halo2::halo2curves::bn256;
-use protostar_works::{gadgets::poseidon::{Poseidon, poseidon_gadget}, circuit::{ExternalValue, Circuit, Advice, Build}, gate::{Gatebb, Gate}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit};
+use protostar_works::{gadgets::poseidon::{Poseidon, poseidon_gadget_internal}, circuit::{ExternalValue, Circuit, Advice, Build}, gate::{Gatebb, Gate}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit};
 use rand_core::OsRng;
 
 
@@ -53,7 +53,7 @@ pub fn assemble_poseidon_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>,
     let mut acc = circuit.advice_pub(0, load_pi_advice_head, vec![], vec![pi])[0];
 
     for _ in 0..1000 {
-        acc = poseidon_gadget(circuit, cfg, 2, 0, vec![acc]);
+        acc = poseidon_gadget_internal(circuit, cfg, 2, 0, vec![acc]);
     }
 }
 

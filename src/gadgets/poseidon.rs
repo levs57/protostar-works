@@ -413,7 +413,7 @@ pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, 
     )
 }
 
-pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, cfg: &'a Poseidon, k: usize, round: usize, inp: Vec<Variable>) -> Variable {
+pub fn poseidon_gadget_internal<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, cfg: &'a Poseidon, k: usize, round: usize, inp: Vec<Variable>) -> Variable {
     let t = inp.len()+1;
     if inp.is_empty() || inp.len() > cfg.constants.n_rounds_p.len() {
         panic!("Wrong inputs length");
@@ -435,4 +435,27 @@ pub fn poseidon_gadget_mixstrat<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, 
     state = poseidon_partial_rounds_gadget(circuit, cfg, state, round);
     state = poseidon_mixed_strategy_full_rounds_gadget(circuit, cfg, round, state, false);
     state[0]
+}
+
+/// Hashes an array with some rate. Recommended rate is (allegedly) around 10; need to check whether evaluation of
+/// linear matrices becomes too slow (might also explore Neptune strategy, which is very similar to what we are doing).
+pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, cfg: &'a Poseidon, round: usize, rate: usize, inp: &[Variable]) -> Variable {
+    let k = 1;
+    let l = inp.len();
+    assert!(l>0, "Can not hash empty array without padding.");
+    let mut to_hash = vec![];
+    
+    for i in 0..l {
+        to_hash.push(inp[l-i-1]) // revert order so it is more convenient to pop stuff
+    }
+
+    while to_hash.len()>1 {
+        let mut chunk = vec![];
+        while to_hash.len()>0 && chunk.len() < rate {
+            chunk.push(to_hash.pop().unwrap());
+        }
+        to_hash.push(poseidon_gadget_internal(circuit, cfg, k, round, chunk));
+    }
+
+    to_hash[0]
 }

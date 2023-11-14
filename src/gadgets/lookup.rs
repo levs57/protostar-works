@@ -5,13 +5,13 @@
 // 2. Table right now is implemented as priveleged subset of variables. Considering it is the same for all
 // step instances, it is not, actually, getting folded. This should be made a primitive.
 
-use std::iter::repeat_with;
+use std::{iter::repeat_with, rc::Rc};
 
 use ff::{PrimeField, BatchInvert};
 use itertools::Itertools;
 use num_bigint::BigUint;
 
-use crate::{constraint_system::Variable, utils::field_precomp::FieldUtils, circuit::{Build, Circuit, ExternalValue, Advice}, gate::Gatebb};
+use crate::{constraint_system::Variable, utils::field_precomp::FieldUtils, circuit::{Build, Circuit, ExternalValue, Advice}, gate::Gatebb, gadgets::lc::sum_gadget};
 
 /// Outputs a product of vector elements and products skipping a single element.
 pub fn montgomery<F: PrimeField+FieldUtils>(v: &[F]) -> (F, Vec<F>) {
@@ -46,30 +46,91 @@ pub fn montgomery<F: PrimeField+FieldUtils>(v: &[F]) -> (F, Vec<F>) {
 pub fn sum_of_fractions<'a, F:PrimeField+FieldUtils> (args: &[F], k: usize) -> F {
     let (tmp, vals) = args.split_at(2);
     assert_eq!(vals.len(), k);
-    let (a, c) = (tmp[0], tmp[1]);
+    let (res, c) = (tmp[0], tmp[1]);
     let (prod, skips) = montgomery(& vals.iter().map(|t|*t-c).collect_vec());
-    a*prod-skips.iter().fold(F::ZERO, |acc,upd|acc+upd)
+    res*prod-skips.iter().fold(F::ZERO, |acc,upd|acc+upd)
 }
 
 pub fn sum_of_fractions_with_nums<'a, F:PrimeField+FieldUtils> (args: &[F], k: usize) -> F {
     let (tmp1, tmp2) = args.split_at(2);
     assert!(tmp2.len() == 2*k);
     let (vals, nums) = tmp2.split_at(k);
-    let (a, c) = (tmp1[0], tmp1[1]);
+    let (res, c) = (tmp1[0], tmp1[1]);
     let (prod, skips) = montgomery(& vals.iter().map(|t|*t-c).collect_vec());
-    a*prod-skips.iter().zip_eq(nums.iter()).fold(F::ZERO, |acc,(skip, num)|acc + *skip * num)
+    res * prod - skips.iter().zip_eq(nums.iter()).fold(F::ZERO, |acc,(skip, num)|acc + *skip * num)
 }
 
-
-pub fn sum_of_fractions_flat_gadget<'a, F: PrimeField+FieldUtils>(
+pub fn invsum_flat_constrain<'a, F: PrimeField+FieldUtils>(
     circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>,
-    vars: Vec<Variable>,
-    challenge: Variable
-    ) -> Variable {
-        assert!(vars.len()>0);
-        todo!("fgsds");
-        vars[0]        
+    vals: &[Variable],
+    res: Variable,
+    challenge: Variable,
+    ) -> (){
+        assert!(vals.len()>0);
+        let args = [res, challenge].iter().chain(vals.iter()).map(|x|*x).collect_vec();
+        let k = vals.len();
+        let gate = Gatebb::new(vals.len()+1, args.len(), 1, Rc::new(move |args|vec![sum_of_fractions(args, k)]));
+        circuit.constrain(&args, gate);        
     }
+
+pub fn fracsum_flat_constrain<'a, F: PrimeField+FieldUtils>(
+    circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>,
+    vals: &[Variable],
+    nums: &[Variable],
+    res: Variable,
+    challenge: Variable,
+) -> () {
+    assert!(vals.len()==nums.len());
+    let args = [res, challenge].iter().chain(vals.iter()).chain(nums.iter()).map(|x|*x).collect_vec();
+    let k = vals.len();
+    let gate = Gatebb::new(vals.len()+1, args.len(), 1, Rc::new(move |args|vec![sum_of_fractions_with_nums(args, k)]));
+    circuit.constrain(&args, gate);
+}
+
+/// Gadget which returns the sum of inverses of an array, shifted by a challenge.
+/// Assumes that array length is divisible by rate, pad otherwise.
+/// Unsound if one of the inverses is undefined.
+/// Rate - amount of values processed in a batch. Deg = rate+1
+pub fn invsum_gadget<'a, F: PrimeField+FieldUtils>(
+    circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>,
+    vals: &[Variable],
+    challenge: Variable,
+    rate: usize,
+    round: usize,
+    ) -> Variable {
+        assert!(rate > 0);
+        let l = vals.len();
+        assert!(l%rate == 0);
+        let mut vals = vals;
+        let mut chunk;
+        let advice = Advice::new(l+1, 0, l/rate, move |args: &[F], _|{
+            let (args, c) = args.split_at(l);
+            let c = c[0];
+            let mut inv = args.iter().map(|x|*x-c).collect_vec();
+            inv.batch_invert();
+            let mut ret = vec![];
+            let mut inv : &[F] = &inv;
+            let mut chunk;
+            while inv.len() > 0 {
+                (chunk, inv) = inv.split_at(rate);
+                ret.push(chunk.iter().fold(F::ZERO, |acc, upd|{acc+upd}));
+            }
+            ret
+        });
+
+        let mut args = vals.to_vec();
+        args.push(challenge);
+
+        let batches = circuit.advice(round, advice, args, vec![]);
+        for i in 0..l/rate {
+            (chunk, vals) = vals.split_at(rate);
+            invsum_flat_constrain(circuit, chunk, batches[i], challenge);
+        }
+
+    sum_gadget(circuit, &batches, round)        
+
+    }
+
 
 
 /// 

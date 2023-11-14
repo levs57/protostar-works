@@ -1,3 +1,4 @@
+
 // This gadget implements linear combination. At some point it should be deprecated; now we will use it to safely
 // wrap every instance of large linear combination.
 
@@ -17,15 +18,8 @@ fn split_and_ip<F: PrimeField+FieldUtils>(args: &[F]) -> Vec<F> {
     inner_prod(a, b)
 }
 
-fn ip_out<F: PrimeField+FieldUtils>(a: &[F], b: &[F]) -> Vec<F> {
-    assert!(a.len()+1 == b.len());
-    vec![a.iter().zip(b.iter()).fold(F::ZERO, |acc, (x,y)|acc+*x*y) - b[b.len()-1]]
-}
-
-fn split_and_ip_out<F: PrimeField+FieldUtils>(args: &[F]) -> Vec<F> {
-    assert!(args.len()%2 == 1);
-    let (a, b) = args.split_at(args.len()/2);
-    ip_out(a, b)
+fn sum_arr<F: PrimeField+FieldUtils>(args: &[F]) -> Vec<F> {
+    vec![args.iter().fold(F::ZERO, |acc, upd| acc+upd)]
 }
 
 /// Linear combination with constant coefficients. Constrain version.
@@ -48,5 +42,11 @@ pub fn lc<'a, F: PrimeField+FieldUtils>(circuit: &mut Circuit<'a, F, Gatebb<'a, 
     assert_eq!(coeffs.len(), vars.len());
     let l = vars.len();
     let poly = PolyOp::new(1, l, 1, |args|{inner_prod(coeffs, args)}); // NO MOVE HERE!!
+    circuit.apply(round, poly, vars.to_vec())[0]
+}
+
+pub fn sum_gadget<'a, F: PrimeField+FieldUtils>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, vars: &[Variable], round: usize) -> Variable {
+    let l = vars.len();
+    let poly = PolyOp::new(1, l, 1, sum_arr);
     circuit.apply(round, poly, vars.to_vec())[0]
 }

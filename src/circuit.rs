@@ -1,5 +1,5 @@
 use std::{rc::Rc, cell::OnceCell, marker::PhantomData, iter::repeat_with};
-
+use elsa::map::FrozenMap;
 use ff::PrimeField;
 
 use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind, Visibility, CS}, utils::poly_utils::check_poly, circuit::circuit_operations::{AttachedAdvice, AttachedPolynomialAdvice}};
@@ -145,6 +145,7 @@ mod private {
 }
 
 pub struct Circuit<'circuit, F: PrimeField, G: Gate<F> + From<PolyOp<'circuit, F>>, S: private::CircuitState> {
+    gate_registry: FrozenMap<String, Box<G>>,
     pub cs: CSWtns<F, G>,
     ops: Vec<Vec<Box<dyn CircuitOperation<F, G> + 'circuit>>>,
     max_degree: usize,
@@ -160,6 +161,7 @@ where
     pub fn new(max_degree: usize, num_rounds: usize) -> Self {
         let cs = ConstraintSystem::new(num_rounds, max_degree);
         let mut prep = Self {
+                gate_registry: FrozenMap::new(),
                 cs : CSWtns::new(cs),
                 ops: repeat_with(|| Vec::default()).take(num_rounds).collect(),  // this particular Vec::default() is !Clone
                 max_degree,
@@ -239,10 +241,23 @@ where
 
     // TODO: pass input by value since we clone it down the stack either way
     pub fn constrain(&mut self, input: &[Variable], gate: G) {
+        println!("Using legacy unnamed constrains");
+        self._constrain(&input, gate)
+    }
+
+    fn _constrain(&mut self, input: &[Variable], gate: G) {
         assert!(gate.d() > 0, "Trying to constrain with gate of degree 0.");
 
         let kind = if gate.d() == 1 { CommitKind::Zero } else { CommitKind::Group };
         self.cs.cs.constrain(kind, input, gate);
+    }
+
+    pub fn constrain_with(
+        &mut self, input: &[Variable],
+        gate_fetcher: &dyn Fn(&FrozenMap<String, Box<G>>) -> G
+    ) {
+        let gate = gate_fetcher(&self.gate_registry);
+        self.constrain(&input, gate);
     }
 
     pub fn load_pi(&'circuit mut self, round: usize, pi: &'circuit ExternalValue<F>) -> Variable {
@@ -252,6 +267,7 @@ where
 
     pub fn finalize(self) -> Circuit<'circuit, F, G, Finalized> {
         Circuit {
+            gate_registry: self.gate_registry,
             cs: self.cs,
             ops: self.ops,
             max_degree: self.max_degree,

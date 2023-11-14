@@ -2,6 +2,8 @@ use std::{rc::Rc, cmp::max};
 use ff::PrimeField;
 use crate::{utils::field_precomp::FieldUtils, circuit::{Circuit, Advice, Build}, gate::Gatebb, constraint_system::Variable};
 use super::running_prod::prod_run_gadget;
+use crate::gatelib::nonzero_check;
+
 
 /// Checks that the array of variables is nonzero.
 /// Rate = amount of elements processed in a single chunk.
@@ -19,10 +21,9 @@ pub fn nonzero_gadget<'a, F: PrimeField + FieldUtils> (circuit: &mut Circuit<'a,
 
     let prod_inv = circuit.advice(round, adv_invert, vec![prod], vec![])[0];
 
-    circuit.constrain(
+    circuit.constrain_with(
         &vec![prod, prod_inv], 
-        Gatebb::new(2, 2, 1,
-            Rc::new(|args|vec![args[0]*args[1] - F::ONE]))
+        &nonzero_check,
     );
 }
 

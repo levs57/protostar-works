@@ -3,12 +3,14 @@
 // Also adapted structures so they work with my field.
 
 use std::rc::Rc;
-
+use elsa::map::FrozenMap;
 use ff::{Field, PrimeField};
+use gate_macro::make_gate;
 use crate::{gadgets::poseidon_constants, circuit::{Advice, Build}};
 use halo2::halo2curves::bn256;
 use crate::{circuit::{Circuit, PolyOp}, constraint_system::Variable, gate::Gatebb};
 use num_traits::pow;
+use crate::utils::field_precomp::FieldUtils;
 
 
 type F = bn256::Fr;
@@ -159,6 +161,24 @@ pub fn poseidon_partial_rounds_constraint(
     ret
 }
 
+#[make_gate]
+pub fn poseidon_partial_rounds_gate<'c>(n_rounds_p: usize, n_rounds_f: usize, t: usize) -> Gatebb<'c, F> {
+    let (c_str, m_str) = poseidon_constants::constants();
+    let c: Vec<F> = c_str[t - 2].iter().map(|s| {F::from_str_vartime(s).unwrap()}).collect();
+    let m: Vec<Vec<F>> = m_str[t - 2].iter().map(|r| r.iter().map(|s| {F::from_str_vartime(s).unwrap()}).collect()).collect();
+    Gatebb::new(
+        5,
+        2*n_rounds_p+2*t,
+        n_rounds_p+t,
+        Rc::new(move|args: &[F]|{
+            let (tmp, io) = args.split_at(2*n_rounds_p);
+            let (adv_in, adv_out) = tmp.split_at(n_rounds_p);
+            let (inp, out) = io.split_at(t);
+            poseidon_partial_rounds_constraint(inp, out, adv_in, adv_out, &c, &m, n_rounds_f, n_rounds_p, t)
+        })
+    )
+}
+
 /// This will compute intermediate state[0] values and the final state
 pub fn poseidon_partial_rounds_advice(
     input_state: &[F],
@@ -210,19 +230,9 @@ pub fn poseidon_partial_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a
     // repeat intermediate values twice, then append input and output
     let to_constrain : Vec<Variable> = adv.iter().chain(adv.iter()).chain(inp.iter()).chain(out.iter()).map(|x|*x).collect();
 
-    circuit.constrain(
+    circuit.constrain_with(
         &to_constrain,
-        Gatebb::new(
-            5,
-            2*n_rounds_p+2*t,
-            n_rounds_p+t,
-            Rc::new(move|args: &[F]|{
-                let (tmp, io) = args.split_at(2*n_rounds_p);
-                let (adv_in, adv_out) = tmp.split_at(n_rounds_p);
-                let (inp, out) = io.split_at(t);
-                poseidon_partial_rounds_constraint(inp, out, adv_in, adv_out, c, m, n_rounds_f, n_rounds_p, t)
-            })
-        )
+        &poseidon_partial_rounds_gate(n_rounds_p, n_rounds_f, t)
     );
 
     out.to_vec()

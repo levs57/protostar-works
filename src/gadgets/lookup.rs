@@ -47,7 +47,7 @@ pub fn sum_of_fractions<'a, F:PrimeField+FieldUtils> (args: &[F], k: usize) -> F
     let (tmp, vals) = args.split_at(2);
     assert_eq!(vals.len(), k);
     let (a, c) = (tmp[0], tmp[1]);
-    let (prod, skips) = montgomery(vals.iter().map(|t|*t-c));
+    // let (prod, skips) = montgomery(vals.iter().map(|t|*t-c));
     todo!();
 }
 

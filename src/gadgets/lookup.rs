@@ -47,9 +47,19 @@ pub fn sum_of_fractions<'a, F:PrimeField+FieldUtils> (args: &[F], k: usize) -> F
     let (tmp, vals) = args.split_at(2);
     assert_eq!(vals.len(), k);
     let (a, c) = (tmp[0], tmp[1]);
-    let (prod, skips) = montgomery(vals.iter().map(|t|*t-c));
-    todo!();
+    let (prod, skips) = montgomery(& vals.iter().map(|t|*t-c).collect_vec());
+    a*prod-skips.iter().fold(F::ZERO, |acc,upd|acc+upd)
 }
+
+pub fn sum_of_fractions_with_nums<'a, F:PrimeField+FieldUtils> (args: &[F], k: usize) -> F {
+    let (tmp1, tmp2) = args.split_at(2);
+    assert!(tmp2.len() == 2*k);
+    let (vals, nums) = tmp2.split_at(k);
+    let (a, c) = (tmp1[0], tmp1[1]);
+    let (prod, skips) = montgomery(& vals.iter().map(|t|*t-c).collect_vec());
+    a*prod-skips.iter().zip_eq(nums.iter()).fold(F::ZERO, |acc,(skip, num)|acc + *skip * num)
+}
+
 
 pub fn sum_of_fractions_flat_gadget<'a, F: PrimeField+FieldUtils>(
     circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>,
@@ -57,6 +67,7 @@ pub fn sum_of_fractions_flat_gadget<'a, F: PrimeField+FieldUtils>(
     challenge: Variable
     ) -> Variable {
         assert!(vars.len()>0);
+        todo!("fgsds");
         vars[0]        
     }
 

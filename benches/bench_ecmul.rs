@@ -4,7 +4,7 @@ use criterion::{Criterion, criterion_main, criterion_group, black_box};
 use ff::Field;
 use group::{Group, Curve};
 use halo2::halo2curves::{bn256, grumpkin, CurveExt};
-use protostar_works::{circuit::{ExternalValue, Circuit, Advice, Build}, gate::{Gatebb, Gate}, gadgets::{ecmul::{EcAffinePoint, escalarmul_gadget_9}, nonzero_check::nonzero_gadget}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit};
+use protostar_works::{circuit::{ExternalValue, Circuit, Advice, Build}, gate::{Gatebb, Gate}, gadgets::{ecmul::{EcAffinePoint, escalarmul_gadget_9}, nonzero_check::nonzero_gadget, input::input}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit};
 use rand_core::OsRng;
 
 type F = bn256::Fr;
@@ -56,21 +56,17 @@ pub fn assemble_ecmul_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Bu
     let pi_pt_ext = (&pi[4], &pi[5]);
     let pi_sc_ext = &pi[6];
 
-    let read_pi = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
 
-    let x = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_a_ext.0])[0];
-    let y = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_a_ext.1])[0];
+    let x = input(circuit, &pi_a_ext.0, 0);
+    let y = input(circuit, &pi_a_ext.1, 0);
     let a = EcAffinePoint::<F,C>::new(circuit, x, y);
-
-    let x = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_b_ext.0])[0];
-    let y = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_b_ext.1])[0];
+    let x = input(circuit, &pi_b_ext.0, 0);
+    let y = input(circuit, &pi_b_ext.1, 0);
     let b = EcAffinePoint::<F,C>::new(circuit, x, y);
-
-    let x = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_pt_ext.0])[0];
-    let y = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_pt_ext.1])[0];
+    let x = input(circuit, &pi_pt_ext.0, 0);
+    let y = input(circuit, &pi_pt_ext.1, 0);
     let pt = EcAffinePoint::<F,C>::new(circuit, x, y);
-
-    let sc = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_sc_ext])[0];
+    let sc = input(circuit, &pi_sc_ext, 0);
 
     let mut nonzeros = vec![];
 

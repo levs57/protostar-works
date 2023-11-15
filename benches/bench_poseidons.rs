@@ -3,7 +3,7 @@ use std::{rc::Rc, iter::repeat_with};
 use criterion::{criterion_group, criterion_main, Criterion};
 use ff::Field;
 use halo2::halo2curves::bn256;
-use protostar_works::{gadgets::poseidon::{poseidon_gadget_internal}, circuit::{ExternalValue, Circuit, Advice, Build}, gate::{Gatebb, Gate}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit, folding::poseidon::Poseidon};
+use protostar_works::{gadgets::{poseidon::{poseidon_gadget_internal}, input::input}, circuit::{ExternalValue, Circuit, Advice, Build}, gate::{Gatebb, Gate}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit, folding::poseidon::Poseidon};
 use rand_core::OsRng;
 
 
@@ -49,8 +49,7 @@ pub fn evaluate_on_random_linear_combinations(gate: &impl Gate<F>, a: &Vec<F>, b
 }
 
 pub fn assemble_poseidon_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, cfg: &'a Poseidon, pi: &'a ExternalValue<F>) {
-    let load_pi_advice_head = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);
-    let mut acc = circuit.advice_pub(0, load_pi_advice_head, vec![], vec![pi])[0];
+    let mut acc = input(circuit, pi, 0);
 
     for _ in 0..1000 {
         acc = poseidon_gadget_internal(circuit, cfg, 2, 0, vec![acc]);

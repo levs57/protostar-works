@@ -19,11 +19,17 @@ pub struct Shape {
     max_degree: usize,
 }
 
+pub struct CommittedInstance<F: PrimeField, C: CurveAffine<ScalarExt=F>> {
+    pubs: Vec<Vec<F>>,
+    round_commitments: Vec<C>,
+    num_constraints: usize,
+    max_degree: usize,
+}
 
+impl<F: PrimeField + FieldUtils, C: CurveAffine<ScalarExt=F>> CommittedInstance<F, C> {
+}
 
-
-//pub struct CommittedInstance<F: PrimeField + FieldUtils, C: CurveAffine<ScalarExt=F>>
-pub struct ProtostarCommitment<F: PrimeField + FieldUtils, C: CurveAffine<ScalarExt=F>,> {
+pub struct ProtostarCommitment<F: PrimeField, C: CurveAffine<ScalarExt=F>> {
     pubs: Vec<Vec<F>>,
     round_commitments: Vec<C>,
     protostar_challenges: Vec<F>,

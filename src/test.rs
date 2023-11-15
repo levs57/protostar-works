@@ -26,7 +26,7 @@ mod tests {
                 VarSmall,
                 choice_gadget
             },
-            nonzero_check::nonzero_gadget
+            nonzero_check::nonzero_gadget, input::input
         }, folding::poseidon::Poseidon
     };
     use ff::{PrimeField, Field};
@@ -61,7 +61,7 @@ mod tests {
         let mut circuit = Circuit::<F, Gatebb<F>, Build>::new(2, 1);
     
         let sq = PolyOp::new(2, 1, 1, |x| vec!(x[0]*x[0]));
-        let input = circuit.advice_pub(0, Advice::new(0, 1, 1, |_, iext| vec![iext[0]]), vec![], vec![&public_input_source])[0];
+        let input = input(&mut circuit, &public_input_source, 0);
         let sq1 = circuit.apply(0, sq.clone(), vec![input]);
         let _ = circuit.apply_pub(0, sq.clone(), sq1);
     
@@ -91,12 +91,12 @@ mod tests {
         let mut pi = vec![];
         for k in 0..5{
             pi.push(
-                circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext[k]])[0]
+                input(&mut circuit, &pi_ext[k], 0)
             );
         }
     
-        let challenge = circuit.advice_pub(1, read_pi_advice.clone(), vec![], vec![&challenge_ext])[0];
-    
+        let challenge = input(&mut circuit, &challenge_ext, 1);
+
         let division_advice = Advice::new(2, 0, 1, |ivar : &[F], _| {
             let ch = ivar[0];
             let x = ivar[1];
@@ -146,7 +146,7 @@ mod tests {
         let pi_ext = ExternalValue::<F>::new();
         let mut circuit = Circuit::new(25, 1);
         let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
-        let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
+        let pi = input(&mut circuit, &pi_ext, 0);
         let ret = poseidon_gadget_internal(&mut circuit, &cfg, 1, 0, vec![pi]);
     
         let mut circuit = circuit.finalize();
@@ -164,8 +164,8 @@ mod tests {
         let cfg = Poseidon::new();
         let pi_ext = ExternalValue::<F>::new();
         let mut circuit = Circuit::new(25, 1);
-        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
-        let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
+        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);
+        let pi = input(&mut circuit, &pi_ext, 0);   
         let ret = poseidon_gadget_internal(&mut circuit, &cfg, 2, 0, vec![pi]);
     
         let mut circuit = circuit.finalize();
@@ -183,8 +183,8 @@ mod tests {
         let cfg = Poseidon::new();
         let pi_ext = ExternalValue::<F>::new();
         let mut circuit = Circuit::new(25, 1);
-        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
-        let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
+        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);
+        let pi = input(&mut circuit, &pi_ext, 0);
         let ret = poseidon_gadget_mixstrat(&mut circuit, &cfg, 0, vec![pi]);
 
         let mut circuit = circuit.finalize();
@@ -207,7 +207,8 @@ mod tests {
         let pi_ext = ExternalValue::<F>::new();
         let mut circuit = Circuit::new(2, 1);
         let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
-        let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
+        let pi = input(&mut circuit, &pi_ext, 0);
+
     
         let bits = bit_decomposition_gadget(&mut circuit, 0, 3, pi);
     
@@ -287,7 +288,8 @@ mod tests {
         let pi_ext = ExternalValue::<F>::new();
         let mut circuit = Circuit::new(9, 1);
         let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
-        let pi = circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext])[0];
+        let pi = input(&mut circuit, &pi_ext, 0);
+
     
         let limbs = limb_decompose_gadget(&mut circuit, 9, 0, 2, pi);
     
@@ -353,11 +355,12 @@ mod tests {
         for i in 0..9 {
             pi.push(vec![]);
             for j in 0..3 {
-                pi[i].push(circuit.advice_pub(0, read_pi_advice.clone(), vec![], vec![&pi_ext[i][j]])[0]);
+                pi[i].push(input(&mut circuit, &pi_ext[i][j], 0));
             }
         }
-        let pi_id = circuit.advice_pub(0, read_pi_advice, vec![], vec![&pi_id_ext])[0];
-    
+        let pi_id = input(&mut circuit, &pi_id_ext, 0);
+
+        
         let pi : Vec<_> = pi.iter().map(|x|x.as_ref()).collect();
         let chosen = choice_gadget(&mut circuit, &pi, VarSmall::new_unchecked(pi_id, 9), 0);
 
@@ -390,16 +393,16 @@ mod tests {
 
         let read_pi = Advice::new(0,1,1, |_, iext: &[F]| vec![iext[0]]);    
 
-        let x = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_a_ext.0])[0];
-        let y = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_a_ext.1])[0];
+        let x = input(&mut circuit, &pi_a_ext.0, 0);
+        let y = input(&mut circuit, &pi_a_ext.1, 0);
         let a = EcAffinePoint::<F,C>::new(&mut circuit, x, y);
-        let x = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_b_ext.0])[0];
-        let y = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_b_ext.1])[0];
+        let x = input(&mut circuit, &pi_b_ext.0, 0);
+        let y = input(&mut circuit, &pi_b_ext.1, 0);
         let b = EcAffinePoint::<F,C>::new(&mut circuit, x, y);
-        let x = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_pt_ext.0])[0];
-        let y = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_pt_ext.1])[0];
+        let x = input(&mut circuit, &pi_pt_ext.0, 0);
+        let y = input(&mut circuit, &pi_pt_ext.1, 0);
         let pt = EcAffinePoint::<F,C>::new(&mut circuit, x, y);
-        let sc = circuit.advice(0, read_pi.clone(), vec![], vec![&pi_sc_ext])[0];
+        let sc = input(&mut circuit, &pi_sc_ext, 0);
 
         let mut nonzeros = vec![];
         let num_limbs = 81;

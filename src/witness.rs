@@ -1,4 +1,5 @@
-use std::{iter::repeat, marker::PhantomData};
+use std::iter::repeat;
+use std::marker::PhantomData;
 
 use ff::PrimeField;
 use halo2::halo2curves::CurveAffine;
@@ -19,17 +20,17 @@ pub trait CSSystemCommit<F: PrimeField, G: CurveAffine<ScalarExt=F>, CK: Commitm
 
 #[derive(Clone)]
 /// Witness data.
-pub struct CSWtns<F: PrimeField, G: Gate<F>> {
-//    pub cs : ConstraintSystem<F, G>,
+pub struct CSWtns<'c, F: PrimeField, G: Gate<'c, F>> {
+//    pub cs : ConstraintSystem<'c, F, G>,
     pub wtns : Vec<RoundWtns<F>>,
     pub ext_vals: Vec<Option<F>>,
     pub int_vals: Vec<Option<F>>,
-    _marker: PhantomData<G>,
+    _marker: PhantomData<&'c G>,
 }
 
-impl<F:PrimeField, G: Gate<F>> CSWtns<F, G>{
+impl<'c, F:PrimeField, G: Gate<'c, F>> CSWtns<'c, F, G>{
 
-    pub fn new(cs: &ConstraintSystem<F, G>) -> Self {
+    pub fn new(cs: &ConstraintSystem<'c, F, G>) -> Self {
         
         let mut wtns = vec![];
 
@@ -43,7 +44,7 @@ impl<F:PrimeField, G: Gate<F>> CSWtns<F, G>{
         let int_vals = repeat(None).take(*num_ints).collect();
 
 
-        Self {wtns, ext_vals, int_vals, _marker: PhantomData::<G>}
+        Self {wtns, ext_vals, int_vals, _marker: PhantomData::<&'c G>}
     }
 
     pub fn setvar(&mut self, var: Variable, value: F) {
@@ -119,29 +120,20 @@ impl<F:PrimeField, G: Gate<F>> CSWtns<F, G>{
     //     CSWtnsRelaxed { cs: self, err }
     // }
 
-    pub fn valid_witness(&self) -> () {
-        for constr in self.cs.iter_constraints() {
-            let input_values: Vec<_> = constr.inputs.iter().map(|&x| self.getvar(x)).collect();
-            let result = constr.gate.exec(&input_values, &[]);
-
-            assert!(result.iter().all(|&output| output == F::ZERO), "Constraint {:?} is not satisfied", constr);
-        }
-    }
-
 }
 
-impl<F: PrimeField, T: Gate<F>, G:CurveAffine<ScalarExt=F>> CSSystemCommit<F, G, CkWtns<G>> for CSWtns<F, T>{
+impl<'c, F: PrimeField, T: Gate<'c, F>, G:CurveAffine<ScalarExt=F>> CSSystemCommit<F, G, CkWtns<G>> for CSWtns<'c, F, T>{
     fn commit(&self, ck: &CkWtns<G>) -> Vec<CtRound<F, G>> {
         ck.commit(&self.wtns)
     }
 }
 
-pub struct CSWtnsRelaxed<F: PrimeField, T : Gate<F>> {
-    cs: CSWtns<F, T>,    
+pub struct CSWtnsRelaxed<'c, F: PrimeField, T : Gate<'c, F>> {
+    cs: CSWtns<'c, F, T>,    
     err: Vec<ErrGroup<F>>
 }
 
-impl<F: PrimeField, T: Gate<F>, G:CurveAffine<ScalarExt=F>> CSSystemCommit<F, G, CkRelaxed<G>> for CSWtnsRelaxed<F, T>{
+impl<'c, F: PrimeField, T: Gate<'c, F>, G:CurveAffine<ScalarExt=F>> CSSystemCommit<F, G, CkRelaxed<G>> for CSWtnsRelaxed<'c, F, T>{
     fn commit(&self, ck: &CkRelaxed<G>) -> <CkRelaxed<G> as CommitmentKey<G>>::Target {
         (ck.0.commit(&self.cs.wtns),  ck.1.commit(&self.err))
     }

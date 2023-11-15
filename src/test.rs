@@ -3,7 +3,7 @@ mod tests {
     use std::{rc::Rc, iter::repeat};
 
     use crate::{
-        gate::{Gatebb, ConstValue},
+        gate::Gatebb,
         constraint_system::{Variable, Visibility, CS},
         circuit::{Circuit, ExternalValue, PolyOp, Advice},
         gadgets::{
@@ -224,7 +224,7 @@ mod tests {
     #[test]
     
     fn test_check_poly() {
-        let f = Rc::new(|x: &[F], _: &[ConstValue<F>]|{vec![x[0].pow([5])]});
+        let f = Rc::new(|x: &[F], _: &[F]|{vec![x[0].pow([5])]});
         check_poly(5, 1, 1, f).unwrap();
     }
 

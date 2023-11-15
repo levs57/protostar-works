@@ -33,10 +33,10 @@ pub struct Variable {
 /// 
 /// It is fully described by a polynomial (gate) and a list of variables it attaches to.
 #[derive(Debug, Clone)]
-pub struct Constraint<F: PrimeField, G: Gate<F>>{
+pub struct Constraint<'c, F: PrimeField, G: Gate<'c, F>>{
     pub inputs: Vec<Variable>,
     pub gate: G,
-    _marker: PhantomData<F>,
+    _marker: PhantomData<&'c F>,
 }
 
 /// Constraints are grouped by their CommitKind.
@@ -44,14 +44,14 @@ pub struct Constraint<F: PrimeField, G: Gate<F>>{
 /// Currently this struct has some additional information. This will probably
 /// be moved in the near future
 #[derive(Debug, Clone)]
-struct ConstraintGroup<F: PrimeField, G: Gate<F>>{
-    pub entries: Vec<Constraint<F, G>>,
+struct ConstraintGroup<'c, F: PrimeField, G: Gate<'c, F>>{
+    pub entries: Vec<Constraint<'c, F, G>>,
     pub kind: CommitKind,
     pub num_rhs: usize,
     pub max_degree: usize,
 }
 
-impl<F: PrimeField, G: Gate<F>> ConstraintGroup<F, G> {
+impl<'c, F: PrimeField, G: Gate<'c, F>> ConstraintGroup<'c, F, G> {
     pub fn new(kind: CommitKind, max_degree: usize) -> Self {
         Self {
             entries: Default::default(),
@@ -86,7 +86,7 @@ pub struct WitnessSpec {
     pub num_exts: usize,
 }
 
-pub trait CS<F: PrimeField, G: Gate<F>> {
+pub trait CS<'c, F: PrimeField, G: Gate<'c, F>> {
     fn num_rounds(&self) -> usize;
 
     fn last_round(&self) -> usize {
@@ -109,12 +109,12 @@ pub trait CS<F: PrimeField, G: Gate<F>> {
 }
 
 #[derive(Debug, Clone)]
-pub struct ConstraintSystem<F: PrimeField, G: Gate<F>> {
+pub struct ConstraintSystem<'c, F: PrimeField, G: Gate<'c, F>> {
     spec: WitnessSpec,
-    constraint_groups: [ConstraintGroup<F, G>; 3],
+    constraint_groups: [ConstraintGroup<'c, F, G>; 3],
 }
 
-impl<F: PrimeField, G: Gate<F>> ConstraintSystem<F, G> {
+impl<'c, F: PrimeField, G: Gate<'c, F>> ConstraintSystem<'c, F, G> {
     pub fn new(num_rounds: usize, max_degree: usize) -> Self {
         let constraint_groups = [
             ConstraintGroup::new(CommitKind::Trivial, 0),  // FIXME: correct max_degree
@@ -129,7 +129,7 @@ impl<F: PrimeField, G: Gate<F>> ConstraintSystem<F, G> {
     }
 
     /// A (short-lived) cursor to the constraint group of a given kind
-    fn constraint_group(&mut self, kind: CommitKind) -> &mut ConstraintGroup<F, G> {
+    fn constraint_group(&mut self, kind: CommitKind) -> &mut ConstraintGroup<'c, F, G> {
         match kind {
             CommitKind::Trivial => &mut self.constraint_groups[0],
             CommitKind::Group => &mut self.constraint_groups[1],
@@ -139,12 +139,12 @@ impl<F: PrimeField, G: Gate<F>> ConstraintSystem<F, G> {
 
     // would love to add this to the trait, but crab god said not yet
     // https://github.com/rust-lang/rust/issues/91611
-    pub fn iter_constraints(&self) -> impl Iterator<Item = &Constraint<F, G>> {
+    pub fn iter_constraints(&self) -> impl Iterator<Item = &Constraint<'c, F, G>> {
         self.constraint_groups.iter().flat_map(|cg| cg.entries.iter())
     }
 }
 
-impl<F: PrimeField, G: Gate<F>> CS<F, G> for ConstraintSystem<F, G> {
+impl<'c, F: PrimeField, G: Gate<'c, F>> CS<'c, F, G> for ConstraintSystem<'c, F, G> {
     fn num_rounds(&self) -> usize {
         self.spec.round_specs.len()
     }

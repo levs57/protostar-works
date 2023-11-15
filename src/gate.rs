@@ -6,9 +6,6 @@ use ff::PrimeField;
 use crate::utils::poly_utils::check_poly;
 use crate::utils::field_precomp::FieldUtils;
 
-pub struct ConstValue<F> {
-    pub val: F
-}
 
 #[derive(Clone)]
 /// A generic black-box gate. This API is unsafe, you must guarantee that given value is a
@@ -17,7 +14,7 @@ pub struct Gatebb<'a, F : PrimeField> {
     d : usize,
     i : usize,
     o : usize,
-    f : Rc<dyn Fn(&[F], &[ConstValue<F>]) -> Vec<F> + 'a>,
+    f : Rc<dyn Fn(&[F], &'a [F]) -> Vec<F> + 'a>,
 }
 
 impl<'a, F: PrimeField> Debug for Gatebb<'a, F> {
@@ -27,16 +24,16 @@ impl<'a, F: PrimeField> Debug for Gatebb<'a, F> {
 }
 
 impl<'a, F: PrimeField> Gatebb<'a, F> {
-    pub fn new(d: usize, i: usize, o: usize, f: Rc<dyn Fn(&[F], &[ConstValue<F>]) -> Vec<F> + 'a>) -> Self {
+    pub fn new(d: usize, i: usize, o: usize, f: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'a>) -> Self {
         check_poly(d, i, o, f.clone()).unwrap();
         Gatebb::<'a>{d,i,o,f}
     }
-    pub fn new_unchecked(d: usize, i: usize, o: usize, f: Rc<dyn Fn(&[F], &[ConstValue<F>]) -> Vec<F> + 'a>) -> Self {
+    pub fn new_unchecked(d: usize, i: usize, o: usize, f: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'a>) -> Self {
         Gatebb::<'a>{d,i,o,f}
     }
 
 }
-pub trait Gate<F : PrimeField> : Clone + Debug {
+pub trait Gate<'a, F : PrimeField> : Clone + Debug {
     /// Returns degree.
     fn d(&self) -> usize;
     /// Returns input size.
@@ -44,10 +41,10 @@ pub trait Gate<F : PrimeField> : Clone + Debug {
     /// Returns output size.
     fn o(&self) -> usize;
     /// Executes gate on a given input.
-    fn exec(& self, input : &[F], constants: &[ConstValue<F>]) -> Vec<F>;
+    fn exec(& self, input : &[F], constants: &'a [F]) -> Vec<F>;
 }
 
-impl<'a, F : PrimeField + FieldUtils> Gate<F> for Gatebb<'a, F> {
+impl<'a, F : PrimeField + FieldUtils> Gate<'a, F> for Gatebb<'a, F> {
     /// Returns degree.
     fn d(&self) -> usize {
         self.d
@@ -61,7 +58,7 @@ impl<'a, F : PrimeField + FieldUtils> Gate<F> for Gatebb<'a, F> {
         self.o
     }
     /// Executes gate on a given input.
-    fn exec(&self, input : &[F], constants: &[ConstValue<F>]) -> Vec<F>{
+    fn exec(&self, input : &[F], constants: &'a [F]) -> Vec<F>{
         (self.f)(input, constants)
     }
 

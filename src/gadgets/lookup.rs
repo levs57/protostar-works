@@ -468,21 +468,21 @@ mod test {
             let points = indexes.clone().map(|_| F::random(OsRng)).collect_vec();
             let result = points.iter().map(|p| (p - challenge).invert().unwrap()).fold(F::ZERO, |acc, n| acc + n);
 
-            let challenge_value = ExternalValue::<F>::new();
-            let points_values = indexes.clone().map(|_| ExternalValue::<F>::new()).collect_vec();
-            let result_value = ExternalValue::<F>::new();
-
             let mut circuit = Circuit::new(TEST_LEN + 1, 1);
-            let challenge_variable = input(&mut circuit, &challenge_value, 0);
-            let points_variables = points_values.iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
-            let reslut_variable = input(&mut circuit, &result_value, 0);
+            let challenge_value = circuit.ext_val(1)[0];
+            let points_values = circuit.ext_val(TEST_LEN);
+            let result_value = circuit.ext_val(1)[0];
+
+            let challenge_variable = input(&mut circuit, challenge_value, 0);
+            let points_variables = points_values.clone().into_iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
+            let reslut_variable = input(&mut circuit, result_value, 0);
 
             invsum_flat_constrain(&mut circuit, &points_variables, reslut_variable, challenge_variable);
             let mut circuit = circuit.finalize();
 
-            challenge_value.set(challenge).unwrap();
-            points_values.iter().zip_eq(points).map(|(val, point)| val.set(point).unwrap()).last();
-            result_value.set(result).unwrap();
+            circuit.set_ext(challenge_value, challenge);
+            points_values.into_iter().zip_eq(points).map(|(val, point)| circuit.set_ext(val, point)).last();
+            circuit.set_ext(result_value, result);
 
             circuit.execute(0);
             circuit.cs.valid_witness();
@@ -503,24 +503,25 @@ mod test {
             let numerators = indexes.clone().map(|_| F::random(OsRng)).collect_vec();
             let result = points.iter().zip_eq(&numerators).map(|(p, n)| (p - challenge).invert().unwrap() * n).fold(F::ZERO, |acc, n| acc + n);
 
-            let challenge_value = ExternalValue::<F>::new();
-            let points_values = indexes.clone().map(|_| ExternalValue::<F>::new()).collect_vec();
-            let numerators_values = indexes.clone().map(|_| ExternalValue::<F>::new()).collect_vec();
-            let result_value = ExternalValue::<F>::new();
 
             let mut circuit = Circuit::new(TEST_LEN + 1, 1);
-            let challenge_variable = input(&mut circuit, &challenge_value, 0);
-            let points_variables = points_values.iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
-            let numerator_variables = numerators_values.iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
-            let reslut_variable = input(&mut circuit, &result_value, 0);
+            let challenge_value = circuit.ext_val(1)[0];
+            let points_values = circuit.ext_val(TEST_LEN);
+            let numerators_values = circuit.ext_val(TEST_LEN);
+            let result_value = circuit.ext_val(1)[0];
+
+            let challenge_variable = input(&mut circuit, challenge_value, 0);
+            let points_variables = points_values.clone().into_iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
+            let numerator_variables = numerators_values.clone().into_iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
+            let reslut_variable = input(&mut circuit, result_value, 0);
 
             fracsum_flat_constrain(&mut circuit, &numerator_variables, &points_variables, reslut_variable, challenge_variable);
             let mut circuit = circuit.finalize();
 
-            challenge_value.set(challenge).unwrap();
-            points_values.iter().zip_eq(points).map(|(val, point)| val.set(point).unwrap()).last();
-            numerators_values.iter().zip_eq(numerators).map(|(val, point)| val.set(point).unwrap()).last();
-            result_value.set(result).unwrap();
+            circuit.set_ext(challenge_value, challenge);
+            points_values.into_iter().zip_eq(points).map(|(val, point)| circuit.set_ext(val, point)).last();
+            numerators_values.into_iter().zip_eq(numerators).map(|(val, point)| circuit.set_ext(val, point)).last();
+            circuit.set_ext(result_value, result);
 
             circuit.execute(0);
             circuit.cs.valid_witness();
@@ -537,19 +538,19 @@ mod test {
             let challenge = F::random(OsRng);
             let points = indexes.clone().map(|_| F::random(OsRng)).collect_vec();
             let result = points.iter().map(|p| (p - challenge).invert().unwrap()).fold(F::ZERO, |acc, n| acc + n);
-
-            let challenge_value = ExternalValue::<F>::new();
-            let points_values = indexes.clone().map(|_| ExternalValue::<F>::new()).collect_vec();
-
+            
             let mut circuit = Circuit::new(10, 1);
-            let challenge_variable = input(&mut circuit, &challenge_value, 0);
-            let points_variables = points_values.iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
+            let challenge_value = circuit.ext_val(1)[0];
+            let points_values = circuit.ext_val(TEST_LEN);
+
+            let challenge_variable = input(&mut circuit, challenge_value, 0);
+            let points_variables = points_values.clone().into_iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
 
             let result_variable = invsum_gadget(&mut circuit, &points_variables, challenge_variable, rate, 0);
             let mut circuit = circuit.finalize();
 
-            challenge_value.set(challenge).unwrap();
-            points_values.iter().zip_eq(points).map(|(val, point)| val.set(point).unwrap()).last();
+            circuit.set_ext(challenge_value, challenge);
+            points_values.into_iter().zip_eq(points).map(|(val, point)| circuit.set_ext(val, point)).last();
 
             circuit.execute(0);
             circuit.cs.valid_witness();
@@ -571,21 +572,21 @@ mod test {
             let numerators = indexes.clone().map(|_| F::random(OsRng)).collect_vec();
             let result = points.iter().zip_eq(&numerators).map(|(p, n)| (p - challenge).invert().unwrap() * n).fold(F::ZERO, |acc, n| acc + n);
 
-            let challenge_value = ExternalValue::<F>::new();
-            let points_values = indexes.clone().map(|_| ExternalValue::<F>::new()).collect_vec();
-            let numerators_values = indexes.clone().map(|_| ExternalValue::<F>::new()).collect_vec();
-
             let mut circuit = Circuit::new(TEST_LEN + 1, 1);
-            let challenge_variable = input(&mut circuit, &challenge_value, 0);
-            let points_variables = points_values.iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
-            let numerator_variables = numerators_values.iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
+            let challenge_value = circuit.ext_val(1)[0];
+            let points_values = circuit.ext_val(TEST_LEN);
+            let numerators_values = circuit.ext_val(TEST_LEN);
+
+            let challenge_variable = input(&mut circuit, challenge_value, 0);
+            let points_variables = points_values.clone().into_iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
+            let numerator_variables = numerators_values.clone().into_iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
 
             let result_variable = fracsum_gadget(&mut circuit, &numerator_variables, &points_variables, challenge_variable, 3, 0);
             let mut circuit = circuit.finalize();
 
-            challenge_value.set(challenge).unwrap();
-            points_values.iter().zip_eq(points).map(|(val, point)| val.set(point).unwrap()).last();
-            numerators_values.iter().zip_eq(numerators).map(|(val, point)| val.set(point).unwrap()).last();
+            circuit.set_ext(challenge_value, challenge);
+            points_values.into_iter().zip_eq(points).map(|(val, point)| circuit.set_ext(val, point)).last();
+            numerators_values.into_iter().zip_eq(numerators).map(|(val, point)| circuit.set_ext(val, point)).last();
 
             circuit.execute(0);
             circuit.cs.valid_witness();
@@ -604,23 +605,23 @@ mod test {
             let indexes = 0..TEST_LEN;
             let range = 16;
 
-            let challenge_value = ExternalValue::<F>::new();
-            
-            let test_values = indexes.clone().map(|_| ExternalValue::<F>::new()).collect_vec();
-            let mut range_lookup = RangeLookup::new(&challenge_value, range);
-
             let mut circuit = Circuit::new(range + 1, TEST_LEN + 1);
-            let test_variables = test_values.iter().enumerate().map(|(i, v)| input(&mut circuit, &v, i)).collect_vec();
+
+            let challenge_value = circuit.ext_val(1)[0];
+            let test_values = circuit.ext_val(TEST_LEN);
+            let mut range_lookup = RangeLookup::new(challenge_value, range);
+
+            let test_variables = test_values.clone().into_iter().enumerate().map(|(i, v)| input(&mut circuit, v, i)).collect_vec();
             test_variables.into_iter().map(|variable| range_lookup.check(&mut circuit, variable)).last();
             range_lookup.finalize(&mut circuit, 0, TEST_LEN - 1, TEST_LEN, 2);
             let mut circuit = circuit.finalize();
 
-            test_values.iter().map(|val| val.set(F::from(OsRng.next_u64() % range as u64)).unwrap()).last();
+            test_values.into_iter().map(|val| circuit.set_ext(val, F::from(OsRng.next_u64() % range as u64))).last();
             for i in indexes {
                 circuit.execute(i);
             }
             let challenge = F::random(OsRng);
-            challenge_value.set(challenge).unwrap();
+            circuit.set_ext(challenge_value, challenge);
             circuit.execute(TEST_LEN);
             circuit.cs.valid_witness();
         }
@@ -635,27 +636,15 @@ mod test {
                 let range = 16;
                 let rounds = 3;
     
-                let challenge_value = ExternalValue::<F>::new();
-                
-                let test_value = ExternalValue::<F>::new();
-                let mut range_lookup = RangeLookup::new(&challenge_value, range);
-    
                 let mut circuit = Circuit::new(range + 1, rounds);
-                let test_variable = input(&mut circuit, &test_value, 0);
+
+                let challenge_value: ExternalValue<F> = circuit.ext_val(1)[0];
+                let test_value = circuit.ext_val(1)[0];
+                let mut range_lookup = RangeLookup::new(challenge_value, range);
+
+                let test_variable = input(&mut circuit, test_value, 0);
                 range_lookup.check(&mut circuit, test_variable);
                 range_lookup.finalize(&mut circuit, 1, 1, 1, 2);
-                let mut circuit = circuit.finalize();
-    
-                test_value.set(F::from(OsRng.next_u64() % range as u64)).unwrap();
-
-                for i in 0..rounds {
-                    circuit.execute(i);
-                }
-
-                let challenge = F::random(OsRng);
-                challenge_value.set(challenge).unwrap();
-                circuit.execute(TEST_LEN);
-                circuit.cs.valid_witness();
             }
 
             #[test]
@@ -665,27 +654,15 @@ mod test {
                 let range = 16;
                 let rounds = 3;
     
-                let challenge_value = ExternalValue::<F>::new();
-                
-                let test_value = ExternalValue::<F>::new();
-                let mut range_lookup = RangeLookup::new(&challenge_value, range);
-    
                 let mut circuit = Circuit::new(range + 1, rounds);
-                let test_variable = input(&mut circuit, &test_value, 2);
+
+                let challenge_value: ExternalValue<F> = circuit.ext_val(1)[0];
+                let test_value = circuit.ext_val(1)[0];
+                let mut range_lookup = RangeLookup::new(challenge_value, range);
+
+                let test_variable = input(&mut circuit, test_value, 2);
                 range_lookup.check(&mut circuit, test_variable);
                 range_lookup.finalize(&mut circuit, 1, 1, 1, 2);
-                let mut circuit = circuit.finalize();
-    
-                test_value.set(F::from(OsRng.next_u64() % range as u64)).unwrap();
-
-                for i in 0..rounds {
-                    circuit.execute(i);
-                }
-
-                let challenge = F::random(OsRng);
-                challenge_value.set(challenge).unwrap();
-                circuit.execute(TEST_LEN);
-                circuit.cs.valid_witness();
             }
 
             #[test]
@@ -695,29 +672,16 @@ mod test {
                 let range = 16;
                 let rounds = 3;
     
-                let challenge_value = ExternalValue::<F>::new();
-                
-                let test_value = ExternalValue::<F>::new();
-                let mut range_lookup = RangeLookup::new(&challenge_value, range);
-    
                 let mut circuit = Circuit::new(range + 1, rounds);
-                let test_variable = input(&mut circuit, &test_value, 2);
+
+                let challenge_value: ExternalValue<F> = circuit.ext_val(1)[0];
+                let test_value = circuit.ext_val(1)[0];
+                let mut range_lookup = RangeLookup::new(challenge_value, range);
+
+                let test_variable = input(&mut circuit, test_value, 2);
                 range_lookup.check(&mut circuit, test_variable);
                 range_lookup.finalize(&mut circuit, 1, 0, 2, 2);
-                let mut circuit = circuit.finalize();
-    
-                test_value.set(F::from(OsRng.next_u64() % range as u64)).unwrap();
-
-                for i in 0..rounds {
-                    circuit.execute(i);
-                }
-
-                let challenge = F::random(OsRng);
-                challenge_value.set(challenge).unwrap();
-                circuit.execute(TEST_LEN);
-                circuit.cs.valid_witness();
             }
         }
-        // TODO: tests for round bounds
     }
 }

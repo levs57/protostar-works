@@ -7,5 +7,5 @@ pub fn eq_gadget<'a, F: PrimeField+FieldUtils>(
     a: Variable,
     b: Variable,
 ) -> () {
-    circuit.constrain(&vec![a,b], Gatebb::new(1, 2, 1, Rc::new(|args|vec![args[0]-args[1]])));
+    circuit.constrain(&vec![a,b], Gatebb::new(1, 2, 1, Rc::new(|args, _|vec![args[0]-args[1]])));
 }

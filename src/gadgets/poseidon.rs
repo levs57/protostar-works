@@ -82,7 +82,7 @@ pub fn poseidon_partial_rounds_gate<'c>(n_rounds_p: usize, n_rounds_f: usize, t:
         5,
         2*n_rounds_p+2*t,
         n_rounds_p+t,
-        Rc::new(move|args: &[F]|{
+        Rc::new(move|args, _|{
             let (tmp, io) = args.split_at(2*n_rounds_p);
             let (adv_in, adv_out) = tmp.split_at(n_rounds_p);
             let (inp, out) = io.split_at(t);
@@ -172,7 +172,7 @@ pub fn poseidon_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F
             pow(5,k),
             t-1,
             t,
-            move |inp| {
+            move |inp, _| {
                 let mut state = vec![F::ZERO; t];
                 state[1..].clone_from_slice(&inp);            
                 poseidon_kround_poly(k, &state, 0, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
@@ -189,7 +189,7 @@ pub fn poseidon_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F
                 pow(5,k),
                 t,
                 t,
-                move |inp| {
+                move |inp, _| {
                     poseidon_kround_poly(k, inp, i, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
                 }
             ),
@@ -205,7 +205,7 @@ pub fn poseidon_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F
                 pow(5,rem),
                 t,
                 t,
-                move |inp| {
+                move |inp, _| {
                     poseidon_kround_poly(rem, inp, i, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
                 }
             ),
@@ -291,7 +291,7 @@ pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, 
                 5,
                 t-1,
                 t,
-                move |inp: &[F]| {
+                move |inp, _| {
                     let mut state = vec![F::ZERO; t];
                     state[1..].clone_from_slice(&inp);
                     poseidon_mixed_strategy_start(&state, i, cfg)
@@ -304,7 +304,7 @@ pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, 
                 5,
                 t,
                 t,
-                move |state: &[F]| {
+                move |state, _| {
                     poseidon_mixed_strategy_start(state, i, cfg)
                 }
             ),
@@ -318,7 +318,7 @@ pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, 
             25,
             t,
             t,
-            move |state: &[F]| poseidon_mixed_strategy_mid(state, i + 1, cfg)
+            move |state, _| poseidon_mixed_strategy_mid(state, i + 1, cfg)
         ),
         state
     );
@@ -329,7 +329,7 @@ pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, 
             5,
             t,
             t,
-            move |state: &[F]| poseidon_mixed_strategy_end(state, i + 3, cfg)
+            move |state, _| poseidon_mixed_strategy_end(state, i + 3, cfg)
         ),
         state
     )

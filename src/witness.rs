@@ -119,6 +119,14 @@ impl<F:PrimeField, G: Gate<F>> CSWtns<F, G>{
     //     CSWtnsRelaxed { cs: self, err }
     // }
 
+    pub fn valid_witness(&self) -> () {
+        for constr in self.cs.iter_constraints() {
+            let input_values: Vec<_> = constr.inputs.iter().map(|&x| self.getvar(x)).collect();
+            let result = constr.gate.exec(&input_values, &[]);
+
+            assert!(result.iter().all(|&output| output == F::ZERO), "Constraint {:?} is not satisfied", constr);
+        }
+    }
 
 }
 

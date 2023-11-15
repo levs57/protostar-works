@@ -30,7 +30,7 @@ impl<F: PrimeField+FieldUtils, C: CurveExt<Base=F>> EcAffinePoint<F, C> {
     }
 
     pub fn new<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, x: Variable, y: Variable) -> Self{
-        circuit.constrain(&[x,y], Gatebb::new(3, 2, 1, Rc::new(|args|{
+        circuit.constrain(&[x,y], Gatebb::new(3, 2, 1, Rc::new(|args, _|{
             let x = args[0];
             let y = args[1];
 
@@ -97,7 +97,7 @@ pub fn eclin_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
             2,
             6,
             1,
-            Rc::new(|args|{
+            Rc::new(|args, _|{
                 let a = args[2]-args[0];
                 let b = args[3]-args[1];
                 let c = args[4]-args[0];
@@ -114,7 +114,7 @@ pub fn eclin_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
                 3,
                 3,
                 1,
-                |args| {
+                |args, _| {
                     vec![(args[0]-args[1])*(args[0]-args[2])*(args[1]-args[2])]
                 }
             ), 
@@ -139,7 +139,7 @@ pub fn ectangent_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
             2,
             4,
             1,
-            Rc::new(move |args|{
+            Rc::new(move |args, _ |{
                 let a = args[2]-args[0];
                 let b = -args[3]-args[1];
                 let c = args[1].scale(2);
@@ -155,7 +155,7 @@ pub fn ectangent_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
                 1,
                 3,
                 1,
-                move |args| {
+                move |args, _| {
                     vec![args[0]-args[1]]
                 }
             ), 
@@ -403,7 +403,7 @@ pub fn escalarmul_gadget_9<'a, F: PrimeField + FieldUtils, C: CurveExt<Base=F>>(
         8,
         5,
         3,
-        Rc::new(|args|{
+        Rc::new(|args, _|{
             let a = (args[0], args[1]);
             let b = (args[2], args[3]);
             let q = args[4];

@@ -10,7 +10,7 @@ pub fn prod_flat_gadget<'a, F: PrimeField + FieldUtils> (circuit: &mut Circuit<'
         0 => circuit.one(),  // product of 0 elements is 1
         1 => *input.first().expect("should not be empty"),
         n => {
-            let prod = PolyOp::new(n, n, 1, |args| vec![args.iter().product()]);
+            let prod = PolyOp::new(n, n, 1, |args, _| vec![args.iter().product()]);
             circuit.apply(round, prod, input)[0]
         }
     }

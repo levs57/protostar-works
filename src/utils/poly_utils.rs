@@ -3,6 +3,8 @@ use std::rc::Rc;
 use ff::PrimeField;
 use rand_core::OsRng;
 
+use crate::gate::ConstValue;
+
 
 /// Little endian bit decomposition of n
 pub fn bits_le(n: usize) -> Vec<u64> {
@@ -17,7 +19,7 @@ pub fn bits_le(n: usize) -> Vec<u64> {
     bits
 }
 
-pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Result<(), &str>{
+pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F], &[ConstValue<F>]) -> Vec<F> + 'a>) -> Result<(), &str>{
     let mut a = vec![]; for _ in 0..i {a.push(F::random(OsRng))} 
     let mut b = vec![]; for _ in 0..i {b.push(F::random(OsRng))} 
 
@@ -27,7 +29,7 @@ pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&
 
     for j in 0..n+1 {
         let tmp : Vec<F> = a.iter().zip(b.iter()).map(|(a,b)|*a+F::from(j as u64)*b).collect();
-        lcs.push((*f)(&tmp));
+        lcs.push((*f)(&tmp, &[]));
     }
 
     assert!(lcs[0].len() == o);
@@ -59,7 +61,7 @@ pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&
 }
 
 /// Attempts to find a polynomial degree of a black-box function. Should instead use binary search, of course :).
-pub fn find_degree<'a, F: PrimeField>(max_degree: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F]) -> Vec<F> + 'a>) -> Result<usize, &str>{
+pub fn find_degree<'a, F: PrimeField>(max_degree: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F], &[ConstValue<F>]) -> Vec<F> + 'a>) -> Result<usize, &str>{
     let mut top = 1;
     loop {
         if top > max_degree {return Err("The degree of provided function is too large.")}

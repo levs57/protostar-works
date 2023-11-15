@@ -26,14 +26,14 @@ pub fn sum_arr<F: PrimeField+FieldUtils>(args: &[F]) -> F {
 pub fn lc_constr<'a, F: PrimeField+FieldUtils>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, coeffs:&'a [F], vars: &[Variable]) -> () {
     assert_eq!(coeffs.len(), vars.len());
     let l = vars.len();
-    let gate = Gatebb::new(1, l, 1, Rc::new(|args|{vec![inner_prod(coeffs, args)]})); // NO MOVE HERE!!
+    let gate = Gatebb::new(1, l, 1, Rc::new(|args, _|{vec![inner_prod(coeffs, args)]})); // NO MOVE HERE!!
     circuit.constrain(vars, gate);
 }
 
 pub fn qc<'a, F: PrimeField+FieldUtils>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, a: &[Variable], b: &[Variable], round: usize) -> Variable {
     assert_eq!(a.len(), b.len());
     let l = a.len();
-    let poly = PolyOp::new(2, 2*l, 1, split_and_ip::<F>);
+    let poly = PolyOp::new(2, 2*l, 1, |args, _| split_and_ip::<F>(args));
     let args : Vec<_> = a.iter().chain(b.iter()).map(|x|*x).collect();
     circuit.apply(round, poly, args)[0]
 }
@@ -41,12 +41,12 @@ pub fn qc<'a, F: PrimeField+FieldUtils>(circuit: &mut Circuit<'a, F, Gatebb<'a, 
 pub fn lc<'a, F: PrimeField+FieldUtils>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, coeffs:&'a [F], vars: &[Variable], round: usize) -> Variable {
     assert_eq!(coeffs.len(), vars.len());
     let l = vars.len();
-    let poly = PolyOp::new(1, l, 1, |args|{vec![inner_prod(coeffs, args)]}); // NO MOVE HERE!!
+    let poly = PolyOp::new(1, l, 1, |args, _|{vec![inner_prod(coeffs, args)]}); // NO MOVE HERE!!
     circuit.apply(round, poly, vars.to_vec())[0]
 }
 
 pub fn sum_gadget<'a, F: PrimeField+FieldUtils>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, vars: &[Variable], round: usize) -> Variable {
     let l = vars.len();
-    let poly = PolyOp::new(1, l, 1, |arr|vec![sum_arr(arr)]);
+    let poly = PolyOp::new(1, l, 1, |arr, _|vec![sum_arr(arr)]);
     circuit.apply(round, poly, vars.to_vec())[0]
 }

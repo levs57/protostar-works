@@ -2,7 +2,7 @@ use std::{rc::Rc, cell::OnceCell, marker::PhantomData, iter::repeat_with};
 use elsa::map::FrozenMap;
 use ff::PrimeField;
 
-use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind, Visibility, CS, Constraint}, utils::poly_utils::check_poly, circuit::circuit_operations::{AttachedAdvice, AttachedPolynomialAdvice, AttachedAdvicePub}};
+use crate::{witness::CSWtns, gate::{Gatebb, Gate, ConstValue}, constraint_system::{Variable, ConstraintSystem, CommitKind, Visibility, CS, Constraint}, utils::poly_utils::check_poly, circuit::circuit_operations::{AttachedAdvice, AttachedPolynomialAdvice, AttachedAdvicePub}};
 
 use self::circuit_operations::CircuitOperation;
 
@@ -15,11 +15,11 @@ pub struct PolyOp<'closure, F: PrimeField>{
     pub d: usize,
     pub i: usize,
     pub o: usize,
-    pub f: Rc<dyn Fn(&[F]) -> Vec<F> + 'closure>,
+    pub f: Rc<dyn Fn(&[F], &[ConstValue<F>]) -> Vec<F> + 'closure>,
 }
 
 impl<'closure, F:PrimeField> PolyOp<'closure, F> {
-    pub fn new(d: usize, i: usize, o: usize, f: impl Fn(&[F]) -> Vec<F> + 'closure) -> Self {
+    pub fn new(d: usize, i: usize, o: usize, f: impl Fn(&[F], &[ConstValue<F>]) -> Vec<F> + 'closure) -> Self {
         let f =  Rc::new(f);
         check_poly(d, i, o, f.clone()).unwrap();
 
@@ -35,9 +35,9 @@ impl<'closure, F: PrimeField> From<PolyOp<'closure, F>> for Gatebb<'closure, F>{
         let i = value.i + value.o;
         let o = value.o;
 
-        let f = move |args: &[F]| {
+        let f = move |args: &[F], _: &[ConstValue<F>]| {
             let (inputs, outputs) = args.split_at(value.i);
-            let results = (value.f)(&inputs);
+            let results = (value.f)(&inputs, &[]);
             results.iter().zip(outputs.iter()).map(|(res, out)|*res-*out).collect()
         };
 
@@ -103,7 +103,7 @@ impl<'closure, F: PrimeField> AdvicePub<'closure, F> {
 pub mod circuit_operations {
     use std::rc::Rc;
     use ff::PrimeField;
-    use crate::{constraint_system::Variable, gate::Gate, witness::CSWtns};
+    use crate::{constraint_system::Variable, gate::{Gate, ConstValue}, witness::CSWtns};
     use super::{ExternalValue, InternalValue};
 
     pub trait CircuitOperation<F: PrimeField, G: Gate<F>> {
@@ -162,11 +162,11 @@ pub mod circuit_operations {
     pub struct AttachedPolynomialAdvice<'closure, F> {
         input: Vec<Variable>,
         output: Vec<Variable>,
-        closure: Rc<dyn Fn(&[F]) -> Vec<F> + 'closure>,
+        closure: Rc<dyn Fn(&[F], &[ConstValue<F>]) -> Vec<F> + 'closure>,
     }
 
     impl<'closure, F> AttachedPolynomialAdvice<'closure, F> {
-        pub fn new(input: Vec<Variable>, output: Vec<Variable>, closure: Rc<dyn Fn(&[F]) -> Vec<F> + 'closure>) -> Self {
+        pub fn new(input: Vec<Variable>, output: Vec<Variable>, closure: Rc<dyn Fn(&[F], &[ConstValue<F>]) -> Vec<F> + 'closure>) -> Self {
             Self { input, output, closure }
         }
     }
@@ -175,7 +175,7 @@ pub mod circuit_operations {
         fn execute(&self, witness: &mut CSWtns<F, G>) {
             let input = witness.get_vars(&self.input);
 
-            let output = (self.closure)(&input);
+            let output = (self.closure)(&input, &[]);
 
             let value_set: Vec<_> = self.output.iter().cloned().zip(output).collect();
             witness.set_vars(&value_set);

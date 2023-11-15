@@ -4,7 +4,7 @@ use criterion::{Criterion, criterion_main, criterion_group, black_box};
 use ff::Field;
 use group::{Group, Curve};
 use halo2::halo2curves::{bn256, grumpkin, CurveExt};
-use protostar_works::{circuit::{ExternalValue, Circuit, Advice}, gate::{Gatebb, Gate}, gadgets::{ecmul::{EcAffinePoint, escalarmul_gadget_9}, nonzero_check::nonzero_gadget, input::input}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit};
+use protostar_works::{circuit::{ExternalValue, Circuit, Advice}, gate::{Gatebb, Gate, ConstValue}, gadgets::{ecmul::{EcAffinePoint, escalarmul_gadget_9}, nonzero_check::nonzero_gadget, input::input}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit};
 use rand_core::OsRng;
 
 type F = bn256::Fr;
@@ -21,13 +21,13 @@ pub fn homogenize<'a>(gate: Gatebb<'a, F>, mu: F) -> Gatebb<'a, F> {
     let gate_i = gate.i();
     let gate_o = gate.o();
 
-    let f = move |input: &[F]| {
+    let f = move |input: &[F], _: &[ConstValue<F>]| {
         let mut ibuf = Vec::with_capacity(input.len());
         for i in 0..input.len() {
             ibuf.push(input[i] * mu_inv);
         }
 
-        let mut obuf = gate.exec(&ibuf);
+        let mut obuf = gate.exec(&ibuf, &[]);
         for i in 0..obuf.len() {
             obuf[i] *= mu_d;
         } 
@@ -44,7 +44,7 @@ pub fn evaluate_on_random_linear_combinations(gate: &impl Gate<F>, a: &Vec<F>, b
     for i in 0..gate.d() {
         let fold: Vec<_> = a.iter().zip(b.iter()).map(|(&x, &y)| x + randomness[i] * y).collect();
 
-        let obuf = gate.exec(&fold);
+        let obuf = gate.exec(&fold, &[]);
         interpolation_values.push(obuf);
     }
 

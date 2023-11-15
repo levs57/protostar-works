@@ -144,6 +144,7 @@ pub fn poseidon_partial_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a
 
     circuit.constrain_with(
         &to_constrain,
+        &[],
         &poseidon_partial_rounds_gate(n_rounds_p, n_rounds_f, t)
     );
 
@@ -166,19 +167,22 @@ pub fn poseidon_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F
     let mut state = inp.clone(); 
     let mut i = start;
 
-    if i == 0 {state = circuit.apply(
-        round,
-        PolyOp::new(
-            pow(5,k),
-            t-1,
-            t,
-            move |inp, _| {
-                let mut state = vec![F::ZERO; t];
-                state[1..].clone_from_slice(&inp);            
-                poseidon_kround_poly(k, &state, 0, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
-            }
-        ),
-        state);
+    if i == 0 {
+        state = circuit.apply(
+            round,
+            PolyOp::new(
+                pow(5,k),
+                t-1,
+                t,
+                move |inp, _| {
+                    let mut state = vec![F::ZERO; t];
+                    state[1..].clone_from_slice(&inp);            
+                    poseidon_kround_poly(k, &state, 0, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
+                }
+            ),
+            state,
+            &[],
+        );
         i+=k;
     }
 
@@ -193,7 +197,8 @@ pub fn poseidon_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F
                     poseidon_kround_poly(k, inp, i, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
                 }
             ),
-            state
+            state,
+            &[],
         );        
         i+=k
     }
@@ -209,7 +214,8 @@ pub fn poseidon_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F
                     poseidon_kround_poly(rem, inp, i, &cfg.constants.c[t-2], &cfg.constants.m[t-2], n_rounds_f, n_rounds_p, t)
                 }
             ),
-            state
+            state,
+            &[],
         )
     }
 
@@ -297,7 +303,9 @@ pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, 
                     poseidon_mixed_strategy_start(&state, i, cfg)
                 }
             ),
-            state)
+            state,
+            &[],
+        )
     } else {
         circuit.apply(round,
             PolyOp::new(
@@ -308,7 +316,8 @@ pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, 
                     poseidon_mixed_strategy_start(state, i, cfg)
                 }
             ),
-            state
+            state,
+            &[],
         )
     };
 
@@ -320,7 +329,8 @@ pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, 
             t,
             move |state, _| poseidon_mixed_strategy_mid(state, i + 1, cfg)
         ),
-        state
+        state,
+        &[]
     );
 
     circuit.apply(
@@ -331,7 +341,8 @@ pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, 
             t,
             move |state, _| poseidon_mixed_strategy_end(state, i + 3, cfg)
         ),
-        state
+        state,
+        &[]
     )
 }
 

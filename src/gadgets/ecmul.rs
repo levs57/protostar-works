@@ -30,7 +30,7 @@ impl<F: PrimeField+FieldUtils, C: CurveExt<Base=F>> EcAffinePoint<F, C> {
     }
 
     pub fn new<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, x: Variable, y: Variable) -> Self{
-        circuit.constrain(&[x,y], Gatebb::new(3, 2, 1, Rc::new(|args, _|{
+        circuit.constrain(&[x,y], &[], Gatebb::new(3, 2, 1, Rc::new(|args, _|{
             let x = args[0];
             let y = args[1];
 
@@ -93,6 +93,7 @@ pub fn eclin_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
 
     circuit.constrain( // Constrain that they are on the same line
         &pts,
+        &[],
         Gatebb::new(
             2,
             6,
@@ -118,7 +119,8 @@ pub fn eclin_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
                     vec![(args[0]-args[1])*(args[0]-args[2])*(args[1]-args[2])]
                 }
             ), 
-            vec![pt1.x,pt2.x,pt3.x]
+            vec![pt1.x,pt2.x,pt3.x],
+            &[],
         )[0]
     );
 }
@@ -135,6 +137,7 @@ pub fn ectangent_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
     let pts = vec![pt1.x, pt1.y, pt2.x, pt2.y];
     circuit.constrain( // Check that slope vector is collinear with vector from pt1 to [-pt2]
         &pts,
+        &[],
         Gatebb::new(
             2,
             4,
@@ -159,7 +162,8 @@ pub fn ectangent_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
                     vec![args[0]-args[1]]
                 }
             ), 
-            vec![pt1.x,pt2.x]
+            vec![pt1.x,pt2.x],
+            &[],
         )[0]
     );    
 }
@@ -415,10 +419,10 @@ pub fn escalarmul_gadget_9<'a, F: PrimeField + FieldUtils, C: CurveExt<Base=F>>(
 
     for i in 0..num_limbs-1 {
         let input = vec![pt_acc[i].x, pt_acc[i].y, pt_x3[i].x, pt_x3[i].y, scale3[i]];
-        circuit.constrain(&input, triple_check.clone());
+        circuit.constrain(&input, &[], triple_check.clone());
         nonzeros.push(scale3[i]);
         let input = vec![pt_x3[i].x, pt_x3[i].y, pt_x9[i].x, pt_x9[i].y, scale9[i]];
-        circuit.constrain(&input, triple_check.clone());
+        circuit.constrain(&input, &[], triple_check.clone());
         nonzeros.push(scale9[i]);
 
         eclin_gadget(circuit,

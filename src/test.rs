@@ -61,8 +61,8 @@ mod tests {
 
         let sq = PolyOp::new(2, 1, 1, |x, _| vec!(x[0]*x[0]));
         let input = input(&mut circuit, public_input_source, 0);
-        let sq1 = circuit.apply(0, sq.clone(), vec![input]);
-        let _ = circuit.apply_pub(0, sq.clone(), sq1);
+        let sq1 = circuit.apply(0, sq.clone(), vec![input], &[]);
+        let _ = circuit.apply_pub(0, sq.clone(), sq1, &[]);
     
         let mut instance = circuit.finalize();
         
@@ -115,7 +115,7 @@ mod tests {
         }));
     
         for k in 0..5 {
-            circuit.constrain(&[one, challenge, pi[k], fractions[k]], div_constr.clone());
+            circuit.constrain(&[one, challenge, pi[k], fractions[k]], &[], div_constr.clone());
         }
     
         let mut circuit = circuit.finalize();

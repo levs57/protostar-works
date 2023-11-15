@@ -24,7 +24,7 @@ impl VarSmall {
         var: Variable,
         base: u32) -> Self {
 
-        circuit.constrain(&[var], Gatebb::new(base as usize, 1, 1,
+        circuit.constrain(&[var], &[], Gatebb::new(base as usize, 1, 1,
             Rc::new(move |args, _|{
                 vec![rangecheck(args[0], base as u64)]
             })
@@ -206,7 +206,7 @@ pub fn limb_decompose_gadget<'a, F: PrimeField+FieldUtils>(
 
     limbs.push(input);
 
-    circuit.constrain(&limbs, Gatebb::new(1, num_limbs+1, 1,
+    circuit.constrain(&limbs, &[], Gatebb::new(1, num_limbs+1, 1,
             Rc::new(move |args, _| {
                 let mut acc = F::ZERO;
                 for i in 0..num_limbs {
@@ -258,5 +258,5 @@ pub fn choice_gadget<'a, F: PrimeField+FieldUtils> (
         }
     );
 
-    circuit.apply(round, choice_poly, v)
+    circuit.apply(round, choice_poly, v, &[])
 }

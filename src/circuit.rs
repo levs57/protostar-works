@@ -2,7 +2,7 @@ use std::{rc::Rc, cell::OnceCell, marker::PhantomData, iter::repeat_with};
 use elsa::map::FrozenMap;
 use ff::PrimeField;
 
-use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind, Visibility, CS, Constraint}, utils::poly_utils::check_poly, circuit::circuit_operations::{AttachedAdvice, AttachedPolynomialAdvice, AttachedAdvicePub}};
+use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind, Visibility, CS, Constraint}, utils::poly_utils::check_poly, circuit::circuit_operations::{AttachedAdvice, AttachedPolynomialAdvice, AttachedAdvicePub}, folding::poseidon_constants::constants};
 
 use self::circuit_operations::CircuitOperation;
 
@@ -249,7 +249,7 @@ where
         output
     }
 
-    fn apply_internal(&mut self, visibility: Visibility, round : usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>) -> Vec<Variable> {
+    fn apply_internal(&mut self, visibility: Visibility, round : usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>, constants: &'circuit [F]) -> Vec<Variable> {
         assert!(round < self.ops.len(), "The round is too large.");
 
         let op_index = self.ops[round].len();
@@ -270,40 +270,40 @@ where
         let mut gate_io = input;  // do not move input into new buffer
         gate_io.extend(output.iter().cloned());
 
-        self.constrain(&gate_io, polyop.into());
+        self.constrain(&gate_io, &constants, polyop.into());
         
         output
     }
 
-    pub fn apply(&mut self, round: usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>) -> Vec<Variable> {
-        self.apply_internal(Visibility::Private, round, polyop, input)
+    pub fn apply(&mut self, round: usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>, constants: &'circuit[F]) -> Vec<Variable> {
+        self.apply_internal(Visibility::Private, round, polyop, input, constants)
     }
 
-    pub fn apply_pub(&mut self, round : usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>) -> Vec<Variable> {
-        self.apply_internal(Visibility::Public, round, polyop, input)
+    pub fn apply_pub(&mut self, round : usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>, constants: &'circuit[F]) -> Vec<Variable> {
+        self.apply_internal(Visibility::Public, round, polyop, input, constants)
     }
 
     // TODO: pass input by value since we clone it down the stack either way
-    pub fn constrain(&mut self, input: &[Variable], gate: G) {
+    pub fn constrain(&mut self, input: &[Variable], constants: &'circuit[F], gate: G) {
         println!("Using legacy unnamed constrains");
-        self._constrain(&input, gate)
+        self._constrain(&input, &constants, gate)
     }
 
-    fn _constrain(&mut self, input: &[Variable], gate: G) {
+    fn _constrain(&mut self, input: &[Variable], constants: &'circuit[F], gate: G) {
         assert!(gate.d() > 0, "Trying to constrain with gate of degree 0.");
 
         let kind = if gate.d() == 1 { CommitKind::Zero } else { CommitKind::Group };
-        self.cs.constrain(kind, input, gate);
+        self.cs.constrain(kind, input, constants, gate);
     }
 
     pub fn constrain_with(
         &mut self, 
-        input: &[Variable],
-
+        input: &[Variable], 
+        constants: &'circuit[F],
         gate_fetcher: &dyn Fn(&FrozenMap<String, Box<G>>) -> G
     ) {
         let gate = gate_fetcher(&self.gate_registry);
-        self.constrain(&input, gate);
+        self._constrain(&input, &constants, gate);
     }
 
     pub fn load_pi(&'circuit mut self, round: usize, pi: ExternalValue<F>) -> Variable {

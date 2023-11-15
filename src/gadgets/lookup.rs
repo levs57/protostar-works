@@ -81,7 +81,7 @@ pub fn invsum_flat_constrain<'a, F: PrimeField+FieldUtils>(
         let args = [res, challenge].iter().chain(vals.iter()).map(|x| *x).collect_vec();
         let k = vals.len();
         let gate = Gatebb::new(vals.len() + 1, args.len(), 1, Rc::new(move |args, _|vec![sum_of_fractions(args, k)]));
-        circuit.constrain(&args, gate);        
+        circuit.constrain(&args, &[], gate);        
     }
 
 pub fn fracsum_flat_constrain<'a, F: PrimeField+FieldUtils>(
@@ -95,7 +95,7 @@ pub fn fracsum_flat_constrain<'a, F: PrimeField+FieldUtils>(
     let args = [res, challenge].iter().chain(dens.iter()).chain(nums.iter()).map(|x|*x).collect_vec();
     let k = dens.len();
     let gate = Gatebb::new(dens.len()+1, args.len(), 1, Rc::new(move |args, _|vec![sum_of_fractions_with_nums(args, k)]));
-    circuit.constrain(&args, gate);
+    circuit.constrain(&args, &[], gate);
 }
 
 /// Gadget which returns the sum of inverses of an array, shifted by a challenge.

@@ -49,13 +49,13 @@ pub fn bit_decomposition_gadget<'a, F: PrimeField+FieldUtils>(circuit: &mut Circ
     let bitcheck_gate = Gatebb::new(2, 1, 1, Rc::new(|args, _| bitcheck::<F>(args)));
 
     for i in 0..num_bits-1 {
-        circuit.constrain(&vec![bits[i]], bitcheck_gate.clone())
+        circuit.constrain(&vec![bits[i]], &[], bitcheck_gate.clone())
     }
-    circuit.constrain(&vec![bits[num_bits-1]], bitcheck_gate);
+    circuit.constrain(&vec![bits[num_bits-1]], &[], bitcheck_gate);
 
     let decompcheck_gate = Gatebb::new(1, num_bits+1, 1, Rc::new(|args, _| decompcheck::<F>(args)));
     let tmp : Vec<_> = repeat(input).take(1).chain(bits.iter().map(|x|*x)).collect();
-    circuit.constrain(&tmp, decompcheck_gate);
+    circuit.constrain(&tmp, &[], decompcheck_gate);
 
     bits
 

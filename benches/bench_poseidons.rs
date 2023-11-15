@@ -3,7 +3,7 @@ use std::{rc::Rc, iter::repeat_with};
 use criterion::{criterion_group, criterion_main, Criterion};
 use ff::Field;
 use halo2::halo2curves::bn256;
-use protostar_works::{gadgets::poseidon::{Poseidon, poseidon_gadget_internal}, circuit::{ExternalValue, Circuit, Advice, Build}, gate::{Gatebb, Gate}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit};
+use protostar_works::{gadgets::poseidon::{poseidon_gadget_internal}, circuit::{ExternalValue, Circuit, Advice, Build}, gate::{Gatebb, Gate}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit, folding::poseidon::Poseidon};
 use rand_core::OsRng;
 
 

@@ -1,4 +1,3 @@
-mod poseidon_constants;
 pub mod lc;
 pub mod poseidon;
 pub mod bits;

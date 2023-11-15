@@ -3,9 +3,14 @@
 use std::iter::repeat;
 
 use ff::PrimeField;
-use halo2::halo2curves::{CurveExt, CurveAffine};
+use halo2::halo2curves::{CurveExt, CurveAffine, bn256};
 use itertools::Itertools;
 use crate::utils::field_precomp::FieldUtils;
+
+/// Encode value as field elements.
+pub trait FEncoding <F: PrimeField> {
+    fn encode(&self) -> Vec<F>;
+}
 
 /// The shape of a circuit.
 pub struct Shape {
@@ -14,8 +19,11 @@ pub struct Shape {
     max_degree: usize,
 }
 
+
+
+
 //pub struct CommittedInstance<F: PrimeField + FieldUtils, C: CurveAffine<ScalarExt=F>>
-pub struct ProtostarCommitment<F: PrimeField + FieldUtils, C: CurveAffine<ScalarExt=F>> {
+pub struct ProtostarCommitment<F: PrimeField + FieldUtils, C: CurveAffine<ScalarExt=F>,> {
     pubs: Vec<Vec<F>>,
     round_commitments: Vec<C>,
     protostar_challenges: Vec<F>,

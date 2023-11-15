@@ -7,7 +7,7 @@ mod tests {
         constraint_system::{Variable, Visibility},
         circuit::{Circuit, ExternalValue, PolyOp, Advice, Build},
         gadgets::{
-            poseidon::{Poseidon,
+            poseidon::{
                 poseidon_gadget_mixstrat,
                 poseidon_gadget_internal
             },
@@ -27,7 +27,7 @@ mod tests {
                 choice_gadget
             },
             nonzero_check::nonzero_gadget
-        }
+        }, folding::poseidon::Poseidon
     };
     use ff::{PrimeField, Field};
     use group::{Group, Curve};
@@ -195,6 +195,8 @@ mod tests {
         circuit.cs.valid_witness();
 
         assert!(circuit.cs.getvar(ret) == F::from_str_vartime("18586133768512220936620570745912940619677854269274689475585506675881198879027").unwrap());
+
+        assert!(cfg.hash(vec![F::ONE]) == F::from_str_vartime("18586133768512220936620570745912940619677854269274689475585506675881198879027").unwrap());
 
         println!("{:?}", circuit.cs.getvar(ret).to_repr());
     }

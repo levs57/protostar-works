@@ -14,7 +14,7 @@ use num_bigint::BigUint;
 use crate::{constraint_system::Variable, utils::field_precomp::FieldUtils,
     circuit::{Build, Circuit, ExternalValue, Advice},
     gate::Gatebb,
-    gadgets::lc::{sum_gadget, inner_prod, sum_arr}};
+    gadgets::{lc::{sum_gadget, inner_prod, sum_arr}, input::input, arith::eq_gadget}};
 
 /// Outputs a product of vector elements and products skipping a single element.
 pub fn montgomery<F: PrimeField+FieldUtils>(v: &[F]) -> (F, Vec<F>) {
@@ -183,10 +183,7 @@ pub fn invsum_gadget<'a, F: PrimeField+FieldUtils>(
             }
     
         sum_gadget(circuit, &batches, round)        
-    
         }
-    
-
 /// 
 pub trait Lookup<'a, F: PrimeField+FieldUtils> {
     /// Adds the variable to the list of variables to look up.
@@ -199,30 +196,31 @@ pub trait Lookup<'a, F: PrimeField+FieldUtils> {
         circuit: &mut Circuit<'a, F, Gatebb<'a,F>, Build>,
         table_round: usize,
         access_round: usize,
-        challenge_round: usize
-    ) -> ExternalValue<F>;
+        challenge_round: usize,
+        rate: usize,
+    ) -> ();
 }
 
-pub struct RangeLookup<F: PrimeField+FieldUtils> {
+pub struct RangeLookup<'a, F: PrimeField+FieldUtils> {
     vars: Vec<Variable>,
     round: usize,
-    challenge: ExternalValue<F>,
+    challenge: &'a ExternalValue<F>,
     range: usize,
 }
 
-impl<'a, F: PrimeField+FieldUtils> RangeLookup<F> {
-    pub fn new(range: usize) -> Self {
+impl<'a, F: PrimeField+FieldUtils> RangeLookup<'a, F> {
+    pub fn new(challenge_src: &'a ExternalValue<F>, range: usize) -> Self {
         
         Self{
             vars: vec![],
             round: 0,
-            challenge: ExternalValue::<F>::new(),
+            challenge: challenge_src,
             range,
         }
     }
 }
 
-impl<'a, F: PrimeField+FieldUtils> Lookup<'a, F> for RangeLookup<F> {
+impl<'a, F: PrimeField+FieldUtils> Lookup<'a, F> for RangeLookup<'a, F> {
     fn check(&mut self, _circuit: &mut Circuit<'a, F, Gatebb<'a,F>, Build>, var: Variable) -> () {
         if self.round < var.round {
             self.round = var.round
@@ -234,8 +232,9 @@ impl<'a, F: PrimeField+FieldUtils> Lookup<'a, F> for RangeLookup<F> {
         circuit: &mut Circuit<'a, F, Gatebb<'a,F>, Build>,
         table_round: usize,
         access_round: usize,
-        challenge_round: usize
-    ) -> ExternalValue<F> {
+        challenge_round: usize,
+        rate: usize,
+    ) -> () {
         let Self{vars, round, challenge, range} = self;
 
         assert!(table_round <= access_round);
@@ -246,7 +245,7 @@ impl<'a, F: PrimeField+FieldUtils> Lookup<'a, F> for RangeLookup<F> {
         let read_table = Advice::new(0, 0, range, move |_:&[F], _| {
             (0..range).map(|i|F::from(i as u64)).collect()
         });
-        let _table = circuit.advice(table_round, read_table, vec![], vec![]);
+        let table = circuit.advice(table_round, read_table, vec![], vec![]);
         // Access counts.
         let compute_accesses = Advice::new(vars.len(), 0, range, move |vars: &[F], _|{
             let mut ret = vec![0; range];
@@ -258,10 +257,13 @@ impl<'a, F: PrimeField+FieldUtils> Lookup<'a, F> for RangeLookup<F> {
             }
             ret.into_iter().map(|x|F::from(x)).collect()
         });
-        let _access_counts = circuit.advice(access_round, compute_accesses, vars, vec![]);
+        let access_counts = circuit.advice(access_round, compute_accesses, vars.clone(), vec![]);
         // Allocate challenge.
-        todo!("CONSTRAIN STUFF");
+        let challenge = input(circuit, challenge, challenge_round);
 
-        challenge
+        let lhs = invsum_gadget(circuit, &vars, challenge, rate, challenge_round);
+        let rhs = fracsum_gadget(circuit, &access_counts, &table, challenge, rate, challenge_round);
+
+        eq_gadget(circuit, lhs, rhs);
     }
 }

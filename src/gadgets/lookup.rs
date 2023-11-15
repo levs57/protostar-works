@@ -37,42 +37,50 @@ pub fn montgomery<F: PrimeField+FieldUtils>(v: &[F]) -> (F, Vec<F>) {
 
     let mut ret = vec![];
 
-    for i in 0..l-1 {
+    for i in 0..l {
         ret.push(left[i]*right[l-i-1])
     }
 
     (prod, ret)
 }
 
-/// Parses input as a, c, vals[0], ... vals[k-1] and constrains a = \sum 1/(vals[i]-c)
+/// Parses input as `a, c, vals[0], ... vals[k-1]` and returns F::ZERO if a == \sum 1/(vals[i]-c) or one of denominators is F::ZERO itself
 /// Assumes denominators are nonzero (which always happens provided c is a random challenge); unsound otherwise.
 pub fn sum_of_fractions<'a, F:PrimeField+FieldUtils> (args: &[F], k: usize) -> F {
     let (tmp, vals) = args.split_at(2);
     assert_eq!(vals.len(), k);
     let (res, c) = (tmp[0], tmp[1]);
-    let (prod, skips) = montgomery(& vals.iter().map(|t|*t-c).collect_vec());
-    res*prod-skips.iter().fold(F::ZERO, |acc,upd|acc+upd)
+    let (prod, skips) = montgomery(& vals.iter().map(|t| *t - c).collect_vec());
+    res * prod - skips.iter().fold(F::ZERO, |acc, upd| acc + upd)
 }
 
+/// Parses input as `a, c, vals[0], ... vals[k-1], nums[0], ... nums[k-1]` and returns F::ZERO if a == \sum nums[i]/(vals[i]-c) or one of denominators is F::ZERO itself
 pub fn sum_of_fractions_with_nums<'a, F:PrimeField+FieldUtils> (args: &[F], k: usize) -> F {
     let (tmp1, tmp2) = args.split_at(2);
-    assert!(tmp2.len() == 2*k);
+    assert!(tmp2.len() == 2 * k);
     let (vals, nums) = tmp2.split_at(k);
     let (res, c) = (tmp1[0], tmp1[1]);
-    let (prod, skips) = montgomery(& vals.iter().map(|t|*t-c).collect_vec());
-    res * prod - skips.iter().zip_eq(nums.iter()).fold(F::ZERO, |acc,(skip, num)|acc + *skip * num)
+    let (prod, skips) = montgomery(& vals.iter().map(|t| *t - c).collect_vec());
+    res * prod - skips.iter().zip_eq(nums.iter()).fold(F::ZERO, |acc, (skip, num)| acc + *skip * num)
 }
 
+/// Constrains res to be sum of inverses.
+/// 
+/// Exact form of the constraint is: res * \prod_i(vals[i] - challenge) - \sum_i(\prod_{j != i} vals[j]) == 0
+/// 
+/// # Panics
+///
+/// Panics if vals.len() == 0.
 pub fn invsum_flat_constrain<'a, F: PrimeField+FieldUtils>(
     circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>,
     vals: &[Variable],
     res: Variable,
     challenge: Variable,
     ) -> (){
-        assert!(vals.len()>0);
-        let args = [res, challenge].iter().chain(vals.iter()).map(|x|*x).collect_vec();
+        assert!(vals.len() > 0);
+        let args = [res, challenge].iter().chain(vals.iter()).map(|x| *x).collect_vec();
         let k = vals.len();
-        let gate = Gatebb::new(vals.len()+1, args.len(), 1, Rc::new(move |args|vec![sum_of_fractions(args, k)]));
+        let gate = Gatebb::new(vals.len() + 1, args.len(), 1, Rc::new(move |args |vec![sum_of_fractions(args, k)]));
         circuit.constrain(&args, gate);        
     }
 
@@ -265,5 +273,188 @@ impl<'a, F: PrimeField+FieldUtils> Lookup<'a, F> for RangeLookup<'a, F> {
         let rhs = fracsum_gadget(circuit, &access_counts, &table, challenge, rate, challenge_round);
 
         eq_gadget(circuit, lhs, rhs);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    const TEST_LEN: usize = 3;
+    use ff::Field;
+    use halo2::halo2curves::bn256;
+    use itertools::Itertools;
+    use rand_core::OsRng;
+
+    mod montgomery {
+        use super::*;
+
+        #[test]
+        fn empty() {
+            type F = bn256::Fr;
+            assert_eq!(montgomery::<F>(&[]), (F::ONE, vec![]));
+        }
+
+        #[test]
+        fn one() {
+            type F = bn256::Fr;
+            let points = [F::random(OsRng)]; 
+            assert_eq!(montgomery::<F>(&points), (points[0], vec![F::ONE]));
+        }
+
+        #[test]
+        fn random() {
+            type F = bn256::Fr;
+            let indexes = 0..TEST_LEN;
+            let points = indexes.clone().map(|_| F::random(OsRng)).collect_vec();
+            let (res_mul, res_partials) = montgomery::<F>(&points);
+            assert_eq!(res_mul, points.iter().fold(F::ONE, |acc, n| acc * n));
+            assert!(points.iter().zip_eq(res_partials).all(|(point, partial)| point * partial == res_mul))
+        }
+    }
+    
+    mod sum_of_fractions {
+        use super::*;
+
+        mod invalid {
+            use super::*;
+
+            #[test]
+            #[should_panic]
+            fn invalid_0_args() {
+                type F = bn256::Fr;
+                sum_of_fractions::<F>(&[], 0);
+            }
+
+            #[test]
+            #[should_panic]
+            fn invalid_small_k() {
+                type F = bn256::Fr;
+                sum_of_fractions::<F>(&[F::ONE, F::ONE, F::ONE, F::ONE], 1);
+            }
+
+            #[test]
+            #[should_panic]
+            fn invalid_big_k() {
+                type F = bn256::Fr;
+                sum_of_fractions::<F>(&[F::ONE, F::ONE, F::ONE, F::ONE], 3);
+            }
+        }
+
+
+        #[test]
+        fn empty() {
+            type F = bn256::Fr;
+            let c = F::random(OsRng);
+
+            assert_eq!(sum_of_fractions::<F>(&[F::ZERO, c], 0), F::ZERO);
+        }
+
+        #[test]
+        fn random_eq() {
+            type F = bn256::Fr;
+            let indexes = 0..TEST_LEN;
+            let c = F::random(OsRng);
+            let points = indexes.clone().map(|_| F::random(OsRng)).collect_vec();
+            let sum = points.iter().map(|p| (p - c).invert().unwrap() * F::ONE).fold(F::ZERO, |acc, n| acc + n);
+            let mut inputs = vec![sum, c];
+            inputs.extend(points.iter());
+            assert_eq!(sum_of_fractions::<F>(&inputs, indexes.len()), F::ZERO);
+        }
+
+        #[test]
+        fn aware_constrain_random() {
+            type F = bn256::Fr;
+            let indexes = 0..TEST_LEN;
+            let c = F::random(OsRng);
+            let fake_sum = F::random(OsRng);
+            let points = indexes.clone().map(|_| F::random(OsRng)).collect_vec();
+            let mut inputs = vec![fake_sum, c];
+            inputs.extend(points.iter());
+            let res = sum_of_fractions::<F>(&inputs, indexes.len());
+            let padded = points.iter().map(|p| (p - c)).collect_vec();
+            let inverces = padded.iter().map(|p| p.invert().unwrap()).collect_vec();
+            let real_sum = inverces.iter().fold(F::ZERO, |acc, n| acc + n);
+            let real_denominator = padded.iter().fold(F::ONE, |acc, n| acc * n);
+            let real_numerator = real_sum * real_denominator;
+            assert_eq!(fake_sum * real_denominator - real_numerator, res);
+        }
+    }
+
+    mod sum_of_fractions_with_nums {
+        use super::*;
+
+        mod invalid {
+            use super::*;
+
+            #[test]
+            #[should_panic]
+            fn invalid_0_args() {
+                type F = bn256::Fr;
+                sum_of_fractions_with_nums::<F>(&[], 0);
+            }
+
+            #[test]
+            #[should_panic]
+            fn invalid_small_k() {
+                type F = bn256::Fr;
+                sum_of_fractions_with_nums::<F>(&[F::ONE, F::ONE, F::ONE, F::ONE, F::ONE], 1);
+            }
+
+            #[test]
+            #[should_panic]
+            fn invalid_big_k() {
+                type F = bn256::Fr;
+                sum_of_fractions_with_nums::<F>(&[F::ONE, F::ONE, F::ONE, F::ONE, F::ONE, F::ONE, F::ONE], 3);
+            }
+        }
+
+
+        #[test]
+        fn empty() {
+            type F = bn256::Fr;
+            let c = F::random(OsRng);
+
+            assert_eq!(sum_of_fractions_with_nums::<F>(&[F::ZERO, c], 0), F::ZERO);
+        }
+
+        #[test]
+        fn random_eq() {
+            type F = bn256::Fr;
+            let indexes = 0..TEST_LEN;
+            let c = F::random(OsRng);
+            let points = indexes.clone().map(|_| F::random(OsRng)).collect_vec();
+            let numerators = indexes.clone().map(|_| F::random(OsRng)).collect_vec();
+
+            let sum = points.iter().zip_eq(&numerators).map(|(p, n)| (p - c).invert().unwrap() * n).fold(F::ZERO, |acc, n| acc + n);
+
+            let mut inputs = vec![sum, c];
+            inputs.extend(points.iter());
+            inputs.extend(numerators.iter());
+            assert_eq!(sum_of_fractions_with_nums::<F>(&inputs, indexes.len()), F::ZERO);
+        }
+
+        #[test]
+        fn aware_constrain_random() {
+            type F = bn256::Fr;
+            let indexes = 0..TEST_LEN;
+            let c = F::random(OsRng);
+            let fake_sum = F::random(OsRng);
+            let points = indexes.clone().map(|_| F::random(OsRng)).collect_vec();
+            let numerators = indexes.clone().map(|_| F::random(OsRng)).collect_vec();
+            let mut inputs = vec![fake_sum, c];
+            inputs.extend(points.iter());
+            inputs.extend(numerators.iter());
+            let res = sum_of_fractions_with_nums::<F>(&inputs, indexes.len());
+            let padded = points.iter().map(|p| (p - c)).collect_vec();
+            let real_sum = padded.iter().zip_eq(&numerators).map(|(p, n)| p.invert().unwrap() * n).fold(F::ZERO, |acc, n| acc + n);
+            let real_denominator = padded.iter().fold(F::ONE, |acc, n| acc * n);
+            let real_numerator = real_sum * real_denominator;
+            assert_eq!(fake_sum * real_denominator - real_numerator, res);
+        }
+    }
+
+    mod invsum_flat_constrain {
+        use super::*;
+
     }
 }

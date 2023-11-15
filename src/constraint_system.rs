@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::{Index, IndexMut}, iter::repeat};
 
 use ff::PrimeField;
 
@@ -13,7 +13,7 @@ pub enum CommitKind {
 }
 
 /// Variable descriptor. We treat challenges as public variables
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Visibility {
     Public,
     Private,
@@ -22,7 +22,7 @@ pub enum Visibility {
 /// A variable inside a constraint system.
 /// 
 /// Variables are what constraints operate on.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Variable {
     pub visibility: Visibility,
     pub round: usize,
@@ -48,6 +48,61 @@ pub struct Constraint<'c, F: PrimeField, G: Gate<'c, F>>{
 //         result.iter().all(|&output| output == F::ZERO)
 //     }
 // }
+
+#[derive(Debug, Default, Clone)]
+pub struct VariableMetadata {
+    pub max_constraint_degree: usize,
+}
+
+impl VariableMetadata {
+    pub fn update_mcd(&mut self, new_degree: usize) {
+        if new_degree > self.max_constraint_degree {
+            self.max_constraint_degree = new_degree;
+        }
+    }
+}
+
+type Store = Vec<Vec<VariableMetadata>>;
+
+/// An environment stores metadata of each variable
+#[derive(Debug, Default, Clone)]
+pub struct Environment {
+    pubs: Store,
+    privs: Store,
+}
+
+impl Environment {
+    pub fn with_capacity(num_pubs: usize, num_privs: usize) -> Self {
+        Self {
+            pubs: Store::with_capacity(num_pubs),
+            privs: Store::with_capacity(num_privs),
+        }
+    }
+}
+
+impl Index<Variable> for Environment {
+    type Output = VariableMetadata;
+
+    fn index(&self, index: Variable) -> &Self::Output {
+        let store = match index.visibility {
+            Visibility::Public => &self.pubs,
+            Visibility::Private => &self.privs,
+        };
+
+        &store[index.round][index.index]
+    }
+}
+
+impl IndexMut<Variable> for Environment {
+    fn index_mut(&mut self, index: Variable) -> &mut Self::Output {
+        let store = match index.visibility {
+            Visibility::Public => &mut self.pubs,
+            Visibility::Private => &mut self.privs,
+        };
+
+        &mut store[index.round][index.index]
+    }
+}
 
 
 /// Constraints are grouped by their CommitKind.
@@ -119,10 +174,11 @@ pub trait CS<'c, F: PrimeField, G: Gate<'c, F>> {
     fn extval(&mut self, size: usize) -> Vec<ExternalValue<F>>; 
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ConstraintSystem<'c, F: PrimeField, G: Gate<'c, F>> {
     spec: WitnessSpec,
     constraint_groups: [ConstraintGroup<'c, F, G>; 3],
+    pub env: Environment,
 }
 
 impl<'c, F: PrimeField, G: Gate<'c, F>> ConstraintSystem<'c, F, G> {
@@ -135,6 +191,7 @@ impl<'c, F: PrimeField, G: Gate<'c, F>> ConstraintSystem<'c, F, G> {
 
         Self {
             spec: WitnessSpec{ round_specs: vec![RoundWitnessSpec::default(); num_rounds], num_exts: 0, num_ints: 0 },
+            env: Environment::default(),
             constraint_groups,
         }
     }
@@ -153,6 +210,19 @@ impl<'c, F: PrimeField, G: Gate<'c, F>> ConstraintSystem<'c, F, G> {
     pub fn iter_constraints(&self) -> impl Iterator<Item = &Constraint<'c, F, G>> {
         self.constraint_groups.iter().flat_map(|cg| cg.entries.iter())
     }
+
+    pub fn iter_variables(&self) -> impl Iterator<Item = Variable> {
+        let spec = self.witness_spec().clone();
+
+        spec.round_specs.into_iter().enumerate().map(
+            |(round, RoundWitnessSpec(n_pubs, n_privs))| {
+                let pubs = (0..n_pubs).map(move |index| Variable { visibility: Visibility::Public, round, index });
+                let privs = (0..n_privs).map(move |index| Variable { visibility: Visibility::Private, round, index });
+
+                pubs.chain(privs)
+            }
+        ).flatten()
+    }
 }
 
 impl<'c, F: PrimeField, G: Gate<'c, F>> CS<'c, F, G> for ConstraintSystem<'c, F, G> {
@@ -162,6 +232,9 @@ impl<'c, F: PrimeField, G: Gate<'c, F>> CS<'c, F, G> for ConstraintSystem<'c, F,
 
     fn new_round(&mut self) -> usize {
         self.spec.round_specs.push(RoundWitnessSpec::default());
+        
+        self.env.pubs.push(Vec::default());
+        self.env.privs.push(Vec::default());
 
         self.last_round()
     }
@@ -175,11 +248,13 @@ impl<'c, F: PrimeField, G: Gate<'c, F>> CS<'c, F, G> for ConstraintSystem<'c, F,
             Visibility::Public => {
                 let prev = self.spec.round_specs[round].0;
                 self.spec.round_specs[round].0 += size;
+                self.env.pubs[round].extend(repeat(VariableMetadata::default()).take(size));
                 prev
             },
             Visibility::Private => {
                 let prev = self.spec.round_specs[round].1;
                 self.spec.round_specs[round].1 += size;
+                self.env.privs[round].extend(repeat(VariableMetadata::default()).take(size));
                 prev
             },
         };
@@ -187,13 +262,18 @@ impl<'c, F: PrimeField, G: Gate<'c, F>> CS<'c, F, G> for ConstraintSystem<'c, F,
         (prev..prev+size).into_iter().map(|index| Variable { visibility, round, index }).collect()
     }
 
-    fn constrain(&mut self, kind: CommitKind, inputs: &[Variable], constants: &[F], gate: G) {
-        self.constraint_group(kind).constrain(inputs, constants, gate);
-    }
-
     fn extval(&mut self, size: usize) -> Vec<ExternalValue<F>> {
         let prev = self.spec.num_exts;
         self.spec.num_exts += size;
         (prev..prev+size).into_iter().map(|x|ExternalValue{addr:x, _marker: PhantomData::<F>}).collect()
+    }
+
+    fn constrain(&mut self, kind: CommitKind, inputs: &[Variable], constants: &[F], gate: G) {
+        // update max constraint degree if necessary
+        for &var in inputs {
+            self.env[var].update_mcd(gate.d())
+        }
+
+        self.constraint_group(kind).constrain(inputs, constants, gate);
     }
 }

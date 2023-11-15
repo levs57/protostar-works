@@ -99,7 +99,7 @@ pub fn fracsum_flat_constrain<'a, F: PrimeField+FieldUtils>(
 }
 
 /// Gadget which returns the sum of inverses of an array, shifted by a challenge.
-/// Assumes that array length is divisible by rate, pad otherwise.
+/// Assumes that array length is divisible by rate.
 /// Unsound if one of the inverses is undefined.
 /// Rate - amount of values processed in a batch. Deg = rate+1
 pub fn invsum_gadget<'a, F: PrimeField+FieldUtils>(
@@ -142,56 +142,56 @@ pub fn invsum_gadget<'a, F: PrimeField+FieldUtils>(
 
     }
 
-    /// Gadget which returns the sum of fractions of an array, shifted by a challenge.
-    /// Assumes that array length is divisible by rate, pad otherwise.
-    /// Unsound if one of the inverses is undefined.
-    /// Rate - amount of values processed in a batch. Deg = rate+1
-    pub fn fracsum_gadget<'a, F: PrimeField+FieldUtils>(
-        circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>,
-        nums: &[Variable],
-        dens: &[Variable],
-        challenge: Variable,
-        rate: usize,
-        round: usize,
-        ) -> Variable {
-            assert!(rate > 0);
-            assert!(nums.len() == dens.len());
-            let l = nums.len();
-            assert!(l%rate == 0);
-            let mut nums = nums;
-            let mut dens = dens;
+/// Gadget which returns the sum of fractions of an array, shifted by a challenge.
+/// Assumes that array length is divisible by rate, pad otherwise.
+/// Unsound if one of the inverses is undefined.
+/// Rate - amount of values processed in a batch. Deg = rate+1
+pub fn fracsum_gadget<'a, F: PrimeField+FieldUtils>(
+    circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>,
+    nums: &[Variable],
+    dens: &[Variable],
+    challenge: Variable,
+    rate: usize,
+    round: usize,
+    ) -> Variable {
+        assert!(rate > 0);
+        assert!(nums.len() == dens.len());
+        let l = nums.len();
+        assert!(l%rate == 0);
+        let mut nums = nums;
+        let mut dens = dens;
+        let mut num_chunk;
+        let mut den_chunk;
+        let advice = Advice::new(2*l+1, 0, l/rate, move |args: &[F], _|{
+            let (tmp, c) = args.split_at(2*l);
+            let c = c[0];
+            let (nums, dens) = tmp.split_at(l);
+            let mut inv = dens.iter().map(|x|*x-c).collect_vec();
+            inv.batch_invert();
+            let mut ret = vec![];
+            let mut inv : &[F] = &inv;
+            let mut nums : &[F] = &nums;
+            let mut inv_chunk;
             let mut num_chunk;
-            let mut den_chunk;
-            let advice = Advice::new(2*l+1, 0, l/rate, move |args: &[F], _|{
-                let (tmp, c) = args.split_at(2*l);
-                let c = c[0];
-                let (nums, dens) = tmp.split_at(l);
-                let mut inv = dens.iter().map(|x|*x-c).collect_vec();
-                inv.batch_invert();
-                let mut ret = vec![];
-                let mut inv : &[F] = &inv;
-                let mut nums : &[F] = &nums;
-                let mut inv_chunk;
-                let mut num_chunk;
-                while inv.len() > 0 {
-                    (inv_chunk, inv) = inv.split_at(rate);
-                    (num_chunk, nums) = nums.split_at(rate);
-                    ret.push(inner_prod(inv_chunk, num_chunk));
-                }
-                ret
-            });
-    
-            let args = nums.iter().chain(dens.iter()).map(|x|*x).chain(once(challenge)).collect();
-    
-            let batches = circuit.advice(round, advice, args, vec![]);
-            for i in 0..l/rate {
+            while inv.len() > 0 {
+                (inv_chunk, inv) = inv.split_at(rate);
                 (num_chunk, nums) = nums.split_at(rate);
-                (den_chunk, dens) = dens.split_at(rate);
-                fracsum_flat_constrain(circuit, num_chunk, den_chunk, batches[i], challenge);
+                ret.push(inner_prod(inv_chunk, num_chunk));
             }
-    
-        sum_gadget(circuit, &batches, round)        
+            ret
+        });
+
+        let args = nums.iter().chain(dens.iter()).map(|x|*x).chain(once(challenge)).collect();
+
+        let batches = circuit.advice(round, advice, args, vec![]);
+        for i in 0..l/rate {
+            (num_chunk, nums) = nums.split_at(rate);
+            (den_chunk, dens) = dens.split_at(rate);
+            fracsum_flat_constrain(circuit, num_chunk, den_chunk, batches[i], challenge);
         }
+
+    sum_gadget(circuit, &batches, round)        
+    }
 /// 
 pub trait Lookup<F: PrimeField+FieldUtils> {
     /// Adds the variable to the list of variables to look up.
@@ -260,7 +260,11 @@ impl<F: PrimeField+FieldUtils> Lookup<F> for RangeLookup<F> {
             for var in vars{
                 let var = BigUint::from_bytes_le(var.to_repr().as_ref());
                 assert!(var < range.into(), "Error: lookup value out of range.");
-                let i = var.to_u64_digits()[0] as usize;
+                let u64_digits = var.to_u64_digits();
+                let mut i = 0 as usize;
+                if u64_digits.len() > 0 {
+                    i = u64_digits[0] as usize;
+                }
                 ret[i]+=1;
             }
             ret.into_iter().map(|x|F::from(x)).collect()
@@ -279,7 +283,7 @@ impl<F: PrimeField+FieldUtils> Lookup<F> for RangeLookup<F> {
 #[cfg(test)]
 mod test {
     use super::*;
-    const TEST_LEN: usize = 3;
+    const TEST_LEN: usize = 12;
     use ff::Field;
     use halo2::halo2curves::bn256;
     use itertools::Itertools;
@@ -320,21 +324,21 @@ mod test {
 
             #[test]
             #[should_panic]
-            fn invalid_0_args() {
+            fn no_args() {
                 type F = bn256::Fr;
                 sum_of_fractions::<F>(&[], 0);
             }
 
             #[test]
             #[should_panic]
-            fn invalid_small_k() {
+            fn small_k() {
                 type F = bn256::Fr;
                 sum_of_fractions::<F>(&[F::ONE, F::ONE, F::ONE, F::ONE], 1);
             }
 
             #[test]
             #[should_panic]
-            fn invalid_big_k() {
+            fn big_k() {
                 type F = bn256::Fr;
                 sum_of_fractions::<F>(&[F::ONE, F::ONE, F::ONE, F::ONE], 3);
             }
@@ -388,26 +392,25 @@ mod test {
 
             #[test]
             #[should_panic]
-            fn invalid_0_args() {
+            fn no_args() {
                 type F = bn256::Fr;
                 sum_of_fractions_with_nums::<F>(&[], 0);
             }
 
             #[test]
             #[should_panic]
-            fn invalid_small_k() {
+            fn small_k() {
                 type F = bn256::Fr;
                 sum_of_fractions_with_nums::<F>(&[F::ONE, F::ONE, F::ONE, F::ONE, F::ONE], 1);
             }
 
             #[test]
             #[should_panic]
-            fn invalid_big_k() {
+            fn big_k() {
                 type F = bn256::Fr;
                 sum_of_fractions_with_nums::<F>(&[F::ONE, F::ONE, F::ONE, F::ONE, F::ONE, F::ONE, F::ONE], 3);
             }
         }
-
 
         #[test]
         fn empty() {
@@ -456,5 +459,265 @@ mod test {
     mod invsum_flat_constrain {
         use super::*;
 
+        #[test]
+        fn random_eq() {
+            type F = bn256::Fr;
+            let indexes = 0..TEST_LEN;
+            
+            let challenge = F::random(OsRng);
+            let points = indexes.clone().map(|_| F::random(OsRng)).collect_vec();
+            let result = points.iter().map(|p| (p - challenge).invert().unwrap()).fold(F::ZERO, |acc, n| acc + n);
+
+            let challenge_value = ExternalValue::<F>::new();
+            let points_values = indexes.clone().map(|_| ExternalValue::<F>::new()).collect_vec();
+            let result_value = ExternalValue::<F>::new();
+
+            let mut circuit = Circuit::new(TEST_LEN + 1, 1);
+            let challenge_variable = input(&mut circuit, &challenge_value, 0);
+            let points_variables = points_values.iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
+            let reslut_variable = input(&mut circuit, &result_value, 0);
+
+            invsum_flat_constrain(&mut circuit, &points_variables, reslut_variable, challenge_variable);
+            let mut circuit = circuit.finalize();
+
+            challenge_value.set(challenge).unwrap();
+            points_values.iter().zip_eq(points).map(|(val, point)| val.set(point).unwrap()).last();
+            result_value.set(result).unwrap();
+
+            circuit.execute(0);
+            circuit.cs.valid_witness();
+
+        }
+    }
+
+    mod fracsum_flat_constrain {
+        use super::*;
+
+        #[test]
+        fn random_eq() {
+            type F = bn256::Fr;
+            let indexes = 0..TEST_LEN;
+            
+            let challenge = F::random(OsRng);
+            let points = indexes.clone().map(|_| F::random(OsRng)).collect_vec();
+            let numerators = indexes.clone().map(|_| F::random(OsRng)).collect_vec();
+            let result = points.iter().zip_eq(&numerators).map(|(p, n)| (p - challenge).invert().unwrap() * n).fold(F::ZERO, |acc, n| acc + n);
+
+            let challenge_value = ExternalValue::<F>::new();
+            let points_values = indexes.clone().map(|_| ExternalValue::<F>::new()).collect_vec();
+            let numerators_values = indexes.clone().map(|_| ExternalValue::<F>::new()).collect_vec();
+            let result_value = ExternalValue::<F>::new();
+
+            let mut circuit = Circuit::new(TEST_LEN + 1, 1);
+            let challenge_variable = input(&mut circuit, &challenge_value, 0);
+            let points_variables = points_values.iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
+            let numerator_variables = numerators_values.iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
+            let reslut_variable = input(&mut circuit, &result_value, 0);
+
+            fracsum_flat_constrain(&mut circuit, &numerator_variables, &points_variables, reslut_variable, challenge_variable);
+            let mut circuit = circuit.finalize();
+
+            challenge_value.set(challenge).unwrap();
+            points_values.iter().zip_eq(points).map(|(val, point)| val.set(point).unwrap()).last();
+            numerators_values.iter().zip_eq(numerators).map(|(val, point)| val.set(point).unwrap()).last();
+            result_value.set(result).unwrap();
+
+            circuit.execute(0);
+            circuit.cs.valid_witness();
+        }
+    }
+    mod invsum_gadget{
+        use super::*;
+
+        #[test]
+        fn random_eq() {
+            type F = bn256::Fr;
+            let indexes = 0..TEST_LEN;
+            let rate = 3;
+            let challenge = F::random(OsRng);
+            let points = indexes.clone().map(|_| F::random(OsRng)).collect_vec();
+            let result = points.iter().map(|p| (p - challenge).invert().unwrap()).fold(F::ZERO, |acc, n| acc + n);
+
+            let challenge_value = ExternalValue::<F>::new();
+            let points_values = indexes.clone().map(|_| ExternalValue::<F>::new()).collect_vec();
+
+            let mut circuit = Circuit::new(10, 1);
+            let challenge_variable = input(&mut circuit, &challenge_value, 0);
+            let points_variables = points_values.iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
+
+            let result_variable = invsum_gadget(&mut circuit, &points_variables, challenge_variable, rate, 0);
+            let mut circuit = circuit.finalize();
+
+            challenge_value.set(challenge).unwrap();
+            points_values.iter().zip_eq(points).map(|(val, point)| val.set(point).unwrap()).last();
+
+            circuit.execute(0);
+            circuit.cs.valid_witness();
+
+            assert_eq!(result, circuit.cs.getvar(result_variable));
+        }
+    }
+
+    mod fracsum_gadget {
+        use super::*;
+
+        #[test]
+        fn random_eq() {
+            type F = bn256::Fr;
+            let indexes = 0..TEST_LEN;
+            
+            let challenge = F::random(OsRng);
+            let points = indexes.clone().map(|_| F::random(OsRng)).collect_vec();
+            let numerators = indexes.clone().map(|_| F::random(OsRng)).collect_vec();
+            let result = points.iter().zip_eq(&numerators).map(|(p, n)| (p - challenge).invert().unwrap() * n).fold(F::ZERO, |acc, n| acc + n);
+
+            let challenge_value = ExternalValue::<F>::new();
+            let points_values = indexes.clone().map(|_| ExternalValue::<F>::new()).collect_vec();
+            let numerators_values = indexes.clone().map(|_| ExternalValue::<F>::new()).collect_vec();
+
+            let mut circuit = Circuit::new(TEST_LEN + 1, 1);
+            let challenge_variable = input(&mut circuit, &challenge_value, 0);
+            let points_variables = points_values.iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
+            let numerator_variables = numerators_values.iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
+
+            let result_variable = fracsum_gadget(&mut circuit, &numerator_variables, &points_variables, challenge_variable, 3, 0);
+            let mut circuit = circuit.finalize();
+
+            challenge_value.set(challenge).unwrap();
+            points_values.iter().zip_eq(points).map(|(val, point)| val.set(point).unwrap()).last();
+            numerators_values.iter().zip_eq(numerators).map(|(val, point)| val.set(point).unwrap()).last();
+
+            circuit.execute(0);
+            circuit.cs.valid_witness();
+            assert_eq!(result, circuit.cs.getvar(result_variable));
+        }
+    }
+
+    mod range_lookup {
+        use super::*;
+
+        use rand_core::RngCore;
+
+        #[test]
+        fn random() {
+            type F = bn256::Fr;
+            let indexes = 0..TEST_LEN;
+            let range = 16;
+
+            let challenge_value = ExternalValue::<F>::new();
+            
+            let test_values = indexes.clone().map(|_| ExternalValue::<F>::new()).collect_vec();
+            let mut range_lookup = RangeLookup::new(&challenge_value, range);
+
+            let mut circuit = Circuit::new(range + 1, TEST_LEN + 1);
+            let test_variables = test_values.iter().enumerate().map(|(i, v)| input(&mut circuit, &v, i)).collect_vec();
+            test_variables.into_iter().map(|variable| range_lookup.check(&mut circuit, variable)).last();
+            range_lookup.finalize(&mut circuit, 0, TEST_LEN - 1, TEST_LEN, 2);
+            let mut circuit = circuit.finalize();
+
+            test_values.iter().map(|val| val.set(F::from(OsRng.next_u64() % range as u64)).unwrap()).last();
+            for i in indexes {
+                circuit.execute(i);
+            }
+            let challenge = F::random(OsRng);
+            challenge_value.set(challenge).unwrap();
+            circuit.execute(TEST_LEN);
+            circuit.cs.valid_witness();
+        }
+
+        mod invalid {
+            use super::*;
+
+            #[test]
+            #[should_panic]
+            fn low_challendge_round() {
+                type F = bn256::Fr;
+                let range = 16;
+                let rounds = 3;
+    
+                let challenge_value = ExternalValue::<F>::new();
+                
+                let test_value = ExternalValue::<F>::new();
+                let mut range_lookup = RangeLookup::new(&challenge_value, range);
+    
+                let mut circuit = Circuit::new(range + 1, rounds);
+                let test_variable = input(&mut circuit, &test_value, 0);
+                range_lookup.check(&mut circuit, test_variable);
+                range_lookup.finalize(&mut circuit, 1, 1, 1, 2);
+                let mut circuit = circuit.finalize();
+    
+                test_value.set(F::from(OsRng.next_u64() % range as u64)).unwrap();
+
+                for i in 0..rounds {
+                    circuit.execute(i);
+                }
+
+                let challenge = F::random(OsRng);
+                challenge_value.set(challenge).unwrap();
+                circuit.execute(TEST_LEN);
+                circuit.cs.valid_witness();
+            }
+
+            #[test]
+            #[should_panic]
+            fn high_value_round() {
+                type F = bn256::Fr;
+                let range = 16;
+                let rounds = 3;
+    
+                let challenge_value = ExternalValue::<F>::new();
+                
+                let test_value = ExternalValue::<F>::new();
+                let mut range_lookup = RangeLookup::new(&challenge_value, range);
+    
+                let mut circuit = Circuit::new(range + 1, rounds);
+                let test_variable = input(&mut circuit, &test_value, 2);
+                range_lookup.check(&mut circuit, test_variable);
+                range_lookup.finalize(&mut circuit, 1, 1, 1, 2);
+                let mut circuit = circuit.finalize();
+    
+                test_value.set(F::from(OsRng.next_u64() % range as u64)).unwrap();
+
+                for i in 0..rounds {
+                    circuit.execute(i);
+                }
+
+                let challenge = F::random(OsRng);
+                challenge_value.set(challenge).unwrap();
+                circuit.execute(TEST_LEN);
+                circuit.cs.valid_witness();
+            }
+
+            #[test]
+            #[should_panic]
+            fn high_table_round() {
+                type F = bn256::Fr;
+                let range = 16;
+                let rounds = 3;
+    
+                let challenge_value = ExternalValue::<F>::new();
+                
+                let test_value = ExternalValue::<F>::new();
+                let mut range_lookup = RangeLookup::new(&challenge_value, range);
+    
+                let mut circuit = Circuit::new(range + 1, rounds);
+                let test_variable = input(&mut circuit, &test_value, 2);
+                range_lookup.check(&mut circuit, test_variable);
+                range_lookup.finalize(&mut circuit, 1, 0, 2, 2);
+                let mut circuit = circuit.finalize();
+    
+                test_value.set(F::from(OsRng.next_u64() % range as u64)).unwrap();
+
+                for i in 0..rounds {
+                    circuit.execute(i);
+                }
+
+                let challenge = F::random(OsRng);
+                challenge_value.set(challenge).unwrap();
+                circuit.execute(TEST_LEN);
+                circuit.cs.valid_witness();
+            }
+        }
+        // TODO: tests for round bounds
     }
 }

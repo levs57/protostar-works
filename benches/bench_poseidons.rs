@@ -48,7 +48,7 @@ pub fn evaluate_on_random_linear_combinations(gate: &impl Gate<F>, a: &Vec<F>, b
 
 }
 
-pub fn assemble_poseidon_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, cfg: &'a Poseidon, pi: &'a ExternalValue<F>) {
+pub fn assemble_poseidon_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, cfg: &'a Poseidon, pi: ExternalValue<F>) {
     let mut acc = input(circuit, pi, 0);
 
     for _ in 0..1000 {
@@ -57,15 +57,16 @@ pub fn assemble_poseidon_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>,
 }
 
 pub fn poseidons_pseudo_fold(c: &mut Criterion) {
-    let pi = ExternalValue::new();
     let cfg = Poseidon::new();
 
     let mut circuit = Circuit::new(25, 1);
-    assemble_poseidon_circuit(&mut circuit, &cfg, &pi);
+    let pi = circuit.ext_val(1)[0];
+
+    assemble_poseidon_circuit(&mut circuit, &cfg, pi);
 
     let mut circuit = circuit.finalize();
 
-    pi.set(F::random(OsRng)).unwrap();
+    circuit.set_ext(pi, F::random(OsRng));
     circuit.execute(0);
 
     circuit.cs.valid_witness();
@@ -92,15 +93,15 @@ pub fn poseidons_pseudo_fold(c: &mut Criterion) {
 }
 
 pub fn poseidons_msm(c: &mut Criterion) {
-    let pi = ExternalValue::new();
     let cfg = Poseidon::new();
 
     let mut circuit = Circuit::new(25, 1);
-    assemble_poseidon_circuit(&mut circuit, &cfg, &pi);
+    let pi = circuit.ext_val(1)[0];
+    assemble_poseidon_circuit(&mut circuit, &cfg, pi);
 
     let mut circuit = circuit.finalize();
 
-    pi.set(F::random(OsRng)).unwrap();
+    circuit.set_ext(pi, F::random(OsRng));
     circuit.execute(0);
 
     circuit.cs.valid_witness();

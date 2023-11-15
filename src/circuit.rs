@@ -49,11 +49,15 @@ impl<'closure, F: PrimeField> From<PolyOp<'closure, F>> for Gatebb<'closure, F>{
 ///
 /// This can be loaded as a public input or used as an auxiliary value in advices. 
 /// Can also be shared between multiple circuits in order to enable layered constructions.
-pub type ExternalValue<F> = OnceCell<F>;
+#[derive(Debug, Clone, Copy)]
+pub struct ExternalValue<F: PrimeField> {
+    pub addr: usize,
+    pub _marker: PhantomData<F>,
+}
 
 /// An internal value, used by prover but not allocated to witness. 
 pub struct InternalValue<F: PrimeField> {
-    elt: Option<F>
+    elt: Option<F>,
 }
 
 impl<F: PrimeField> InternalValue<F> {
@@ -109,21 +113,21 @@ pub mod circuit_operations {
         fn execute(&self, witness: &mut CSWtns<F, G>);
     }
 
-    pub struct AttachedAdvicePub<'advice, F> {
-        aux: Vec<&'advice ExternalValue<F>>,
+    pub struct AttachedAdvicePub<'advice, F: PrimeField> {
+        aux: Vec<ExternalValue<F>>,
         output: Vec<Variable>,
         closure: Rc<dyn Fn(&[F]) -> Vec<F> + 'advice>,
     }
 
-    impl<'advice, F> AttachedAdvicePub<'advice, F> {
-        pub fn new(aux: Vec<&'advice ExternalValue<F>>, output: Vec<Variable>, closure: Rc<dyn Fn(&[F]) -> Vec<F> + 'advice>) -> Self {
+    impl<'advice, F: PrimeField> AttachedAdvicePub<'advice, F> {
+        pub fn new(aux: Vec<ExternalValue<F>>, output: Vec<Variable>, closure: Rc<dyn Fn(&[F]) -> Vec<F> + 'advice>) -> Self {
             Self { aux, output, closure }
         }
     }
 
     impl<'advice, F: PrimeField, G: Gate<F>> CircuitOperation<F, G> for AttachedAdvicePub<'advice, F> {
         fn execute(&self, witness: &mut CSWtns<F, G>) {
-            let aux: Vec<_> = self.aux.iter().map(|ev| *ev.get().expect("external values should be set before execution")).collect();
+            let aux: Vec<_> = self.aux.iter().map(|ev| witness.getext(*ev)).collect();
 
             let output = (self.closure)(&aux);
 
@@ -247,7 +251,7 @@ where
         output
     }
 
-    pub fn advice_pub(&mut self, round: usize, advice: AdvicePub<'circuit, F>, aux: Vec<&'circuit ExternalValue<F>>) -> Vec<Variable> {
+    pub fn advice_pub(&mut self, round: usize, advice: AdvicePub<'circuit, F>, aux: Vec<ExternalValue<F>>) -> Vec<Variable> {
         assert!(round < self.ops.len(), "The round is too large.");
 
         let op_index = self.ops[round].len();
@@ -316,12 +320,14 @@ where
         self.constrain(&input, gate);
     }
 
-    pub fn load_pi(&'circuit mut self, round: usize, pi: &'circuit ExternalValue<F>) -> Variable {
+    pub fn load_pi(&'circuit mut self, round: usize, pi: ExternalValue<F>) -> Variable {
         let adv = AdvicePub::new(1, 1, move |ext| vec![ext[0]]);
-        self.advice_pub(round, adv, vec![&pi])[0]
+        self.advice_pub(round, adv, vec![pi])[0]
     }
 
-    pub fn finalize(self) -> Circuit<'circuit, F, G, Finalized> {
+    pub fn finalize(mut self) -> Circuit<'circuit, F, G, Finalized> {
+        self.cs.create_witness();
+        
         Circuit {
             gate_registry: self.gate_registry,
             cs: self.cs,
@@ -334,6 +340,10 @@ where
 
     pub fn one(&self) -> Variable {
         Variable { visibility: Visibility::Public, round: 0, index: 0 }
+    }
+
+    pub fn ext_val(&mut self, size: usize) -> Vec<ExternalValue<F>> {
+        self.cs.cs.extval(size)
     }
 }
 
@@ -352,5 +362,9 @@ where
             }
             self.round_counter += 1;
         }
+    }
+
+    pub fn set_ext(&mut self, ext: ExternalValue<F>, value: F) -> () {
+        self.cs.setext(ext, value);
     }
 }

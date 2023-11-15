@@ -193,13 +193,13 @@ pub fn invsum_gadget<'a, F: PrimeField+FieldUtils>(
         sum_gadget(circuit, &batches, round)        
         }
 /// 
-pub trait Lookup<'a, F: PrimeField+FieldUtils> {
+pub trait Lookup<F: PrimeField+FieldUtils> {
     /// Adds the variable to the list of variables to look up.
-    fn check(&mut self, circuit: &mut Circuit<'a, F, Gatebb<'a,F>, Build>, var: Variable) -> ();
+    fn check<'a>(&mut self, circuit: &mut Circuit<'a, F, Gatebb<'a,F>, Build>, var: Variable) -> ();
     /// Seals the lookup and applies the constraints. Returns the challenge.
     /// Round parameter is the round of a challenge - so it must be strictly larger than rounds of any
     /// variable participating in a lookup.
-    fn finalize(
+    fn finalize<'a>(
         self,
         circuit: &mut Circuit<'a, F, Gatebb<'a,F>, Build>,
         table_round: usize,
@@ -209,15 +209,15 @@ pub trait Lookup<'a, F: PrimeField+FieldUtils> {
     ) -> ();
 }
 
-pub struct RangeLookup<'a, F: PrimeField+FieldUtils> {
+pub struct RangeLookup<F: PrimeField+FieldUtils> {
     vars: Vec<Variable>,
     round: usize,
-    challenge: &'a ExternalValue<F>,
+    challenge: ExternalValue<F>,
     range: usize,
 }
 
-impl<'a, F: PrimeField+FieldUtils> RangeLookup<'a, F> {
-    pub fn new(challenge_src: &'a ExternalValue<F>, range: usize) -> Self {
+impl<F: PrimeField+FieldUtils> RangeLookup<F> {
+    pub fn new(challenge_src: ExternalValue<F>, range: usize) -> Self {
         
         Self{
             vars: vec![],
@@ -228,14 +228,14 @@ impl<'a, F: PrimeField+FieldUtils> RangeLookup<'a, F> {
     }
 }
 
-impl<'a, F: PrimeField+FieldUtils> Lookup<'a, F> for RangeLookup<'a, F> {
-    fn check(&mut self, _circuit: &mut Circuit<'a, F, Gatebb<'a,F>, Build>, var: Variable) -> () {
+impl<F: PrimeField+FieldUtils> Lookup<F> for RangeLookup<F> {
+    fn check<'a>(&mut self, _circuit: &mut Circuit<'a, F, Gatebb<'a,F>, Build>, var: Variable) -> () {
         if self.round < var.round {
             self.round = var.round
         }
         self.vars.push(var);
     }
-    fn finalize(
+    fn finalize<'a>(
         self,
         circuit: &mut Circuit<'a, F, Gatebb<'a,F>, Build>,
         table_round: usize,

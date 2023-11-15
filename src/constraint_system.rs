@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use ff::PrimeField;
 
-use crate::gate::Gate;
+use crate::{gate::Gate, circuit::ExternalValue};
 
 /// Constraint commitment kind.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -79,7 +79,12 @@ pub struct RoundWitnessSpec(pub usize, pub usize);
 /// Witness shape specification: a collection of specifications for each round
 /// 
 /// Any witness used for this constraint system has to at least comply with the spec.
-pub type WitnessSpec = Vec<RoundWitnessSpec>;
+#[derive(Debug, Clone)]
+pub struct WitnessSpec {
+    pub round_specs: Vec<RoundWitnessSpec>,
+    pub num_ints: usize,
+    pub num_exts: usize,
+}
 
 pub trait CS<F: PrimeField, G: Gate<F>> {
     fn num_rounds(&self) -> usize;
@@ -99,6 +104,8 @@ pub trait CS<F: PrimeField, G: Gate<F>> {
     }
 
     fn constrain(&mut self, kind: CommitKind, inputs: &[Variable], gate: G);
+
+    fn extval(&mut self, size: usize) -> Vec<ExternalValue<F>>; 
 }
 
 #[derive(Debug, Clone)]
@@ -116,7 +123,7 @@ impl<F: PrimeField, G: Gate<F>> ConstraintSystem<F, G> {
         ];
 
         Self {
-            spec: vec![RoundWitnessSpec::default(); num_rounds],
+            spec: WitnessSpec{ round_specs: vec![RoundWitnessSpec::default(); num_rounds], num_exts: 0, num_ints: 0 },
             constraint_groups,
         }
     }
@@ -139,11 +146,11 @@ impl<F: PrimeField, G: Gate<F>> ConstraintSystem<F, G> {
 
 impl<F: PrimeField, G: Gate<F>> CS<F, G> for ConstraintSystem<F, G> {
     fn num_rounds(&self) -> usize {
-        self.spec.len()
+        self.spec.round_specs.len()
     }
 
     fn new_round(&mut self) {
-        self.spec.push(RoundWitnessSpec::default())
+        self.spec.round_specs.push(RoundWitnessSpec::default())
     }
 
     fn witness_spec(&self) -> &WitnessSpec {
@@ -153,13 +160,13 @@ impl<F: PrimeField, G: Gate<F>> CS<F, G> for ConstraintSystem<F, G> {
     fn alloc_in_round(&mut self, round: usize, visibility: Visibility, size: usize) -> Vec<Variable> {
         let prev = match visibility {
             Visibility::Public => {
-                let prev = self.spec[round].0;
-                self.spec[round].0 += size;
+                let prev = self.spec.round_specs[round].0;
+                self.spec.round_specs[round].0 += size;
                 prev
             },
             Visibility::Private => {
-                let prev = self.spec[round].1;
-                self.spec[round].1 += size;
+                let prev = self.spec.round_specs[round].1;
+                self.spec.round_specs[round].1 += size;
                 prev
             },
         };
@@ -169,5 +176,11 @@ impl<F: PrimeField, G: Gate<F>> CS<F, G> for ConstraintSystem<F, G> {
 
     fn constrain(&mut self, kind: CommitKind, inputs: &[Variable], gate: G) {
         self.constraint_group(kind).constrain(inputs, gate);
+    }
+
+    fn extval(&mut self, size: usize) -> Vec<ExternalValue<F>> {
+        let prev = self.spec.num_exts;
+        self.spec.num_exts += size;
+        (prev..prev+size).into_iter().map(|x|ExternalValue{addr:x, _marker: PhantomData::<F>}).collect()
     }
 }

@@ -4,7 +4,7 @@ mod tests {
 
     use crate::{
         gate::Gatebb,
-        constraint_system::{Variable, Visibility},
+        constraint_system::{Variable, Visibility, CS},
         circuit::{Circuit, ExternalValue, PolyOp, Advice, Build},
         gadgets::{
             poseidon::{
@@ -56,21 +56,24 @@ mod tests {
     #[test]
     
     fn test_circuit_builder() {
-        let public_input_source = ExternalValue::<F>::new();
-    
         let mut circuit = Circuit::<F, Gatebb<F>, Build>::new(2, 1);
-    
+        let public_input_source = circuit.ext_val(1)[0];
+
         let sq = PolyOp::new(2, 1, 1, |x| vec!(x[0]*x[0]));
-        let input = input(&mut circuit, &public_input_source, 0);
+        let input = input(&mut circuit, public_input_source, 0);
         let sq1 = circuit.apply(0, sq.clone(), vec![input]);
         let _ = circuit.apply_pub(0, sq.clone(), sq1);
     
         let mut circuit = circuit.finalize();
-    
-        public_input_source.set(F::from(2)).unwrap();
-    
+        
+        println!("PI source: {:?}", public_input_source);
+        println!("ext_vals.len(): {}", circuit.cs.ext_vals.len());
+        println!("num_exts, according to cfg: {}", circuit.cs.cs.witness_spec().num_exts);
+
+        circuit.set_ext(public_input_source, F::from(2));
+
         circuit.execute(0);
-    
+        
         let var = Variable { visibility: Visibility::Public, round: 0, index: 2 };
         assert_eq!(F::from(16), circuit.cs.getvar(var));
     }
@@ -78,24 +81,21 @@ mod tests {
     #[test]
     
     fn test_permutation_argument() {
-        let pi_ext : Vec<_> = repeat(ExternalValue::<F>::new()).take(5).collect();
-        let challenge_ext = ExternalValue::<F>::new();
     
         let mut circuit = Circuit::new(2, 2);
-        
-        let one = circuit.one();
-    
-        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);
-        
+        let pi_ext = circuit.ext_val(5);
+        let challenge_ext = circuit.ext_val(1)[0];
+
+        let one = circuit.one();        
     
         let mut pi = vec![];
         for k in 0..5{
             pi.push(
-                input(&mut circuit, &pi_ext[k], 0)
+                input(&mut circuit, pi_ext[k], 0)
             );
         }
     
-        let challenge = input(&mut circuit, &challenge_ext, 1);
+        let challenge = input(&mut circuit, challenge_ext, 1);
 
         let division_advice = Advice::new(2, 0, 1, |ivar : &[F], _| {
             let ch = ivar[0];
@@ -125,16 +125,16 @@ mod tests {
         let mut circuit = circuit.finalize();
     
         // construction phase ended
-    
-        pi_ext[0].set(F::from(2)).unwrap();
-        pi_ext[1].set(F::from(3)).unwrap();
-        pi_ext[2].set(F::from(4)).unwrap();
-        pi_ext[3].set(F::from(5)).unwrap();
-        pi_ext[4].set(F::from(6)).unwrap();
+        circuit.set_ext(pi_ext[0], F::from(2));
+        circuit.set_ext(pi_ext[1], F::from(3));
+        circuit.set_ext(pi_ext[2], F::from(4));
+        circuit.set_ext(pi_ext[3], F::from(5));
+        circuit.set_ext(pi_ext[4], F::from(6));
     
         circuit.execute(0);
+
+        circuit.set_ext(challenge_ext, F::random(OsRng));
     
-        challenge_ext.set(F::random(OsRng)).unwrap();
         circuit.execute(1);
     
         circuit.cs.valid_witness(); // test that constraints are satisfied
@@ -143,15 +143,15 @@ mod tests {
     #[test]
     fn test_poseidon_gadget(){
         let cfg = Poseidon::new();
-        let pi_ext = ExternalValue::<F>::new();
         let mut circuit = Circuit::new(25, 1);
+        let pi_ext = circuit.ext_val(1)[0];
         let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
-        let pi = input(&mut circuit, &pi_ext, 0);
+        let pi = input(&mut circuit, pi_ext, 0);
         let ret = poseidon_gadget_internal(&mut circuit, &cfg, 1, 0, vec![pi]);
     
         let mut circuit = circuit.finalize();
     
-        pi_ext.set(F::ONE).unwrap();
+        circuit.set_ext(pi_ext, F::ONE);
     
         circuit.execute(0);
         circuit.cs.valid_witness();
@@ -162,15 +162,15 @@ mod tests {
     #[test]
     fn test_poseidon_gadget_k_equals_two(){
         let cfg = Poseidon::new();
-        let pi_ext = ExternalValue::<F>::new();
         let mut circuit = Circuit::new(25, 1);
+        let pi_ext = circuit.ext_val(1)[0];
         let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);
-        let pi = input(&mut circuit, &pi_ext, 0);   
+        let pi = input(&mut circuit, pi_ext, 0);   
         let ret = poseidon_gadget_internal(&mut circuit, &cfg, 2, 0, vec![pi]);
     
         let mut circuit = circuit.finalize();
     
-        pi_ext.set(F::ONE).unwrap();
+        circuit.set_ext(pi_ext, F::ONE);
     
         circuit.execute(0);
         circuit.cs.valid_witness();
@@ -181,15 +181,15 @@ mod tests {
     #[test]
     fn test_poseidon_gadget_mixstrat(){
         let cfg = Poseidon::new();
-        let pi_ext = ExternalValue::<F>::new();
         let mut circuit = Circuit::new(25, 1);
+        let pi_ext = circuit.ext_val(1)[0];
         let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);
-        let pi = input(&mut circuit, &pi_ext, 0);
+        let pi = input(&mut circuit, pi_ext, 0);
         let ret = poseidon_gadget_mixstrat(&mut circuit, &cfg, 0, vec![pi]);
 
         let mut circuit = circuit.finalize();
 
-        pi_ext.set(F::ONE).unwrap();
+        circuit.set_ext(pi_ext, F::ONE);
 
         circuit.execute(0);
         circuit.cs.valid_witness();
@@ -204,16 +204,17 @@ mod tests {
     #[test]
     
     fn test_bit_decomposition(){
-        let pi_ext = ExternalValue::<F>::new();
         let mut circuit = Circuit::new(2, 1);
+        let pi_ext = circuit.ext_val(1)[0];
+
         let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
-        let pi = input(&mut circuit, &pi_ext, 0);
+        let pi = input(&mut circuit, pi_ext, 0);
 
     
         let bits = bit_decomposition_gadget(&mut circuit, 0, 3, pi);
     
         let mut circuit = circuit.finalize();
-        pi_ext.set(F::from(6)).unwrap();
+        circuit.set_ext(pi_ext, F::from(6));
         circuit.execute(0);
     
         circuit.cs.valid_witness();
@@ -285,16 +286,16 @@ mod tests {
 
     fn test_limb_decompose_gadget() {
 
-        let pi_ext = ExternalValue::<F>::new();
         let mut circuit = Circuit::new(9, 1);
+        let pi_ext = circuit.ext_val(1)[0];
         let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
-        let pi = input(&mut circuit, &pi_ext, 0);
+        let pi = input(&mut circuit, pi_ext, 0);
 
     
         let limbs = limb_decompose_gadget(&mut circuit, 9, 0, 2, pi);
     
         let mut circuit = circuit.finalize();
-        pi_ext.set(F::from(25)).unwrap();
+        circuit.set_ext(pi_ext, F::from(25));
         circuit.execute(0);
     
         circuit.cs.valid_witness();
@@ -340,35 +341,33 @@ mod tests {
     #[test]
 
     fn test_choice_gadget() -> () {
+        let mut circuit = Circuit::new(10, 1);
 
         let mut pi_ext = vec![];
-        let pi_id_ext = ExternalValue::<F>::new();
+        let pi_id_ext = circuit.ext_val(1)[0];
         for i in 0..9 {
-            pi_ext.push(vec![]);
-            for _ in 0..3 {
-                pi_ext[i].push(ExternalValue::<F>::new());
-            }
+            pi_ext.push(circuit.ext_val(3));
         }
-        let mut circuit = Circuit::new(10, 1);
+
         let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
         let mut pi = vec![];
         for i in 0..9 {
             pi.push(vec![]);
             for j in 0..3 {
-                pi[i].push(input(&mut circuit, &pi_ext[i][j], 0));
+                pi[i].push(input(&mut circuit, pi_ext[i][j], 0));
             }
         }
-        let pi_id = input(&mut circuit, &pi_id_ext, 0);
+        let pi_id = input(&mut circuit, pi_id_ext, 0);
 
         
         let pi : Vec<_> = pi.iter().map(|x|x.as_ref()).collect();
         let chosen = choice_gadget(&mut circuit, &pi, VarSmall::new_unchecked(pi_id, 9), 0);
 
         let mut circuit = circuit.finalize();
-        pi_id_ext.set(F::from(5)).unwrap();
+        circuit.set_ext(pi_id_ext, F::from(5));
         for i in 0..9 {
             for j in 0..3 {
-                pi_ext[i][j].set(F::random(OsRng)).unwrap();
+                circuit.set_ext(pi_ext[i][j], F::random(OsRng));
             }
         }
         circuit.execute(0);
@@ -384,25 +383,24 @@ mod tests {
 
     #[test]
     fn test_escalarmul_gadget()->(){
-        let pi_a_ext = (ExternalValue::<F>::new(), ExternalValue::<F>::new());
-        let pi_b_ext = (ExternalValue::<F>::new(), ExternalValue::<F>::new()); // a*(1+9+...+9^{nl-1})+b=0 must be checked out of band
-        let pi_pt_ext = (ExternalValue::<F>::new(), ExternalValue::<F>::new());
-        let pi_sc_ext = ExternalValue::<F>::new();
-
         let mut circuit = Circuit::new(10, 1);
 
-        let read_pi = Advice::new(0,1,1, |_, iext: &[F]| vec![iext[0]]);    
+        let pi_a_ext = (circuit.ext_val(1)[0], circuit.ext_val(1)[0]);
+        let pi_b_ext = (circuit.ext_val(1)[0], circuit.ext_val(1)[0]); // a*(1+9+...+9^{nl-1})+b=0 must be checked out of band
+        let pi_pt_ext = (circuit.ext_val(1)[0], circuit.ext_val(1)[0]);
+        let pi_sc_ext = circuit.ext_val(1)[0];
 
-        let x = input(&mut circuit, &pi_a_ext.0, 0);
-        let y = input(&mut circuit, &pi_a_ext.1, 0);
+
+        let x = input(&mut circuit, pi_a_ext.0, 0);
+        let y = input(&mut circuit, pi_a_ext.1, 0);
         let a = EcAffinePoint::<F,C>::new(&mut circuit, x, y);
-        let x = input(&mut circuit, &pi_b_ext.0, 0);
-        let y = input(&mut circuit, &pi_b_ext.1, 0);
+        let x = input(&mut circuit, pi_b_ext.0, 0);
+        let y = input(&mut circuit, pi_b_ext.1, 0);
         let b = EcAffinePoint::<F,C>::new(&mut circuit, x, y);
-        let x = input(&mut circuit, &pi_pt_ext.0, 0);
-        let y = input(&mut circuit, &pi_pt_ext.1, 0);
+        let x = input(&mut circuit, pi_pt_ext.0, 0);
+        let y = input(&mut circuit, pi_pt_ext.1, 0);
         let pt = EcAffinePoint::<F,C>::new(&mut circuit, x, y);
-        let sc = input(&mut circuit, &pi_sc_ext, 0);
+        let sc = input(&mut circuit, pi_sc_ext, 0);
 
         let mut nonzeros = vec![];
         let num_limbs = 81;
@@ -413,18 +411,21 @@ mod tests {
         let mut circuit = circuit.finalize();
 
         let pi_a = C::random(OsRng).to_affine();
-        pi_a_ext.0.set(pi_a.x).unwrap(); pi_a_ext.1.set(pi_a.y).unwrap();
+        circuit.set_ext(pi_a_ext.0, pi_a.x);
+        circuit.set_ext(pi_a_ext.1, pi_a.y);
 
         //1+9+81+...+9^{num_limbs - 1} = (9^{num_limbs}-1)/8
 
         let bscale = (Fq::from(9).pow([num_limbs as u64])-Fq::ONE)*(Fq::from(8).invert().unwrap());
         let pi_b = -(C::from(pi_a)*bscale).to_affine();
-        pi_b_ext.0.set(pi_b.x).unwrap(); pi_b_ext.1.set(pi_b.y).unwrap();
+        circuit.set_ext(pi_b_ext.0, pi_b.x);
+        circuit.set_ext(pi_b_ext.1, pi_b.y);
 
         let pi_pt = C::random(OsRng).to_affine();
-        pi_pt_ext.0.set(pi_pt.x).unwrap(); pi_pt_ext.1.set(pi_pt.y).unwrap();
+        circuit.set_ext(pi_pt_ext.0, pi_pt.x);
+        circuit.set_ext(pi_pt_ext.1, pi_pt.y);
 
-        pi_sc_ext.set(F::from(23)).unwrap();
+        circuit.set_ext(pi_sc_ext, F::from(23));
 
         circuit.execute(0);
 

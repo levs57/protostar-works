@@ -3,7 +3,7 @@ use std::iter::repeat;
 use ff::PrimeField;
 use halo2::halo2curves::CurveAffine;
 
-use crate::{gate::Gate, constraint_system::{ConstraintSystem, Variable, CS, Visibility}, commitment::{CommitmentKey, CkWtns, CtRound, ErrGroup, CkRelaxed}};
+use crate::{gate::Gate, constraint_system::{ConstraintSystem, Variable, CS, Visibility, WitnessSpec}, commitment::{CommitmentKey, CkWtns, CtRound, ErrGroup, CkRelaxed}, circuit::ExternalValue};
 
 #[derive(Clone)]
 pub struct RoundWtns<F: PrimeField> {
@@ -22,17 +22,40 @@ pub trait CSSystemCommit<F: PrimeField, G: CurveAffine<ScalarExt=F>, CK: Commitm
 pub struct CSWtns<F: PrimeField, G: Gate<F>> {
     pub cs : ConstraintSystem<F, G>,
     pub wtns : Vec<RoundWtns<F>>,
+    pub ext_vals: Vec<Option<F>>,
+    pub int_vals: Vec<Option<F>>,
 }
 
 impl<F:PrimeField, G: Gate<F>> CSWtns<F, G>{
 
     pub fn new(cs: ConstraintSystem<F, G>) -> Self {
-        let mut wtns = vec![];
-        for round_spec in cs.witness_spec() {
-            wtns.push(RoundWtns{pubs: vec![None; round_spec.0], privs: vec![None; round_spec.1]})
+        let wtns = vec![];
+        let ext_vals = vec![];
+        let int_vals = vec![];
+
+        // let WitnessSpec{round_specs, num_exts, num_ints} = cs.witness_spec();
+        // for round_spec in round_specs {
+        //     wtns.push(RoundWtns{pubs: vec![None; round_spec.0], privs: vec![None; round_spec.1]})
+        // }
+
+        // let ext_vals = repeat(None).take(*num_exts).collect();
+        // let int_vals = repeat(None).take(*num_ints).collect();
+
+        Self {cs, wtns, ext_vals, int_vals}
+    }
+
+
+    pub fn create_witness(&mut self) -> () {
+        assert!(self.wtns.len() == 0);
+        let WitnessSpec{round_specs, num_exts, num_ints} = self.cs.witness_spec();
+
+        for round_spec in round_specs {
+            self.wtns.push(RoundWtns{pubs: vec![None; round_spec.0], privs: vec![None; round_spec.1]})
         }
 
-        Self {cs, wtns}
+        self.ext_vals = repeat(None).take(*num_exts).collect();
+        self.int_vals = repeat(None).take(*num_ints).collect();
+
     }
 
     pub fn setvar(&mut self, var: Variable, value: F) {
@@ -68,13 +91,25 @@ impl<F:PrimeField, G: Gate<F>> CSWtns<F, G>{
         }
     }
 
-    pub fn alloc_in_round(&mut self, round: usize, visibility: Visibility, size: usize) -> Vec<Variable> {
-        let w = match visibility {
-            Visibility::Public => &mut self.wtns[round].pubs,
-            Visibility::Private => &mut self.wtns[round].privs,
-        };
+    pub fn getext(&self, ext: ExternalValue<F>) -> F {
+        let e = self.ext_vals[ext.addr];
+        assert!(e.is_some(), "Use of unassigned external value: {:?}", ext);
+        e.unwrap()
+    }
 
-        w.extend(repeat(None).take(size));
+    pub fn setext(&mut self, ext: ExternalValue<F>, value: F) -> () {
+        let e = &mut self.ext_vals[ext.addr];
+        assert!(e.is_none(), "Double assignment at external value: {:?}", ext);
+        *e = Some(value);
+    }
+
+    pub fn alloc_in_round(&mut self, round: usize, visibility: Visibility, size: usize) -> Vec<Variable> {
+        // let w = match visibility {
+        //     Visibility::Public => &mut self.wtns[round].pubs,
+        //     Visibility::Private => &mut self.wtns[round].privs,
+        // };
+
+        //w.extend(repeat(None).take(size));
         self.cs.alloc_in_round(round, visibility, size)
     }
 

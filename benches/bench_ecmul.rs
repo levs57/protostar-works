@@ -50,23 +50,23 @@ pub fn evaluate_on_random_linear_combinations(gate: &impl Gate<F>, a: &Vec<F>, b
 
 }
 
-pub fn assemble_ecmul_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, pi: &'a [ExternalValue<F>], num_limbs: usize) {
-    let pi_a_ext = (&pi[0], &pi[1]);
-    let pi_b_ext = (&pi[2], &pi[3]); // a*(1+9+...+9^{nl-1})+b=0 must be checked out of band
-    let pi_pt_ext = (&pi[4], &pi[5]);
-    let pi_sc_ext = &pi[6];
+pub fn assemble_ecmul_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, pi: &[ExternalValue<F>], num_limbs: usize) {
+    let pi_a_ext = (pi[0], pi[1]);
+    let pi_b_ext = (pi[2], pi[3]); // a*(1+9+...+9^{nl-1})+b=0 must be checked out of band
+    let pi_pt_ext = (pi[4], pi[5]);
+    let pi_sc_ext = pi[6];
 
 
-    let x = input(circuit, &pi_a_ext.0, 0);
-    let y = input(circuit, &pi_a_ext.1, 0);
+    let x = input(circuit, pi_a_ext.0, 0);
+    let y = input(circuit, pi_a_ext.1, 0);
     let a = EcAffinePoint::<F,C>::new(circuit, x, y);
-    let x = input(circuit, &pi_b_ext.0, 0);
-    let y = input(circuit, &pi_b_ext.1, 0);
+    let x = input(circuit, pi_b_ext.0, 0);
+    let y = input(circuit, pi_b_ext.1, 0);
     let b = EcAffinePoint::<F,C>::new(circuit, x, y);
-    let x = input(circuit, &pi_pt_ext.0, 0);
-    let y = input(circuit, &pi_pt_ext.1, 0);
+    let x = input(circuit, pi_pt_ext.0, 0);
+    let y = input(circuit, pi_pt_ext.1, 0);
     let pt = EcAffinePoint::<F,C>::new(circuit, x, y);
-    let sc = input(circuit, &pi_sc_ext, 0);
+    let sc = input(circuit, pi_sc_ext, 0);
 
     let mut nonzeros = vec![];
 
@@ -76,32 +76,38 @@ pub fn assemble_ecmul_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Bu
 }
 
 pub fn ecmul_pseudo_fold(c: &mut Criterion) {
-    let pi = vec![ExternalValue::new(); 7];
     let num_limbs = 40;
 
     let mut circuit = Circuit::new(10, 1);
+    let pi = circuit.ext_val(7);
+
     assemble_ecmul_circuit(&mut circuit, &pi, num_limbs);
     
     let mut circuit = circuit.finalize();
 
-    let pi_a_ext = (&pi[0], &pi[1]);
-    let pi_b_ext = (&pi[2], &pi[3]); // a*(1+9+...+9^{nl-1})+b=0 must be checked out of band
-    let pi_pt_ext = (&pi[4], &pi[5]);
-    let pi_sc_ext = &pi[6];
+    let pi_a_ext = (pi[0], pi[1]);
+    let pi_b_ext = (pi[2], pi[3]); // a*(1+9+...+9^{nl-1})+b=0 must be checked out of band
+    let pi_pt_ext = (pi[4], pi[5]);
+    let pi_sc_ext = pi[6];
+
 
     let pi_a = C::random(OsRng).to_affine();
-    pi_a_ext.0.set(pi_a.x).unwrap(); pi_a_ext.1.set(pi_a.y).unwrap();
+    circuit.set_ext(pi_a_ext.0, pi_a.x);
+    circuit.set_ext(pi_a_ext.1, pi_a.y);
 
     //1+9+81+...+9^{num_limbs - 1} = (9^{num_limbs}-1)/8
 
     let bscale = (Fq::from(9).pow([num_limbs as u64])-Fq::ONE)*(Fq::from(8).invert().unwrap());
     let pi_b = -(C::from(pi_a)*bscale).to_affine();
-    pi_b_ext.0.set(pi_b.x).unwrap(); pi_b_ext.1.set(pi_b.y).unwrap();
+    circuit.set_ext(pi_b_ext.0, pi_b.x);
+    circuit.set_ext(pi_b_ext.1, pi_b.y);
 
     let pi_pt = C::random(OsRng).to_affine();
-    pi_pt_ext.0.set(pi_pt.x).unwrap(); pi_pt_ext.1.set(pi_pt.y).unwrap();
+    circuit.set_ext(pi_pt_ext.0, pi_pt.x);
+    circuit.set_ext(pi_pt_ext.1, pi_pt.y);
 
-    pi_sc_ext.set(F::from(23)).unwrap();
+    circuit.set_ext(pi_sc_ext, F::from(23));
+
 
     circuit.execute(0);
 
@@ -128,32 +134,36 @@ pub fn ecmul_pseudo_fold(c: &mut Criterion) {
 }
 
 pub fn ecmul_msm(c: &mut Criterion) {
-    let pi = vec![ExternalValue::new(); 7];
     let num_limbs = 40;
 
     let mut circuit = Circuit::new(10, 1);
+    let pi = circuit.ext_val(7);
+
     assemble_ecmul_circuit(&mut circuit, &pi, num_limbs);
 
     let mut circuit = circuit.finalize();
 
-    let pi_a_ext = (&pi[0], &pi[1]);
-    let pi_b_ext = (&pi[2], &pi[3]); // a*(1+9+...+9^{nl-1})+b=0 must be checked out of band
-    let pi_pt_ext = (&pi[4], &pi[5]);
-    let pi_sc_ext = &pi[6];
+    let pi_a_ext = (pi[0], pi[1]);
+    let pi_b_ext = (pi[2], pi[3]); // a*(1+9+...+9^{nl-1})+b=0 must be checked out of band
+    let pi_pt_ext = (pi[4], pi[5]);
+    let pi_sc_ext = pi[6];
 
     let pi_a = C::random(OsRng).to_affine();
-    pi_a_ext.0.set(pi_a.x).unwrap(); pi_a_ext.1.set(pi_a.y).unwrap();
+    circuit.set_ext(pi_a_ext.0, pi_a.x);
+    circuit.set_ext(pi_a_ext.1, pi_a.y);
 
     //1+9+81+...+9^{num_limbs - 1} = (9^{num_limbs}-1)/8
 
     let bscale = (Fq::from(9).pow([num_limbs as u64])-Fq::ONE)*(Fq::from(8).invert().unwrap());
     let pi_b = -(C::from(pi_a)*bscale).to_affine();
-    pi_b_ext.0.set(pi_b.x).unwrap(); pi_b_ext.1.set(pi_b.y).unwrap();
+    circuit.set_ext(pi_b_ext.0, pi_b.x);
+    circuit.set_ext(pi_b_ext.1, pi_b.y);
 
     let pi_pt = C::random(OsRng).to_affine();
-    pi_pt_ext.0.set(pi_pt.x).unwrap(); pi_pt_ext.1.set(pi_pt.y).unwrap();
+    circuit.set_ext(pi_pt_ext.0, pi_pt.x);
+    circuit.set_ext(pi_pt_ext.1, pi_pt.y);
 
-    pi_sc_ext.set(F::from(23)).unwrap();
+    circuit.set_ext(pi_sc_ext, F::from(23));
 
     circuit.execute(0);
 

@@ -1,7 +1,7 @@
 use std::{rc::Rc, iter::repeat};
 
 use ff::PrimeField;
-use crate::{utils::field_precomp::FieldUtils, gate::Gatebb, circuit::{Circuit, Advice, PolyOp, Build}, constraint_system::Variable};
+use crate::{utils::field_precomp::FieldUtils, gate::Gatebb, circuit::{Circuit, Advice, PolyOp}, constraint_system::Variable};
 use num_bigint::{self, BigUint};
 
 #[derive(Clone, Copy)]
@@ -20,7 +20,7 @@ impl VarSmall {
 
     /// Range-checks variable var. Base = limb size.
     pub fn new<'a, F: PrimeField+FieldUtils>(
-        circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>,
+        circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
         var: Variable,
         base: u32) -> Self {
 
@@ -180,7 +180,7 @@ pub fn limbs<F: PrimeField>(x: F, base: u32) ->  Vec<u32>{
 }
 
 pub fn limb_decompose_gadget<'a, F: PrimeField+FieldUtils>(
-    circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>,
+    circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
     base: u32,
     round: usize,
     num_limbs: usize,
@@ -226,7 +226,7 @@ pub fn limb_decompose_gadget<'a, F: PrimeField+FieldUtils>(
 
 /// Gadget which takes as an input n vector variables, and an index variable, and returns a variable #i.
 pub fn choice_gadget<'a, F: PrimeField+FieldUtils> (
-        circuit: &mut Circuit<'a, F, Gatebb<'a,F>, Build>,
+        circuit: &mut Circuit<'a, F, Gatebb<'a,F>>,
         variants: &[&[Variable]],
         index: VarSmall,
         round: usize) -> Vec<Variable> {

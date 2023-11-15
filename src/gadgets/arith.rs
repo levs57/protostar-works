@@ -1,9 +1,9 @@
 use std::rc::Rc;
 use ff::PrimeField;
-use crate::{circuit::{Circuit, Build}, utils::field_precomp::FieldUtils, gate::Gatebb, constraint_system::Variable};
+use crate::{circuit::{Circuit}, utils::field_precomp::FieldUtils, gate::Gatebb, constraint_system::Variable};
 
 pub fn eq_gadget<'a, F: PrimeField+FieldUtils>(
-    circuit: &mut Circuit<'a,F,Gatebb<'a,F>,Build>,
+    circuit: &mut Circuit<'a,F,Gatebb<'a,F>>,
     a: Variable,
     b: Variable,
 ) -> () {

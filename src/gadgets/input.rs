@@ -1,9 +1,9 @@
 use ff::PrimeField;
 
-use crate::{circuit::{Circuit, Build, ExternalValue, Advice, AdvicePub}, utils::field_precomp::FieldUtils, gate::Gatebb, constraint_system::Variable};
+use crate::{circuit::{Circuit, ExternalValue, Advice, AdvicePub}, utils::field_precomp::FieldUtils, gate::Gatebb, constraint_system::Variable};
 
 pub fn input<'a, F: PrimeField+FieldUtils>(
-    circuit: &mut Circuit<'a,F,Gatebb<'a,F>,Build>,
+    circuit: &mut Circuit<'a,F,Gatebb<'a,F>>,
     inp: ExternalValue<F>,
     round: usize,
 ) -> Variable {

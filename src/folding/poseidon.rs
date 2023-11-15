@@ -2,7 +2,7 @@ use std::rc::Rc;
 use elsa::map::FrozenMap;
 use ff::{Field, PrimeField};
 use gate_macro::make_gate;
-use crate::{circuit::{Advice, Build}};
+use crate::{circuit::{Advice}};
 use halo2::halo2curves::bn256;
 use crate::{circuit::{Circuit, PolyOp}, constraint_system::Variable, gate::Gatebb};
 use num_traits::pow;

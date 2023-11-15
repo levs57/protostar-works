@@ -6,7 +6,7 @@ use std::rc::Rc;
 use elsa::map::FrozenMap;
 use ff::{Field, PrimeField};
 use gate_macro::make_gate;
-use crate::{circuit::{Advice, Build}, folding::{poseidon::{ark, mix, sbox, Poseidon}, poseidon_constants}};
+use crate::{circuit::{Advice}, folding::{poseidon::{ark, mix, sbox, Poseidon}, poseidon_constants}};
 use halo2::halo2curves::bn256;
 use crate::{circuit::{Circuit, PolyOp}, constraint_system::Variable, gate::Gatebb};
 use num_traits::pow;
@@ -118,7 +118,7 @@ pub fn poseidon_partial_rounds_advice(
 }
 
 /// A gadget which implements partial rounds of Poseidon hash function.
-pub fn poseidon_partial_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, cfg: &'a Poseidon, inp: Vec<Variable>, round: usize) -> Vec<Variable>{
+pub fn poseidon_partial_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, inp: Vec<Variable>, round: usize) -> Vec<Variable>{
     let t = inp.len();
     let n_rounds_f = cfg.constants.n_rounds_f;
     let n_rounds_p = cfg.constants.n_rounds_p[t - 2];
@@ -150,7 +150,7 @@ pub fn poseidon_partial_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a
     out.to_vec()
 }
 
-pub fn poseidon_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, cfg: &'a Poseidon, k: usize, round: usize, inp: Vec<Variable>, start: usize, finish: usize) -> Vec<Variable> {
+pub fn poseidon_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, k: usize, round: usize, inp: Vec<Variable>, start: usize, finish: usize) -> Vec<Variable> {
 
     let t = if start==0 {inp.len()+1} else {inp.len()};
 
@@ -275,7 +275,7 @@ pub fn poseidon_mixed_strategy_end(
     mix(&state, m) // Ends in i-th round
 }
 
-pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, cfg: &'a Poseidon, round: usize, state: Vec<Variable>, is_first_part:bool) -> Vec<Variable>{
+pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, round: usize, state: Vec<Variable>, is_first_part:bool) -> Vec<Variable>{
     let t = if is_first_part {state.len() + 1} else {state.len()};
     
     let n_rounds_f = cfg.constants.n_rounds_f;
@@ -335,7 +335,7 @@ pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, 
     )
 }
 
-pub fn poseidon_gadget_internal<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, cfg: &'a Poseidon, k: usize, round: usize, inp: Vec<Variable>) -> Variable {
+pub fn poseidon_gadget_internal<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, k: usize, round: usize, inp: Vec<Variable>) -> Variable {
     let t = inp.len()+1;
     if inp.is_empty() || inp.len() > cfg.constants.n_rounds_p.len() {
         panic!("Wrong inputs length");
@@ -352,7 +352,7 @@ pub fn poseidon_gadget_internal<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, 
     state[0]
 }
 
-pub fn poseidon_gadget_mixstrat<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, cfg: &'a Poseidon, round: usize, inp: Vec<Variable>) -> Variable {
+pub fn poseidon_gadget_mixstrat<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, round: usize, inp: Vec<Variable>) -> Variable {
     let mut state = poseidon_mixed_strategy_full_rounds_gadget(circuit, cfg, round, inp, true);
     state = poseidon_partial_rounds_gadget(circuit, cfg, state, round);
     state = poseidon_mixed_strategy_full_rounds_gadget(circuit, cfg, round, state, false);
@@ -361,7 +361,7 @@ pub fn poseidon_gadget_mixstrat<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, 
 
 /// Hashes an array with some rate. Recommended rate is (allegedly) around 10; need to check whether evaluation of
 /// linear matrices becomes too slow (might also explore Neptune strategy, which is very similar to what we are doing).
-pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, cfg: &'a Poseidon, round: usize, rate: usize, inp: &[Variable]) -> Variable {
+pub fn poseidon_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, round: usize, rate: usize, inp: &[Variable]) -> Variable {
     let k = 1;
     let l = inp.len();
     assert!(l>0, "Can not hash empty array without padding.");

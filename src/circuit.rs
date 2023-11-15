@@ -2,7 +2,7 @@ use std::{rc::Rc, cell::OnceCell, marker::PhantomData, iter::repeat_with};
 use elsa::map::FrozenMap;
 use ff::PrimeField;
 
-use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind, Visibility, CS}, utils::poly_utils::check_poly, circuit::circuit_operations::{AttachedAdvice, AttachedPolynomialAdvice, AttachedAdvicePub}};
+use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind, Visibility, CS, Constraint}, utils::poly_utils::check_poly, circuit::circuit_operations::{AttachedAdvice, AttachedPolynomialAdvice, AttachedAdvicePub}};
 
 use self::circuit_operations::CircuitOperation;
 
@@ -102,11 +102,8 @@ impl<'closure, F: PrimeField> AdvicePub<'closure, F> {
 
 pub mod circuit_operations {
     use std::rc::Rc;
-
     use ff::PrimeField;
-
     use crate::{constraint_system::Variable, gate::Gate, witness::CSWtns};
-
     use super::{ExternalValue, InternalValue};
 
     pub trait CircuitOperation<F: PrimeField, G: Gate<F>> {
@@ -186,28 +183,17 @@ pub mod circuit_operations {
     }
 }
 
-pub struct Build;
-pub struct Finalized;
-
-mod private {
-    use super::{Build, Finalized};
-
-    pub trait CircuitState {}
-
-    impl CircuitState for Build {}
-    impl CircuitState for Finalized {}
-}
-
-pub struct Circuit<'circuit, F: PrimeField, G: Gate<F> + From<PolyOp<'circuit, F>>, S: private::CircuitState> {
+pub struct Circuit<'circuit, F: PrimeField, G: Gate<F> + From<PolyOp<'circuit, F>>> {
     gate_registry: FrozenMap<String, Box<G>>,
-    pub cs: CSWtns<F, G>,
+//    pub cs: CSWtns<F, G>,
+    pub cs: ConstraintSystem<F, G>,
     ops: Vec<Vec<Box<dyn CircuitOperation<F, G> + 'circuit>>>,
     max_degree: usize,
-    round_counter : usize,
-    _state_marker: PhantomData<S>,
+//    round_counter : usize,
+//    _state_marker: PhantomData<S>,
 }
 
-impl<'circuit, F, G> Circuit<'circuit, F, G, Build>
+impl<'circuit, F, G> Circuit<'circuit, F, G>
 where
     F: PrimeField,
     G: Gate<F> + From<PolyOp<'circuit, F>>,
@@ -216,11 +202,10 @@ where
         let cs = ConstraintSystem::new(num_rounds, max_degree);
         let mut prep = Self {
                 gate_registry: FrozenMap::new(),
-                cs : CSWtns::new(cs),
+                cs,
                 ops: repeat_with(|| Vec::default()).take(num_rounds).collect(),  // this particular Vec::default() is !Clone
                 max_degree,
-                round_counter: 0,
-                _state_marker: PhantomData,
+                //_state_marker: PhantomData,
         };
 
         let load_one = AdvicePub::new( 0, 1, |_| vec![F::ONE]);
@@ -309,7 +294,7 @@ where
         assert!(gate.d() > 0, "Trying to constrain with gate of degree 0.");
 
         let kind = if gate.d() == 1 { CommitKind::Zero } else { CommitKind::Group };
-        self.cs.cs.constrain(kind, input, gate);
+        self.cs.constrain(kind, input, gate);
     }
 
     pub fn constrain_with(
@@ -325,16 +310,15 @@ where
         self.advice_pub(round, adv, vec![pi])[0]
     }
 
-    pub fn finalize(mut self) -> Circuit<'circuit, F, G, Finalized> {
-        self.cs.create_witness();
-        
-        Circuit {
-            gate_registry: self.gate_registry,
-            cs: self.cs,
-            ops: self.ops,
-            max_degree: self.max_degree,
-            round_counter: self.round_counter,
-            _state_marker: PhantomData,
+    pub fn finalize(self) -> SealedCircuit<'circuit, F, G> {
+        let cs = CSWtns::<F,G>::new(&self.cs);
+
+        let circuit = Rc::new(self);
+
+        SealedCircuit {
+            cs,
+            circuit,
+            round_counter: 0,
         }
     }
 
@@ -343,11 +327,17 @@ where
     }
 
     pub fn ext_val(&mut self, size: usize) -> Vec<ExternalValue<F>> {
-        self.cs.cs.extval(size)
+        self.cs.extval(size)
     }
 }
 
-impl<'circuit, F, G> Circuit<'circuit, F, G, Finalized>
+pub struct SealedCircuit<'circuit, F: PrimeField, G: Gate<F> + From<PolyOp<'circuit, F>>>{
+    circuit: Rc <Circuit<'circuit, F, G>>,
+    pub cs : CSWtns<F, G>,
+    round_counter : usize,
+}
+
+impl<'circuit, F, G> SealedCircuit<'circuit, F, G>
 where
     F: PrimeField,
     G: Gate<F> + From<PolyOp<'circuit, F>>,
@@ -357,7 +347,7 @@ where
         assert!(self.round_counter <= round, "Execution is already at round {}, tried to execute up to round {}", self.round_counter, round);
 
         while self.round_counter <= round {
-            for op in &self.ops[self.round_counter] {
+            for op in &self.circuit.ops[self.round_counter] {
                 op.execute(&mut self.cs);
             }
             self.round_counter += 1;
@@ -366,5 +356,19 @@ where
 
     pub fn set_ext(&mut self, ext: ExternalValue<F>, value: F) -> () {
         self.cs.setext(ext, value);
+    }
+
+
+    pub fn valid_witness(&self) -> () {
+        for constr in self.circuit.cs.iter_constraints() {
+            let input_values: Vec<_> = constr.inputs.iter().map(|&x| self.cs.getvar(x)).collect();
+            let result = constr.gate.exec(&input_values);
+
+            assert!(result.iter().all(|&output| output == F::ZERO), "Constraint {:?} is not satisfied", constr);
+        }
+    }
+
+    pub fn iter_constraints(&self) -> impl Iterator<Item = &Constraint<F, G>> {
+        self.circuit.cs.iter_constraints()
     }
 }

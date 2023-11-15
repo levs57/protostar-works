@@ -3,7 +3,7 @@ use std::{rc::Rc, iter::repeat_with};
 use criterion::{criterion_group, criterion_main, Criterion};
 use ff::Field;
 use halo2::halo2curves::bn256;
-use protostar_works::{gadgets::{poseidon::{poseidon_gadget_internal}, input::input}, circuit::{ExternalValue, Circuit, Advice, Build}, gate::{Gatebb, Gate}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit, folding::poseidon::Poseidon};
+use protostar_works::{gadgets::{poseidon::{poseidon_gadget_internal}, input::input}, circuit::{ExternalValue, Circuit, Advice}, gate::{Gatebb, Gate}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit, folding::poseidon::Poseidon};
 use rand_core::OsRng;
 
 
@@ -48,7 +48,7 @@ pub fn evaluate_on_random_linear_combinations(gate: &impl Gate<F>, a: &Vec<F>, b
 
 }
 
-pub fn assemble_poseidon_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, cfg: &'a Poseidon, pi: ExternalValue<F>) {
+pub fn assemble_poseidon_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, cfg: &'a Poseidon, pi: ExternalValue<F>) {
     let mut acc = input(circuit, pi, 0);
 
     for _ in 0..1000 {
@@ -64,18 +64,18 @@ pub fn poseidons_pseudo_fold(c: &mut Criterion) {
 
     assemble_poseidon_circuit(&mut circuit, &cfg, pi);
 
-    let mut circuit = circuit.finalize();
+    let mut instance = circuit.finalize();
 
-    circuit.set_ext(pi, F::random(OsRng));
-    circuit.execute(0);
+    instance.set_ext(pi, F::random(OsRng));
+    instance.execute(0);
 
-    circuit.cs.valid_witness();
-    println!("Total circuit size: private: {} public: {}", circuit.cs.wtns[0].privs.len(), circuit.cs.wtns[0].pubs.len());
+    instance.valid_witness();
+    println!("Total circuit size: private: {} public: {}", instance.cs.wtns[0].privs.len(), instance.cs.wtns[0].pubs.len());
 
     let mu = F::random(OsRng); // relaxation factor
 
     let mut bench_data = Vec::<(Gatebb<F>, Vec<F>, Vec<F>, Vec<F>)>::new();
-    for constr in circuit.cs.cs.iter_constraints() {
+    for constr in instance.iter_constraints() {
         let gate = homogenize(constr.gate.clone(), mu);
 
         let a: Vec<_> = repeat_with(|| F::random(OsRng)).take(gate.i()).collect();
@@ -99,20 +99,20 @@ pub fn poseidons_msm(c: &mut Criterion) {
     let pi = circuit.ext_val(1)[0];
     assemble_poseidon_circuit(&mut circuit, &cfg, pi);
 
-    let mut circuit = circuit.finalize();
+    let mut instance = circuit.finalize();
 
-    circuit.set_ext(pi, F::random(OsRng));
-    circuit.execute(0);
+    instance.set_ext(pi, F::random(OsRng));
+    instance.execute(0);
 
-    circuit.cs.valid_witness();
+    instance.valid_witness();
 
-    let mut ck = Vec::with_capacity(circuit.cs.wtns.len());
-    for rw in &circuit.cs.wtns {
+    let mut ck = Vec::with_capacity(instance.cs.wtns.len());
+    for rw in &instance.cs.wtns {
         let rck: CkRound<G> = rw.privs.iter().map(|_| G::random(OsRng)).collect();
         ck.push(rck);
     }
 
-    c.bench_function("poseidons msm", |b| b.iter(|| circuit.cs.commit(&ck)));
+    c.bench_function("poseidons msm", |b| b.iter(|| instance.cs.commit(&ck)));
 }
 
 criterion_group!(poseidon, poseidons_pseudo_fold, poseidons_msm);

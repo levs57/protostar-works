@@ -12,7 +12,7 @@ use itertools::Itertools;
 use num_bigint::BigUint;
 
 use crate::{constraint_system::Variable, utils::field_precomp::FieldUtils,
-    circuit::{Build, Circuit, ExternalValue, Advice},
+    circuit::{Circuit, ExternalValue, Advice},
     gate::Gatebb,
     gadgets::{lc::{sum_gadget, inner_prod, sum_arr}, input::input, arith::eq_gadget}};
 
@@ -72,7 +72,7 @@ pub fn sum_of_fractions_with_nums<'a, F:PrimeField+FieldUtils> (args: &[F], k: u
 ///
 /// Panics if vals.len() == 0.
 pub fn invsum_flat_constrain<'a, F: PrimeField+FieldUtils>(
-    circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>,
+    circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
     vals: &[Variable],
     res: Variable,
     challenge: Variable,
@@ -85,7 +85,7 @@ pub fn invsum_flat_constrain<'a, F: PrimeField+FieldUtils>(
     }
 
 pub fn fracsum_flat_constrain<'a, F: PrimeField+FieldUtils>(
-    circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>,
+    circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
     nums: &[Variable],
     dens: &[Variable],
     res: Variable,
@@ -103,7 +103,7 @@ pub fn fracsum_flat_constrain<'a, F: PrimeField+FieldUtils>(
 /// Unsound if one of the inverses is undefined.
 /// Rate - amount of values processed in a batch. Deg = rate+1
 pub fn invsum_gadget<'a, F: PrimeField+FieldUtils>(
-    circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>,
+    circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
     vals: &[Variable],
     challenge: Variable,
     rate: usize,
@@ -147,7 +147,7 @@ pub fn invsum_gadget<'a, F: PrimeField+FieldUtils>(
 /// Unsound if one of the inverses is undefined.
 /// Rate - amount of values processed in a batch. Deg = rate+1
 pub fn fracsum_gadget<'a, F: PrimeField+FieldUtils>(
-    circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>,
+    circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
     nums: &[Variable],
     dens: &[Variable],
     challenge: Variable,
@@ -195,13 +195,13 @@ pub fn fracsum_gadget<'a, F: PrimeField+FieldUtils>(
 /// 
 pub trait Lookup<F: PrimeField+FieldUtils> {
     /// Adds the variable to the list of variables to look up.
-    fn check<'a>(&mut self, circuit: &mut Circuit<'a, F, Gatebb<'a,F>, Build>, var: Variable) -> ();
+    fn check<'a>(&mut self, circuit: &mut Circuit<'a, F, Gatebb<'a,F>>, var: Variable) -> ();
     /// Seals the lookup and applies the constraints. Returns the challenge.
     /// Round parameter is the round of a challenge - so it must be strictly larger than rounds of any
     /// variable participating in a lookup.
     fn finalize<'a>(
         self,
-        circuit: &mut Circuit<'a, F, Gatebb<'a,F>, Build>,
+        circuit: &mut Circuit<'a, F, Gatebb<'a,F>>,
         table_round: usize,
         access_round: usize,
         challenge_round: usize,
@@ -229,7 +229,7 @@ impl<F: PrimeField+FieldUtils> RangeLookup<F> {
 }
 
 impl<F: PrimeField+FieldUtils> Lookup<F> for RangeLookup<F> {
-    fn check<'a>(&mut self, _circuit: &mut Circuit<'a, F, Gatebb<'a,F>, Build>, var: Variable) -> () {
+    fn check<'a>(&mut self, _circuit: &mut Circuit<'a, F, Gatebb<'a,F>>, var: Variable) -> () {
         if self.round < var.round {
             self.round = var.round
         }
@@ -237,7 +237,7 @@ impl<F: PrimeField+FieldUtils> Lookup<F> for RangeLookup<F> {
     }
     fn finalize<'a>(
         self,
-        circuit: &mut Circuit<'a, F, Gatebb<'a,F>, Build>,
+        circuit: &mut Circuit<'a, F, Gatebb<'a,F>>,
         table_round: usize,
         access_round: usize,
         challenge_round: usize,
@@ -478,14 +478,14 @@ mod test {
             let reslut_variable = input(&mut circuit, result_value, 0);
 
             invsum_flat_constrain(&mut circuit, &points_variables, reslut_variable, challenge_variable);
-            let mut circuit = circuit.finalize();
+            let mut instance = circuit.finalize();
 
-            circuit.set_ext(challenge_value, challenge);
-            points_values.into_iter().zip_eq(points).map(|(val, point)| circuit.set_ext(val, point)).last();
-            circuit.set_ext(result_value, result);
+            instance.set_ext(challenge_value, challenge);
+            points_values.into_iter().zip_eq(points).map(|(val, point)| instance.set_ext(val, point)).last();
+            instance.set_ext(result_value, result);
 
-            circuit.execute(0);
-            circuit.cs.valid_witness();
+            instance.execute(0);
+            instance.valid_witness();
 
         }
     }
@@ -516,15 +516,15 @@ mod test {
             let reslut_variable = input(&mut circuit, result_value, 0);
 
             fracsum_flat_constrain(&mut circuit, &numerator_variables, &points_variables, reslut_variable, challenge_variable);
-            let mut circuit = circuit.finalize();
+            let mut instance = circuit.finalize();
 
-            circuit.set_ext(challenge_value, challenge);
-            points_values.into_iter().zip_eq(points).map(|(val, point)| circuit.set_ext(val, point)).last();
-            numerators_values.into_iter().zip_eq(numerators).map(|(val, point)| circuit.set_ext(val, point)).last();
-            circuit.set_ext(result_value, result);
+            instance.set_ext(challenge_value, challenge);
+            points_values.into_iter().zip_eq(points).map(|(val, point)| instance.set_ext(val, point)).last();
+            numerators_values.into_iter().zip_eq(numerators).map(|(val, point)| instance.set_ext(val, point)).last();
+            instance.set_ext(result_value, result);
 
-            circuit.execute(0);
-            circuit.cs.valid_witness();
+            instance.execute(0);
+            instance.valid_witness();
         }
     }
     mod invsum_gadget{
@@ -553,7 +553,7 @@ mod test {
             points_values.into_iter().zip_eq(points).map(|(val, point)| circuit.set_ext(val, point)).last();
 
             circuit.execute(0);
-            circuit.cs.valid_witness();
+            circuit.valid_witness();
 
             assert_eq!(result, circuit.cs.getvar(result_variable));
         }
@@ -589,7 +589,7 @@ mod test {
             numerators_values.into_iter().zip_eq(numerators).map(|(val, point)| circuit.set_ext(val, point)).last();
 
             circuit.execute(0);
-            circuit.cs.valid_witness();
+            circuit.valid_witness();
             assert_eq!(result, circuit.cs.getvar(result_variable));
         }
     }
@@ -623,7 +623,7 @@ mod test {
             let challenge = F::random(OsRng);
             circuit.set_ext(challenge_value, challenge);
             circuit.execute(TEST_LEN);
-            circuit.cs.valid_witness();
+            circuit.valid_witness();
         }
 
         mod invalid {

@@ -5,7 +5,7 @@ mod tests {
     use crate::{
         gate::Gatebb,
         constraint_system::{Variable, Visibility, CS},
-        circuit::{Circuit, ExternalValue, PolyOp, Advice, Build},
+        circuit::{Circuit, ExternalValue, PolyOp, Advice},
         gadgets::{
             poseidon::{
                 poseidon_gadget_mixstrat,
@@ -56,7 +56,7 @@ mod tests {
     #[test]
     
     fn test_circuit_builder() {
-        let mut circuit = Circuit::<F, Gatebb<F>, Build>::new(2, 1);
+        let mut circuit = Circuit::<F, Gatebb<F>>::new(2, 1);
         let public_input_source = circuit.ext_val(1)[0];
 
         let sq = PolyOp::new(2, 1, 1, |x| vec!(x[0]*x[0]));
@@ -64,18 +64,14 @@ mod tests {
         let sq1 = circuit.apply(0, sq.clone(), vec![input]);
         let _ = circuit.apply_pub(0, sq.clone(), sq1);
     
-        let mut circuit = circuit.finalize();
+        let mut instance = circuit.finalize();
         
-        println!("PI source: {:?}", public_input_source);
-        println!("ext_vals.len(): {}", circuit.cs.ext_vals.len());
-        println!("num_exts, according to cfg: {}", circuit.cs.cs.witness_spec().num_exts);
+        instance.set_ext(public_input_source, F::from(2));
 
-        circuit.set_ext(public_input_source, F::from(2));
-
-        circuit.execute(0);
+        instance.execute(0);
         
         let var = Variable { visibility: Visibility::Public, round: 0, index: 2 };
-        assert_eq!(F::from(16), circuit.cs.getvar(var));
+        assert_eq!(F::from(16), instance.cs.getvar(var));
     }
     
     #[test]
@@ -137,7 +133,7 @@ mod tests {
     
         circuit.execute(1);
     
-        circuit.cs.valid_witness(); // test that constraints are satisfied
+        circuit.valid_witness(); // test that constraints are satisfied
     }
     
     #[test]
@@ -154,7 +150,7 @@ mod tests {
         circuit.set_ext(pi_ext, F::ONE);
     
         circuit.execute(0);
-        circuit.cs.valid_witness();
+        circuit.valid_witness();
     
         assert_eq!(circuit.cs.getvar(ret), F::from_str_vartime("18586133768512220936620570745912940619677854269274689475585506675881198879027").unwrap());
     }
@@ -173,7 +169,7 @@ mod tests {
         circuit.set_ext(pi_ext, F::ONE);
     
         circuit.execute(0);
-        circuit.cs.valid_witness();
+        circuit.valid_witness();
     
         assert_eq!(circuit.cs.getvar(ret), F::from_str_vartime("18586133768512220936620570745912940619677854269274689475585506675881198879027").unwrap());
     }
@@ -192,7 +188,7 @@ mod tests {
         circuit.set_ext(pi_ext, F::ONE);
 
         circuit.execute(0);
-        circuit.cs.valid_witness();
+        circuit.valid_witness();
 
         assert!(circuit.cs.getvar(ret) == F::from_str_vartime("18586133768512220936620570745912940619677854269274689475585506675881198879027").unwrap());
 
@@ -217,7 +213,7 @@ mod tests {
         circuit.set_ext(pi_ext, F::from(6));
         circuit.execute(0);
     
-        circuit.cs.valid_witness();
+        circuit.valid_witness();
     
         assert!(bits.len()==3);
         assert!(circuit.cs.getvar(bits[0]) == F::ZERO);
@@ -298,7 +294,7 @@ mod tests {
         circuit.set_ext(pi_ext, F::from(25));
         circuit.execute(0);
     
-        circuit.cs.valid_witness();
+        circuit.valid_witness();
     
         assert!(limbs.len()==2);
         assert!(circuit.cs.getvar(limbs[0].var) == F::from(7));
@@ -372,7 +368,7 @@ mod tests {
         }
         circuit.execute(0);
     
-        circuit.cs.valid_witness();
+        circuit.valid_witness();
 
         assert!(chosen.len() == 3);
 
@@ -408,34 +404,34 @@ mod tests {
         let scmul = escalarmul_gadget_9(&mut circuit, sc, pt, num_limbs, 0, a, b, &mut nonzeros);
 
         nonzero_gadget(&mut circuit, &nonzeros, 9);
-        let mut circuit = circuit.finalize();
+        let mut instance = circuit.finalize();
 
         let pi_a = C::random(OsRng).to_affine();
-        circuit.set_ext(pi_a_ext.0, pi_a.x);
-        circuit.set_ext(pi_a_ext.1, pi_a.y);
+        instance.set_ext(pi_a_ext.0, pi_a.x);
+        instance.set_ext(pi_a_ext.1, pi_a.y);
 
         //1+9+81+...+9^{num_limbs - 1} = (9^{num_limbs}-1)/8
 
         let bscale = (Fq::from(9).pow([num_limbs as u64])-Fq::ONE)*(Fq::from(8).invert().unwrap());
         let pi_b = -(C::from(pi_a)*bscale).to_affine();
-        circuit.set_ext(pi_b_ext.0, pi_b.x);
-        circuit.set_ext(pi_b_ext.1, pi_b.y);
+        instance.set_ext(pi_b_ext.0, pi_b.x);
+        instance.set_ext(pi_b_ext.1, pi_b.y);
 
         let pi_pt = C::random(OsRng).to_affine();
-        circuit.set_ext(pi_pt_ext.0, pi_pt.x);
-        circuit.set_ext(pi_pt_ext.1, pi_pt.y);
+        instance.set_ext(pi_pt_ext.0, pi_pt.x);
+        instance.set_ext(pi_pt_ext.1, pi_pt.y);
 
-        circuit.set_ext(pi_sc_ext, F::from(23));
+        instance.set_ext(pi_sc_ext, F::from(23));
 
-        circuit.execute(0);
+        instance.execute(0);
 
-        circuit.cs.valid_witness();
+        instance.valid_witness();
 
-        let answer = grumpkin::G1Affine::from_xy(circuit.cs.getvar(scmul.x), circuit.cs.getvar(scmul.y)).unwrap();
+        let answer = grumpkin::G1Affine::from_xy(instance.cs.getvar(scmul.x), instance.cs.getvar(scmul.y)).unwrap();
 
         assert!(answer == (pi_pt*<C as CurveExt>::ScalarExt::from(23)).to_affine());
 
-        println!("Total circuit size: private: {} public: {}", circuit.cs.wtns[0].privs.len(), circuit.cs.wtns[0].pubs.len());
+        println!("Total circuit size: private: {} public: {}", instance.cs.wtns[0].privs.len(), instance.cs.wtns[0].pubs.len());
     }
 
 

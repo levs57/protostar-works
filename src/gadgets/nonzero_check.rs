@@ -1,13 +1,13 @@
 use std::{rc::Rc, cmp::max};
 use ff::PrimeField;
-use crate::{utils::field_precomp::FieldUtils, circuit::{Circuit, Advice, Build}, gate::Gatebb, constraint_system::Variable};
+use crate::{utils::field_precomp::FieldUtils, circuit::{Circuit, Advice}, gate::Gatebb, constraint_system::Variable};
 use super::running_prod::prod_run_gadget;
 use crate::gatelib::nonzero_check;
 
 
 /// Checks that the array of variables is nonzero.
 /// Rate = amount of elements processed in a single chunk.
-pub fn nonzero_gadget<'a, F: PrimeField + FieldUtils> (circuit: &mut Circuit<'a, F, Gatebb<'a, F>, Build>, input: &[Variable], rate: usize) -> () {
+pub fn nonzero_gadget<'a, F: PrimeField + FieldUtils> (circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, input: &[Variable], rate: usize) -> () {
     let mut round = 0;
     for v in input {
         round = max(

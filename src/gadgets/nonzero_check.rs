@@ -23,6 +23,7 @@ pub fn nonzero_gadget<'a, F: PrimeField + FieldUtils> (circuit: &mut Circuit<'a,
 
     circuit.constrain_with(
         &vec![prod, prod_inv], 
+        &[],
         &nonzero_check(),
     );
 }

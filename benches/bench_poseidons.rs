@@ -19,13 +19,13 @@ pub fn homogenize<'a>(gate: Gatebb<'a, F>, mu: F) -> Gatebb<'a, F> {
     let gate_i = gate.i();
     let gate_o = gate.o();
 
-    let f = move |input: &[F]| {
+    let f = move |input: &[F], _: &[F]| {
         let mut ibuf = Vec::with_capacity(input.len());
         for i in 0..input.len() {
             ibuf.push(input[i] * mu_inv);
         }
 
-        let mut obuf = gate.exec(&ibuf);
+        let mut obuf = gate.exec(&ibuf, &[]);
         for i in 0..obuf.len() {
             obuf[i] *= mu_d;
         } 
@@ -36,13 +36,13 @@ pub fn homogenize<'a>(gate: Gatebb<'a, F>, mu: F) -> Gatebb<'a, F> {
     Gatebb::new(gate_d, gate_i, gate_o, Rc::new(f))
 }
 
-pub fn evaluate_on_random_linear_combinations(gate: &impl Gate<F>, a: &Vec<F>, b: &Vec<F>, randomness: &Vec<F>) {
+pub fn evaluate_on_random_linear_combinations<'c>(gate: &impl Gate<'c, F>, a: &Vec<F>, b: &Vec<F>, randomness: &Vec<F>) {
     let mut interpolation_values: Vec<Vec<F>> = Vec::with_capacity(gate.d());
 
     for i in 0..gate.d() {
         let fold: Vec<_> = a.iter().zip(b.iter()).map(|(&x, &y)| x + randomness[i] * y).collect();
 
-        let obuf = gate.exec(&fold);
+        let obuf = gate.exec(&fold, &[]);
         interpolation_values.push(obuf);
     }
 

@@ -1,10 +1,3 @@
-// given two relaxed instances A, B (relaxed here just means a single additional error value for major gate) compute majgate(A+t(B-A))
-// compute each constraint on A+t(B-A)
-// step 1: evaluate each constr of deg d on t=0, t=1, ..., t=d // probably makes sense to find for each witness element the max degree of a constraint it participates in
-// step 2: use my magic function to obtain values of the majgate in t=0 ... t = D+log_ceil(m)
-// ?????
-// step 3: folding
-
 use std::collections::HashMap;
 
 use ff::PrimeField;

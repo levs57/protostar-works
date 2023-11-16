@@ -72,10 +72,10 @@ pub struct Environment {
 }
 
 impl Environment {
-    pub fn with_capacity(num_pubs: usize, num_privs: usize) -> Self {
+    pub fn new(num_rounds: usize) -> Self {
         Self {
-            pubs: Store::with_capacity(num_pubs),
-            privs: Store::with_capacity(num_privs),
+            pubs: vec![Vec::default(); num_rounds],
+            privs: vec![Vec::default(); num_rounds],
         }
     }
 }
@@ -191,7 +191,7 @@ impl<'c, F: PrimeField, G: Gate<'c, F>> ConstraintSystem<'c, F, G> {
 
         Self {
             spec: WitnessSpec{ round_specs: vec![RoundWitnessSpec::default(); num_rounds], num_exts: 0, num_ints: 0 },
-            env: Environment::default(),
+            env: Environment::new(num_rounds),
             constraint_groups,
         }
     }
@@ -214,14 +214,15 @@ impl<'c, F: PrimeField, G: Gate<'c, F>> ConstraintSystem<'c, F, G> {
     pub fn iter_variables(&self) -> impl Iterator<Item = Variable> {
         let spec = self.witness_spec().clone();
 
-        spec.round_specs.into_iter().enumerate().map(
-            |(round, RoundWitnessSpec(n_pubs, n_privs))| {
+        spec.round_specs.into_iter()
+            .enumerate()
+            .map(|(round, RoundWitnessSpec(n_pubs, n_privs))| {
                 let pubs = (0..n_pubs).map(move |index| Variable { visibility: Visibility::Public, round, index });
                 let privs = (0..n_privs).map(move |index| Variable { visibility: Visibility::Private, round, index });
 
                 pubs.chain(privs)
-            }
-        ).flatten()
+            })
+            .flatten()
     }
 }
 

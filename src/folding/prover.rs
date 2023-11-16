@@ -57,7 +57,7 @@ pub fn fold<'c, F: PrimeField, G: Gate<'c, F>>(a: RelaxedInstance<'c, F, G>, b: 
         line_evaluations.insert(var, DiscreteRay::new(av, bv - av).take(num_evals).collect());
     }
 
-    // step 2: actually evaluate the constraints
+    // step 2: evaluate each constraint f on A + t (B - A) for t = 0 .. deg f (inclusive)
     for constr in a.wtns.cs.iter_constraints() {
         let result = constraint_multieval(constr, &line_evaluations);
     }

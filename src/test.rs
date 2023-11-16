@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod tests {
-    use std::{rc::Rc, iter::repeat};
+    use std::rc::Rc;
 
     use crate::{
         gate::Gatebb,
-        constraint_system::{Variable, Visibility, CS},
-        circuit::{Circuit, ExternalValue, PolyOp, Advice},
+        constraint_system::{Variable, Visibility},
+        circuit::{Circuit, PolyOp, Advice},
         gadgets::{
             poseidon::{
                 poseidon_gadget_mixstrat,

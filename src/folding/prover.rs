@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use ff::PrimeField;
 
-use crate::constraint_system::{WitnessSpec, RoundWitnessSpec, CS, Variable, Constraint};
+use crate::constraint_system::{Variable, Constraint};
 use crate::{witness::CSWtns, gate::Gate};
 use crate::utils::discrete_ray::DiscreteRay;
 
@@ -39,7 +39,7 @@ pub fn constraint_multieval<'c, F: PrimeField, G: Gate<'c, F>>(constraint: &Cons
             .map(|var| line_evaluations.get(var).expect("precomputed all variables")[t])
             .collect();
 
-        constraint.gate.exec(&input)
+        constraint.gate.exec(&input, &constraint.constants)
     }).flatten().collect()
 }
 

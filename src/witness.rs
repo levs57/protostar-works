@@ -129,12 +129,6 @@ impl<'c, F:PrimeField, G: Gate<'c, F>> CSWtns<'c, F, G>{
     //     CSWtnsRelaxed { cs: self, err }
     // }
 
-    // pub fn valid_witness(&self) -> () {
-    //     for constr in self.cs.iter_constraints() {
-    //         assert!(constr.is_satisfied(self), "Constraint {:?} is not satisfied", constr);
-    //     }
-    // }
-
     pub fn witness_length(&self) -> usize {
         self.wtns.iter().map(|rw| rw.pubs.len() + rw.privs.len()).sum()
     }

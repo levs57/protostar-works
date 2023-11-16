@@ -2,7 +2,7 @@ use std::{marker::PhantomData, ops::{Index, IndexMut}, iter::repeat};
 
 use ff::PrimeField;
 
-use crate::{gate::Gate, circuit::ExternalValue, witness::CSWtns};
+use crate::{gate::Gate, circuit::ExternalValue};
 
 /// Constraint commitment kind.
 #[derive(Debug, Clone, Copy, PartialEq)]

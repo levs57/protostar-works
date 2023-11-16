@@ -1,9 +1,7 @@
 // This file also implements folding utils like shape. Should split into parts later.
 
-use std::iter::repeat;
-
 use ff::PrimeField;
-use halo2::halo2curves::{CurveExt, CurveAffine, bn256};
+use halo2::halo2curves::CurveAffine;
 use itertools::Itertools;
 use crate::utils::field_utils::FieldUtils;
 

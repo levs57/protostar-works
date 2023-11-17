@@ -2,3 +2,5 @@
 .idea
 /target
 /Cargo.lock
+/gate_macro/target
+/gate_macro/Cargo.lock

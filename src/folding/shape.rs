@@ -46,27 +46,27 @@ impl<F: PrimeField, C: CurveAffine<ScalarExt = F>> ProtostarLhs<F, C> {
     }
 
     pub fn scale(&mut self, scale: F) {
-        self.round_commitments.iter_mut().map(|x|*x = (*x * scale).into()).count();
-        self.pubs.iter_mut().map(|rpubs|rpubs.iter_mut().map(|x|*x *= scale).count()).count();
-        self.protostar_challenges.iter_mut().map(|x|*x *= scale).count();
+        self.round_commitments.iter_mut().map(|x| *x = (*x * scale).into()).count();
+        self.pubs.iter_mut().map(|rpubs| rpubs.iter_mut().map(|x| *x *= scale).count()).count();
+        self.protostar_challenges.iter_mut().map(|x| *x *= scale).count();
     }
 
     pub fn neg(&mut self) {
-        self.round_commitments.iter_mut().map(|x|*x = -*x).count();
-        self.pubs.iter_mut().map(|rpubs|rpubs.iter_mut().map(|x|-*x).count()).count();
-        self.protostar_challenges.iter_mut().map(|x|-*x).count();
+        self.round_commitments.iter_mut().map(|x| *x = -*x).count();
+        self.pubs.iter_mut().map(|rpubs| rpubs.iter_mut().map(|x| *x = -*x).count()).count();
+        self.protostar_challenges.iter_mut().map(|x| *x = -*x).count();
     }
 
     pub fn add_assign(&mut self, other: Self) {
         self.round_commitments.iter_mut().zip_eq(other.round_commitments.iter())
-            .map(|(a,b)|*a = (*a + *b).into()).count();
+            .map(|(a, b)| *a = (*a + *b).into()).count();
         self.pubs.iter_mut().zip_eq(other.pubs.iter())
-            .map(|(rpubsa, rpubsb)|{
+            .map(|(rpubsa, rpubsb)| {
                 rpubsa.iter_mut().zip_eq(rpubsb.iter())
-                    .map(|(a,b)|*a += b).count()
+                    .map(|(a, b)| *a += b).count()
             }).count();
         self.protostar_challenges.iter_mut().zip_eq(other.protostar_challenges.iter())
-            .map(|(a,b)|*a += b).count();
+            .map(|(a, b)| *a += b).count();
     }
 }
 
@@ -113,7 +113,7 @@ impl<F: PrimeField, C: CurveAffine<ScalarExt = F>> Fold<F,C> {
         lhs_acc.add_assign(diff);
         let lhs = lhs_acc;
         let nt = F::ONE-t;
-        let error = t*error_acc + t*error_inc + t*nt*ev(&cross_terms, t);
+        let error = nt*error_acc + t*error_inc + t*nt*ev(&cross_terms, t);
         ProtostarInstance { lhs, error }
     }
 }

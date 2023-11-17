@@ -5,3 +5,4 @@ pub mod precomp_scripts;
 pub mod half_squares;
 pub mod inv_lagrange_prod;
 pub mod cross_terms_combination;
+pub mod arith_helper;

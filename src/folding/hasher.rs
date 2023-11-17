@@ -1,14 +1,14 @@
+use std::marker::PhantomData;
 use ff::Field;
-use halo2::halo2curves::bn256;
-
+use halo2::{halo2curves::bn256, transcript};
 use super::poseidon::Poseidon;
 
-pub trait Hasher<R: Field> {
+pub trait HashConfig<R: Field> {
     fn new() -> Self;
     fn hash(&self, input: Vec<R>) -> R;
 }
 
-impl Hasher<bn256::Fr> for Poseidon {
+impl HashConfig<bn256::Fr> for Poseidon {
     fn new() -> Self {
         Poseidon::new()
     }

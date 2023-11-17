@@ -87,6 +87,13 @@ pub struct WitnessSpec {
     pub num_exts: usize,
 }
 
+#[derive(Debug, Clone)]
+pub struct ConstrSpec {
+    pub num_lin_constraints: usize,
+    pub num_nonlinear_constraints: usize,
+    pub max_degree: usize,
+}
+
 pub trait CS<'c, F: PrimeField, G: Gate<'c, F>> {
     fn num_rounds(&self) -> usize;
 
@@ -95,6 +102,8 @@ pub trait CS<'c, F: PrimeField, G: Gate<'c, F>> {
     }
 
     fn new_round(&mut self);
+
+    fn constr_spec(&self) -> ConstrSpec;
 
     fn witness_spec(&self) -> &WitnessSpec;
 
@@ -156,6 +165,13 @@ impl<'c, F: PrimeField, G: Gate<'c, F>> CS<'c, F, G> for ConstraintSystem<'c, F,
 
     fn witness_spec(&self) -> &WitnessSpec {
         &self.spec
+    }
+
+    fn constr_spec(&self) -> ConstrSpec {
+        let num_lin_constraints = self.constraint_groups[2].num_rhs;
+        let num_nonlinear_constraints = self.constraint_groups[1].num_rhs;
+        let max_degree = self.constraint_groups[1].max_degree;
+        ConstrSpec { num_lin_constraints, num_nonlinear_constraints, max_degree }
     }
 
     fn alloc_in_round(&mut self, round: usize, visibility: Visibility, size: usize) -> Vec<Variable> {

@@ -3,7 +3,7 @@
 // This is a bit similar to protogalaxy; main reason why we are doing it is to skip a commitment
 // to an additional round.
 
-use std::{iter::{once, zip}, fmt::Debug};
+use std::{iter::once, fmt::Debug};
 
 use super::field_precomp::FieldUtils;
 use itertools::Itertools;
@@ -344,8 +344,8 @@ mod tests {
         let mut arr2 : Vec<_> = (0..13*5).collect();
 
         parallelize_with_alignment(&mut arr1, &mut arr2, |chunk_v, chunk_w, offset|{
-            chunk_v.iter_mut().enumerate().map(|(i, x)| *x -= (i + offset * 7)).count();
-            chunk_w.iter_mut().enumerate().map(|(i, x)| *x -= (i + offset * 5)).count();
+            chunk_v.iter_mut().enumerate().map(|(i, x)| *x -= i + offset * 7).count();
+            chunk_w.iter_mut().enumerate().map(|(i, x)| *x -= i + offset * 5).count();
         }, 7, 5);
 
         for v in arr1 {assert!(v==0)}

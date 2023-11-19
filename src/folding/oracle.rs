@@ -32,7 +32,7 @@ impl<ProverMsg, R: PrimeField> Oracle<ProverMsg, R> for MockOracle<R> {
     fn new() -> Self {
         Self{ _marker: PhantomData::<R> }
     }
-    fn update(&mut self, msg: ProverMsg) {}
+    fn update(&mut self, _msg: ProverMsg) {}
     fn response(&self) -> R {
         trunc128(R::random(OsRng))
     }
@@ -41,9 +41,9 @@ impl<ProverMsg, R: PrimeField> Oracle<ProverMsg, R> for MockOracle<R> {
 
 
 mod tests{
-    use ff::{Field, PrimeField};
+    use super::*;
     use halo2::halo2curves::bn256;
-    use rand_core::OsRng;
+    
 
     type R = bn256::Fr;
 

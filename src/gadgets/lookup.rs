@@ -5,7 +5,7 @@
 // 2. Table right now is implemented as priveleged subset of variables. Considering it is the same for all
 // step instances, it is not, actually, getting folded. This should be made a primitive.
 
-use std::{iter::{repeat_with, once}, rc::Rc};
+use std::{iter::{once}, rc::Rc};
 
 use ff::{PrimeField, BatchInvert};
 use itertools::Itertools;

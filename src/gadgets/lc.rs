@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use ff::PrimeField;
 use itertools::Itertools;
-use crate::{utils::field_precomp::FieldUtils, circuit::{Circuit, Advice, PolyOp}, gate::Gatebb, constraint_system::Variable};
+use crate::{utils::field_precomp::FieldUtils, circuit::{Circuit, PolyOp}, gate::Gatebb, constraint_system::Variable};
 
 pub fn inner_prod<F: PrimeField+FieldUtils>(a: &[F], b: &[F]) -> F {
     a.iter().zip_eq(b.iter()).fold(F::ZERO, |acc, (x,y)|acc+*x*y)

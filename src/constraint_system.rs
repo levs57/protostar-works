@@ -45,8 +45,9 @@ pub struct Constraint<'c, F: PrimeField, G: Gate<'c, F>>{
 /// Currently this struct has some additional information. This will probably
 /// be moved in the near future
 #[derive(Debug, Clone)]
-struct ConstraintGroup<'c, F: PrimeField, G: Gate<'c, F>>{
+struct ConstraintGroup<'c, F: PrimeField, G: Gate<'c, F>> {
     pub entries: Vec<Constraint<'c, F, G>>,
+    #[allow(dead_code)]
     pub kind: CommitKind,
     pub num_rhs: usize,
     pub max_degree: usize,

@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod tests {
-    use std::{rc::Rc, iter::repeat};
+    use std::rc::Rc;
 
     use crate::{
         gate::Gatebb,
-        constraint_system::{Variable, Visibility, CS},
-        circuit::{Circuit, ExternalValue, PolyOp, Advice},
+        constraint_system::{Variable, Visibility},
+        circuit::{Circuit, PolyOp, Advice},
         gadgets::{
             poseidon::{
                 poseidon_gadget_mixstrat,
@@ -141,7 +141,6 @@ mod tests {
         let cfg = Poseidon::new();
         let mut circuit = Circuit::new(25, 1);
         let pi_ext = circuit.ext_val(1)[0];
-        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
         let pi = input(&mut circuit, pi_ext, 0);
         let ret = poseidon_gadget_internal(&mut circuit, &cfg, 1, 0, vec![pi]);
     
@@ -160,7 +159,6 @@ mod tests {
         let cfg = Poseidon::new();
         let mut circuit = Circuit::new(25, 1);
         let pi_ext = circuit.ext_val(1)[0];
-        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);
         let pi = input(&mut circuit, pi_ext, 0);   
         let ret = poseidon_gadget_internal(&mut circuit, &cfg, 2, 0, vec![pi]);
     
@@ -179,7 +177,6 @@ mod tests {
         let cfg = Poseidon::new();
         let mut circuit = Circuit::new(25, 1);
         let pi_ext = circuit.ext_val(1)[0];
-        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);
         let pi = input(&mut circuit, pi_ext, 0);
         let ret = poseidon_gadget_mixstrat(&mut circuit, &cfg, 0, vec![pi]);
 
@@ -203,9 +200,7 @@ mod tests {
         let mut circuit = Circuit::new(2, 1);
         let pi_ext = circuit.ext_val(1)[0];
 
-        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
         let pi = input(&mut circuit, pi_ext, 0);
-
     
         let bits = bit_decomposition_gadget(&mut circuit, 0, 3, pi);
     
@@ -284,7 +279,6 @@ mod tests {
 
         let mut circuit = Circuit::new(9, 1);
         let pi_ext = circuit.ext_val(1)[0];
-        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
         let pi = input(&mut circuit, pi_ext, 0);
 
     
@@ -341,11 +335,10 @@ mod tests {
 
         let mut pi_ext = vec![];
         let pi_id_ext = circuit.ext_val(1)[0];
-        for i in 0..9 {
+        for _ in 0..9 {
             pi_ext.push(circuit.ext_val(3));
         }
 
-        let read_pi_advice = Advice::new(0, 1, 1, |_, iext: &[F]| vec![iext[0]]);    
         let mut pi = vec![];
         for i in 0..9 {
             pi.push(vec![]);

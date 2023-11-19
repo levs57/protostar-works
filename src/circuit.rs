@@ -249,7 +249,7 @@ where
         output
     }
 
-    fn apply_internal(&mut self, visibility: Visibility, round : usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>, constants: &'circuit [F]) -> Vec<Variable> {
+    fn apply_internal(&mut self, visibility: Visibility, round : usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>, constants: &[F]) -> Vec<Variable> {
         assert!(round < self.ops.len(), "The round is too large.");
 
         let op_index = self.ops[round].len();
@@ -275,21 +275,21 @@ where
         output
     }
 
-    pub fn apply(&mut self, round: usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>, constants: &'circuit[F]) -> Vec<Variable> {
+    pub fn apply(&mut self, round: usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>, constants: &[F]) -> Vec<Variable> {
         self.apply_internal(Visibility::Private, round, polyop, input, constants)
     }
 
-    pub fn apply_pub(&mut self, round : usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>, constants: &'circuit[F]) -> Vec<Variable> {
+    pub fn apply_pub(&mut self, round : usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>, constants: &[F]) -> Vec<Variable> {
         self.apply_internal(Visibility::Public, round, polyop, input, constants)
     }
 
     // TODO: pass input by value since we clone it down the stack either way
-    pub fn constrain(&mut self, input: &[Variable], constants: &'circuit[F], gate: G) {
+    pub fn constrain(&mut self, input: &[Variable], constants: &[F], gate: G) {
         println!("Using legacy unnamed constrains");
         self._constrain(&input, &constants, gate)
     }
 
-    fn _constrain(&mut self, input: &[Variable], constants: &'circuit[F], gate: G) {
+    fn _constrain(&mut self, input: &[Variable], constants: &[F], gate: G) {
         assert!(gate.d() > 0, "Trying to constrain with gate of degree 0.");
 
         let kind = if gate.d() == 1 { CommitKind::Zero } else { CommitKind::Group };
@@ -299,7 +299,7 @@ where
     pub fn constrain_with(
         &mut self, 
         input: &[Variable], 
-        constants: &'circuit[F],
+        constants: &[F],
         gate_fetcher: &dyn Fn(&FrozenMap<String, Box<G>>) -> G
     ) {
         let gate = gate_fetcher(&self.gate_registry);
@@ -363,7 +363,7 @@ where
     pub fn valid_witness(&self) -> () {
         for constr in self.circuit.cs.iter_constraints() {
             let input_values: Vec<_> = constr.inputs.iter().map(|&x| self.cs.getvar(x)).collect();
-            let result = constr.gate.exec(&input_values, &[]);
+            let result = constr.gate.exec(&input_values, &constr.constants);
 
             assert!(result.iter().all(|&output| output == F::ZERO), "Constraint {:?} is not satisfied", constr);
         }

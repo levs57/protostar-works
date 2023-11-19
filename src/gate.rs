@@ -7,14 +7,14 @@ use crate::utils::poly_utils::check_poly;
 use crate::utils::field_precomp::FieldUtils;
 
 
-#[derive(Clone)]
 /// A generic black-box gate. This API is unsafe, you must guarantee that given value is a
 /// polynomial of degree d with i inputs and o outputs.
+#[derive(Clone)]
 pub struct Gatebb<'a, F : PrimeField> {
     d : usize,
     i : usize,
     o : usize,
-    f : Rc<dyn Fn(&[F], &'a [F]) -> Vec<F> + 'a>,
+    f : Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'a>,
 }
 
 impl<'a, F: PrimeField> Debug for Gatebb<'a, F> {
@@ -41,7 +41,7 @@ pub trait Gate<'a, F : PrimeField> : Clone + Debug {
     /// Returns output size.
     fn o(&self) -> usize;
     /// Executes gate on a given input.
-    fn exec(& self, input : &[F], constants: &'a [F]) -> Vec<F>;
+    fn exec(& self, input : &[F], constants: &[F]) -> Vec<F>;
 }
 
 impl<'a, F : PrimeField + FieldUtils> Gate<'a, F> for Gatebb<'a, F> {
@@ -58,7 +58,7 @@ impl<'a, F : PrimeField + FieldUtils> Gate<'a, F> for Gatebb<'a, F> {
         self.o
     }
     /// Executes gate on a given input.
-    fn exec(&self, input : &[F], constants: &'a [F]) -> Vec<F>{
+    fn exec(&self, input : &[F], constants: &[F]) -> Vec<F>{
         (self.f)(input, constants)
     }
 

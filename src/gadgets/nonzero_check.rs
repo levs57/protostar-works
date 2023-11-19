@@ -1,4 +1,4 @@
-use std::{rc::Rc, cmp::max};
+use std::{cmp::max};
 use ff::PrimeField;
 use crate::{utils::field_precomp::FieldUtils, circuit::{Circuit, Advice}, gate::Gatebb, constraint_system::Variable};
 use super::running_prod::prod_run_gadget;

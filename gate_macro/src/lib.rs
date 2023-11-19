@@ -9,7 +9,7 @@ use syn::token::Comma;
 
 
 #[proc_macro_attribute]
-pub fn make_gate(args: TokenStream, input: TokenStream) -> TokenStream {
+pub fn make_gate(_args: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemFn);
     let mut initializer = input.clone();
     let generics = input.sig.generics;

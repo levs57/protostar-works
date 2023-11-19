@@ -1,6 +1,6 @@
-use std::marker::PhantomData;
+
 use ff::Field;
-use halo2::{halo2curves::bn256, transcript};
+use halo2::{halo2curves::bn256};
 use super::poseidon::Poseidon;
 
 pub trait HashConfig<R: Field> {

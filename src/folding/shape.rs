@@ -1,10 +1,10 @@
 // This file also implements folding utils like shape. Should split into parts later.
 
-use std::iter::repeat;
+
 use ff::PrimeField;
-use halo2::halo2curves::{CurveExt, CurveAffine, bn256};
+use halo2::halo2curves::CurveAffine;
 use itertools::Itertools;
-use crate::{utils::{field_precomp::FieldUtils, arith_helper::{log2_ceil, ev}}, constraint_system::{WitnessSpec, ConstraintSystem, CS, ConstrSpec}, gate::Gate};
+use crate::{utils::arith_helper::{log2_ceil, ev}, constraint_system::{WitnessSpec, ConstraintSystem, CS, ConstrSpec}, gate::Gate};
 
 /// Encode value as field elements.
 pub trait FEncoding <F: PrimeField> {

@@ -1,8 +1,8 @@
-use std::{rc::Rc, marker::PhantomData, iter::repeat_with};
+use std::{rc::{Rc, Weak}, marker::PhantomData, iter::repeat_with, cell::RefCell};
 use elsa::map::FrozenMap;
 use ff::PrimeField;
 
-use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind, Visibility, CS, Constraint}, utils::poly_utils::check_poly, circuit::circuit_operations::{AttachedAdvice, AttachedPolynomialAdvice, AttachedAdvicePub}};
+use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind, Visibility, CS, Constraint}, utils::poly_utils::check_poly, circuit::circuit_operations::{AttachedAdvice, AttachedPolynomialAdvice, AttachedAdvicePub} };
 
 use self::circuit_operations::CircuitOperation;
 
@@ -74,11 +74,11 @@ impl<F: PrimeField> InternalValue<F> {
     pub ivar: usize,
     pub iext: usize,
     pub o: usize,
-    pub f: Rc<dyn Fn(&[F], &[F])-> Vec<F> + 'closure>,
+    pub f: Rc<dyn Fn(&[F], &RunIndex)-> Vec<F> + 'closure>,
 }
 
 impl<'closure, F: PrimeField> Advice<'closure, F> {
-    pub fn new(ivar: usize, iext: usize, o: usize, f: impl Fn(&[F], &[F]) -> Vec<F> + 'closure) -> Self {
+    pub fn new(ivar: usize, iext: usize, o: usize, f: impl Fn(&[F], &RunIndex) -> Vec<F> + 'closure) -> Self {
         let f = Rc::new(f);
 
         Self { ivar, iext, o, f }
@@ -104,10 +104,10 @@ pub mod circuit_operations {
     use std::rc::Rc;
     use ff::PrimeField;
     use crate::{constraint_system::Variable, gate::Gate, witness::CSWtns};
-    use super::{ExternalValue, InternalValue};
+    use super::{ExternalValue, RunIndex};
 
     pub trait CircuitOperation<'a, F: PrimeField, G: Gate<'a, F>> {
-        fn execute(&self, witness: &mut CSWtns<'a, F, G>);
+        fn execute(&self, witness: &mut CSWtns<'a, F, G>, idx: &RunIndex);
     }
 
     pub struct AttachedAdvicePub<'advice, F: PrimeField> {
@@ -123,7 +123,7 @@ pub mod circuit_operations {
     }
 
     impl<'advice, F: PrimeField, G: Gate<'advice, F>> CircuitOperation<'advice, F, G> for AttachedAdvicePub<'advice, F> {
-        fn execute(&self, witness: &mut CSWtns<'advice, F, G>) {
+        fn execute(&self, witness: &mut CSWtns<'advice, F, G>, idx: &RunIndex) {
             let aux: Vec<_> = self.aux.iter().map(|ev| witness.getext(*ev)).collect();
 
             let output = (self.closure)(&aux);
@@ -136,23 +136,21 @@ pub mod circuit_operations {
 
     pub struct AttachedAdvice<'advice, F: PrimeField> {
         input: Vec<Variable>,
-        aux: Vec<&'advice InternalValue<F>>,
         output: Vec<Variable>,
-        closure: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'advice>,
+        closure: Rc<dyn Fn(&[F], &RunIndex) -> Vec<F> + 'advice>,
     }
 
     impl<'advice, F: PrimeField> AttachedAdvice<'advice, F> {
-        pub fn new(input: Vec<Variable>, aux: Vec<&'advice InternalValue<F>>, output: Vec<Variable>, closure: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'advice>) -> Self {
-            Self { input, aux, output, closure }
+        pub fn new(input: Vec<Variable>, output: Vec<Variable>, closure: Rc<dyn Fn(&[F], &RunIndex) -> Vec<F> + 'advice>) -> Self {
+            Self { input, output, closure }
         }
     }
 
     impl<'advice, F: PrimeField, G: Gate<'advice, F>> CircuitOperation<'advice, F, G> for AttachedAdvice<'advice, F> {
-        fn execute(&self, witness: &mut CSWtns<'advice, F, G>) {
+        fn execute(&self, witness: &mut CSWtns<'advice, F, G>, idx: &RunIndex) {
             let input = witness.get_vars(&self.input);
-            let aux: Vec<_> = self.aux.iter().map(|ev| ev.get().expect("external values should be set before execution")).collect();
 
-            let output = (self.closure)(&input, &aux);
+            let output = (self.closure)(&input, &idx);
 
             let value_set: Vec<_> = self.output.iter().cloned().zip(output).collect();
             witness.set_vars(&value_set);
@@ -172,7 +170,7 @@ pub mod circuit_operations {
     }
 
     impl<'closure, F: PrimeField, G: Gate<'closure, F>> CircuitOperation<'closure, F, G> for AttachedPolynomialAdvice<'closure, F> {
-        fn execute(&self, witness: &mut CSWtns<'closure, F, G>) {
+        fn execute(&self, witness: &mut CSWtns<'closure, F, G>, _: &RunIndex) {
             let input = witness.get_vars(&self.input);
 
             let output = (self.closure)(&input, &[]);
@@ -216,7 +214,7 @@ where
         prep
     }
 
-    pub fn advice(&mut self, round: usize, advice: Advice<'circuit, F>, input: Vec<Variable>, aux: Vec<&'circuit InternalValue<F>>) -> Vec<Variable> {
+    pub fn advice(&mut self, round: usize, advice: Advice<'circuit, F>, input: Vec<Variable>) -> Vec<Variable> {
         assert!(round < self.ops.len(), "The round is too large.");
 
         let op_index = self.ops[round].len();
@@ -226,10 +224,9 @@ where
         }
 
         assert!(input.len() == advice.ivar, "Incorrect amount of input vars at operation #{} (round {})", op_index, round);
-        assert!(aux.len() == advice.iext, "Incorrect amount of internal vals at operation #{} (round {})", op_index, round);
 
         let output = self.cs.alloc_in_round(round, Visibility::Private, advice.o);
-        let operation = Box::new(AttachedAdvice::new(input, aux, output.clone(), advice.f.clone()));
+        let operation = Box::new(AttachedAdvice::new(input, output.clone(), advice.f.clone()));
         self.ops[round].push(operation);
 
         output
@@ -310,15 +307,10 @@ where
         self.advice_pub(round, adv, vec![pi])[0]
     }
 
-    pub fn finalize(self) -> SealedCircuit<'circuit, F, G> {
-        let cs = CSWtns::<F,G>::new(&self.cs);
-
-        let circuit = Rc::new(self);
-
-        SealedCircuit {
-            cs,
-            circuit,
-            round_counter: 0,
+    pub fn finalize(self) -> ConstructedCircuit<'circuit, F, G> {
+        ConstructedCircuit {
+            circuit: self,
+            num_runs: RefCell::new(0),
         }
     }
 
@@ -331,13 +323,43 @@ where
     }
 }
 
-pub struct SealedCircuit<'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>>{
-    circuit: Rc <Circuit<'circuit, F, G>>,
-    pub cs : CSWtns<'circuit, F, G>,
-    round_counter : usize,
+pub struct RunIndex {
+    idx: usize,
 }
 
-impl<'circuit, F, G> SealedCircuit<'circuit, F, G>
+impl RunIndex {
+    fn new(idx: usize) -> Self {
+        Self {
+            idx,
+        }
+    }
+}
+
+pub struct ConstructedCircuit<'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> {
+    circuit: Circuit<'circuit, F, G>,
+    num_runs: RefCell<usize>,
+}
+
+impl<'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> ConstructedCircuit<'circuit, F, G> {
+    pub fn spawn<'constructed>(&'constructed self) -> CircuitRun<'constructed, 'circuit, F, G> {
+        *self.num_runs.borrow_mut() += 1;
+        CircuitRun { 
+            constructed: &self, 
+            cs: CSWtns::<F,G>::new(&self.circuit.cs), 
+            round_counter: 0,
+            run_idx: RunIndex::new(*self.num_runs.borrow() - 1),
+        }
+    }
+}
+
+pub struct CircuitRun<'constructed, 'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>>{
+    constructed: &'constructed ConstructedCircuit<'circuit, F, G>,
+    pub cs : CSWtns<'circuit, F, G>,
+    round_counter : usize,
+    run_idx: RunIndex,
+}
+
+impl<'constructed, 'circuit, F, G> CircuitRun<'constructed, 'circuit, F, G>
 where
     F: PrimeField,
     G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>,
@@ -347,8 +369,8 @@ where
         assert!(self.round_counter <= round, "Execution is already at round {}, tried to execute up to round {}", self.round_counter, round);
 
         while self.round_counter <= round {
-            for op in &self.circuit.ops[self.round_counter] {
-                op.execute(&mut self.cs);
+            for op in &self.constructed.circuit.ops[self.round_counter] {
+                op.execute(&mut self.cs, &self.run_idx);
             }
             self.round_counter += 1;
         }
@@ -360,7 +382,7 @@ where
 
 
     pub fn valid_witness(&self) -> () {
-        for constr in self.circuit.cs.iter_constraints() {
+        for constr in self.constructed.circuit.cs.iter_constraints() {
             let input_values: Vec<_> = constr.inputs.iter().map(|&x| self.cs.getvar(x)).collect();
             let result = constr.gate.exec(&input_values);
 
@@ -369,6 +391,7 @@ where
     }
 
     pub fn iter_constraints(&self) -> impl Iterator<Item = &Constraint<'circuit, F, G>> {
-        self.circuit.cs.iter_constraints()
+        self.constructed.circuit.cs.iter_constraints()
     }
 }
+

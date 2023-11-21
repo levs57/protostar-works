@@ -193,7 +193,7 @@ pub fn limb_decompose_gadget<'a, F: PrimeField+FieldUtils>(
             1,
             0,
             num_limbs,
-            move |args,_| {
+            move |args, _| {
                 let x = args[0];
                 let limbs = limbs(x, base);
                 assert!(limbs.len()<=num_limbs, "The value has too many limbs.");
@@ -201,7 +201,6 @@ pub fn limb_decompose_gadget<'a, F: PrimeField+FieldUtils>(
             }
         ),
         vec![input],
-        vec![]
     );
 
 

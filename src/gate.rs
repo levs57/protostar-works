@@ -15,6 +15,7 @@ pub struct Gatebb<'a, F : PrimeField> {
     i : usize,
     o : usize,
     f : Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'a>,
+    consts: Vec<F>,
 }
 
 impl<'a, F: PrimeField> Debug for Gatebb<'a, F> {
@@ -24,12 +25,12 @@ impl<'a, F: PrimeField> Debug for Gatebb<'a, F> {
 }
 
 impl<'a, F: PrimeField> Gatebb<'a, F> {
-    pub fn new(d: usize, i: usize, o: usize, f: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'a>) -> Self {
-        check_poly(d, i, o, f.clone()).unwrap();
-        Gatebb::<'a>{d,i,o,f}
+    pub fn new(d: usize, i: usize, o: usize, f: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'a>, consts: Vec<F>) -> Self {
+        check_poly(d, i, o, f.clone(), &consts).unwrap();
+        Gatebb::<'a>{d, i, o, f, consts}
     }
-    pub fn new_unchecked(d: usize, i: usize, o: usize, f: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'a>) -> Self {
-        Gatebb::<'a>{d,i,o,f}
+    pub fn new_unchecked(d: usize, i: usize, o: usize, f: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'a>, consts: Vec<F>) -> Self {
+        Gatebb::<'a>{d, i, o, f, consts}
     }
 
 }
@@ -41,7 +42,7 @@ pub trait Gate<'a, F : PrimeField> : Clone + Debug {
     /// Returns output size.
     fn o(&self) -> usize;
     /// Executes gate on a given input.
-    fn exec(& self, input : &[F], constants: &[F]) -> Vec<F>;
+    fn exec(& self, input : &[F]) -> Vec<F>;
 }
 
 impl<'a, F : PrimeField + FieldUtils> Gate<'a, F> for Gatebb<'a, F> {
@@ -58,8 +59,8 @@ impl<'a, F : PrimeField + FieldUtils> Gate<'a, F> for Gatebb<'a, F> {
         self.o
     }
     /// Executes gate on a given input.
-    fn exec(&self, input : &[F], constants: &[F]) -> Vec<F>{
-        (self.f)(input, constants)
+    fn exec(&self, input : &[F]) -> Vec<F>{
+        (self.f)(input, &self.consts)
     }
 
 

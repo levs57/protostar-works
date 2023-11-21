@@ -5,7 +5,7 @@
 // 2. Table right now is implemented as priveleged subset of variables. Considering it is the same for all
 // step instances, it is not, actually, getting folded. This should be made a primitive.
 
-use std::{iter::{once}, rc::Rc};
+use std::{iter::{once}, rc::Rc, collections::HashMap};
 
 use ff::{PrimeField, BatchInvert};
 use itertools::Itertools;
@@ -46,7 +46,7 @@ pub fn montgomery<F: PrimeField+FieldUtils>(v: &[F]) -> (F, Vec<F>) {
 
 /// Parses input as `a, c, vals[0], ... vals[k-1]` and returns F::ZERO if a == \sum 1/(vals[i]-c) or one of denominators is F::ZERO itself
 /// Assumes denominators are nonzero (which always happens provided c is a random challenge); unsound otherwise.
-pub fn sum_of_fractions<'a, F:PrimeField+FieldUtils> (args: &[F], k: usize) -> F {
+pub fn sum_of_fractions<F:PrimeField+FieldUtils> (args: &[F], k: usize) -> F {
     let (tmp, vals) = args.split_at(2);
     assert_eq!(vals.len(), k);
     let (res, c) = (tmp[0], tmp[1]);
@@ -55,7 +55,7 @@ pub fn sum_of_fractions<'a, F:PrimeField+FieldUtils> (args: &[F], k: usize) -> F
 }
 
 /// Parses input as `a, c, vals[0], ... vals[k-1], nums[0], ... nums[k-1]` and returns F::ZERO if a == \sum nums[i]/(vals[i]-c) or one of denominators is F::ZERO itself
-pub fn sum_of_fractions_with_nums<'a, F:PrimeField+FieldUtils> (args: &[F], dens: &[F], k: usize) -> F {
+pub fn sum_of_fractions_with_nums<F:PrimeField+FieldUtils> (args: &[F], dens: &[F], k: usize) -> F {
     let (tmp1, nums) = args.split_at(2);
     assert!(nums.len() == k);
     let (res, c) = (tmp1[0], tmp1[1]);
@@ -79,22 +79,22 @@ pub fn invsum_flat_constrain<'a, F: PrimeField+FieldUtils>(
         assert!(vals.len() > 0);
         let args = [res, challenge].iter().chain(vals.iter()).map(|x| *x).collect_vec();
         let k = vals.len();
-        let gate = Gatebb::new(vals.len() + 1, args.len(), 1, Rc::new(move |args, _|vec![sum_of_fractions(args, k)]));
-        circuit.constrain(&args, &[], gate);        
+        let gate = Gatebb::new(vals.len() + 1, args.len(), 1, Rc::new(move |args, _|vec![sum_of_fractions(args, k)]), vec![]);
+        circuit.constrain(&args, gate);        
     }
 
-pub fn fracsum_flat_constrain<'a, F: PrimeField+FieldUtils>(
-    circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
+pub fn fracsum_flat_constrain<'a, 'c, F: PrimeField+FieldUtils>(
+    circuit: &mut Circuit<'c, F, Gatebb<'c, F>>,
     nums: &[Variable],
-    dens: &'a[F],
+    dens: &'a [F],
     res: Variable,
     challenge: Variable,
 ) -> () {
     assert!(dens.len()==nums.len());
     let args = [res, challenge].iter().chain(nums.iter()).map(|x|*x).collect_vec();
     let k = dens.len();
-    let gate = Gatebb::new(dens.len()+1, args.len(), 1, Rc::new(move |args, _|vec![sum_of_fractions_with_nums(args, &dens, k)]));
-    circuit.constrain(&args, &dens, gate);
+    let gate = Gatebb::new(dens.len()+1, args.len(), 1, Rc::new(move |args, dens|vec![sum_of_fractions_with_nums(args, &dens, k)]), dens.to_vec());
+    circuit.constrain(&args, gate);
 }
 
 /// Gadget which returns the sum of inverses of an array, shifted by a challenge.
@@ -145,8 +145,8 @@ pub fn invsum_gadget<'a, F: PrimeField+FieldUtils>(
 /// Assumes that array length is divisible by rate, pad otherwise.
 /// Unsound if one of the inverses is undefined.
 /// Rate - amount of values processed in a batch. Deg = rate+1
-pub fn fracsum_gadget<'a, F: PrimeField+FieldUtils>(
-    circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
+pub fn fracsum_gadget<'a,'c, F: PrimeField+FieldUtils>(
+    circuit: &mut Circuit<'c, F, Gatebb<'c, F>>,
     nums: &[Variable],
     dens: &'a [F],
     challenge: Variable,
@@ -159,12 +159,13 @@ pub fn fracsum_gadget<'a, F: PrimeField+FieldUtils>(
         assert!(l%rate == 0);
         let mut nums = nums;
         let mut dens = dens;
+        let captured_dens = dens.to_vec();
         let mut num_chunk;
         let mut den_chunk;
-        let advice = Advice::new(l+1, 0, l/rate, move |args: &[F], _|{
+        let advice = Advice::<'c, F>::new(l+1, 0, l/rate, move |args: &[F], _|{
             let (nums, c) = args.split_at(l);
             let c = c[0];
-            let mut inv = dens.iter().map(|x|*x-c).collect_vec();
+            let mut inv = captured_dens.iter().map(|x|*x-c).collect_vec();
             inv.batch_invert();
             let mut ret = vec![];
             let mut inv : &[F] = &inv;
@@ -207,27 +208,27 @@ pub trait Lookup<'a, F: PrimeField+FieldUtils> {
     ) -> ();
 }
 
-pub struct StaticLookup<'c, F: PrimeField+FieldUtils> {
+pub struct StaticLookup<F: PrimeField+FieldUtils> {
     vars: Vec<Variable>,
     round: usize,
     challenge: ExternalValue<F>,
-    table: &'c [F],
+    table: Vec<F>,
 }
 
-impl<'c, F: PrimeField+FieldUtils> StaticLookup<'c, F> {
-    pub fn new(challenge_src: ExternalValue<F>, table: &'c [F]) -> Self {
+impl<F: PrimeField+FieldUtils> StaticLookup<F> {
+    pub fn new<'c>(challenge_src: ExternalValue<F>, table: &'c [F]) -> Self {
         
         Self{
             vars: vec![],
             round: 0,
             challenge: challenge_src,
-            table,
+            table: table.to_vec(),
         }
     }
 }
 
-impl<'a, 'c: 'a, F: PrimeField+FieldUtils> Lookup<'a, F> for StaticLookup<'c, F> {
-    fn check(&mut self, _circuit: &mut Circuit<'a, F, Gatebb<'a,F>>, var: Variable) -> () {
+impl<'c, F: PrimeField+FieldUtils> Lookup<'c, F> for StaticLookup<F> {
+    fn check(&mut self, _circuit: &mut Circuit<'c, F, Gatebb<'c,F>>, var: Variable) -> () {
         if self.round < var.round {
             self.round = var.round
         }
@@ -235,7 +236,7 @@ impl<'a, 'c: 'a, F: PrimeField+FieldUtils> Lookup<'a, F> for StaticLookup<'c, F>
     }
     fn finalize(
         self,
-        circuit: &mut Circuit<'a, F, Gatebb<'a,F>>,
+        circuit: &mut Circuit<'c, F, Gatebb<'c,F>>,
         table_round: usize,
         access_round: usize,
         challenge_round: usize,
@@ -246,19 +247,18 @@ impl<'a, 'c: 'a, F: PrimeField+FieldUtils> Lookup<'a, F> for StaticLookup<'c, F>
         assert!(table_round <= access_round);
         assert!(access_round >= round);
         assert!(challenge_round > access_round);
-
+        let mut table_hash = HashMap::new();
+        table.iter().enumerate().map(|(i, var)| table_hash.insert(BigUint::from_bytes_le(var.to_repr().as_ref()), i)).last();
         // Access counts.
         let compute_accesses = Advice::new(vars.len(), 0, table.len(), move |vars: &[F], _|{
-            let mut ret = vec![0; table.len()];
+            let mut ret = vec![0; table_hash.len()];
             for var in vars{
                 let var = BigUint::from_bytes_le(var.to_repr().as_ref());
-                assert!(var < table.len().into(), "Error: lookup value out of range.");
-                let u64_digits = var.to_u64_digits();
-                let mut i = 0 as usize;
-                if u64_digits.len() > 0 {
-                    i = u64_digits[0] as usize;
-                }
-                ret[i]+=1;
+                let idx = match table_hash.get(&var) {
+                    None => panic!("Error: lookup value {} out of range.", var),
+                    Some(x) => *x,
+                };
+                ret[idx] += 1;
             }
             ret.into_iter().map(|x|F::from(x)).collect()
         });
@@ -267,7 +267,7 @@ impl<'a, 'c: 'a, F: PrimeField+FieldUtils> Lookup<'a, F> for StaticLookup<'c, F>
         let challenge = input(circuit, challenge, challenge_round);
 
         let lhs = invsum_gadget(circuit, &vars, challenge, rate, challenge_round);
-        let rhs = fracsum_gadget(circuit, &access_counts, table, challenge, rate, challenge_round);
+        let rhs = fracsum_gadget(circuit, &access_counts, &table, challenge, rate, challenge_round);
 
         eq_gadget(circuit, lhs, rhs);
     }
@@ -590,7 +590,7 @@ mod test {
             let indexes = 0..TEST_LEN;
             let range = 16;
 
-            let table = (0..range).map(|x| F::from(x as u64)).collect_vec();
+            let table = (0..range).map(|_| F::random(OsRng)).collect_vec();
             let mut circuit = Circuit::new(range + 1, TEST_LEN + 1);
 
             let challenge_value = circuit.ext_val(1)[0];
@@ -602,7 +602,7 @@ mod test {
             range_lookup.finalize(&mut circuit, 0, TEST_LEN - 1, TEST_LEN, 2);
             let mut circuit = circuit.finalize();
 
-            test_values.into_iter().map(|val| circuit.set_ext(val, F::from(OsRng.next_u64() % range as u64))).last();
+            test_values.into_iter().map(|val| circuit.set_ext(val, table[(OsRng.next_u64() % range as u64) as usize])).last();
             for i in indexes {
                 circuit.execute(i);
             }
@@ -660,9 +660,9 @@ mod test {
                 let range = 16;
                 let rounds = 3;
     
-                let table = (0..range).map(|x| F::from(x as u64)).collect_vec();
                 let mut circuit = Circuit::new(range + 1, rounds);
-
+                
+                let table = (0..range).map(|x| F::from(x as u64)).collect_vec();
 
                 let challenge_value: ExternalValue<F> = circuit.ext_val(1)[0];
                 let test_value = circuit.ext_val(1)[0];

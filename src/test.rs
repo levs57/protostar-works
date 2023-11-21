@@ -61,8 +61,8 @@ mod tests {
 
         let sq = PolyOp::new(2, 1, 1, |x, _| vec!(x[0]*x[0]));
         let input = input(&mut circuit, public_input_source, 0);
-        let sq1 = circuit.apply(0, sq.clone(), vec![input], &[]);
-        let _ = circuit.apply_pub(0, sq.clone(), sq1, &[]);
+        let sq1 = circuit.apply(0, sq.clone(), vec![input]);
+        let _ = circuit.apply_pub(0, sq.clone(), sq1);
     
         let mut instance = circuit.finalize();
         
@@ -106,16 +106,20 @@ mod tests {
             );
         }
     
-        let div_constr = Gatebb::<F>::new(2, 4, 1, Rc::new(|args, _|{
-            let one = args[0];
-            let ch = args[1];
-            let x = args[2];
-            let res = args[3];
-            vec![one*one - res * (x-ch)]
-        }));
+        let div_constr = Gatebb::<F>::new(
+            2, 4, 1,
+            Rc::new(|args, _|{
+                let one = args[0];
+                let ch = args[1];
+                let x = args[2];
+                let res = args[3];
+                vec![one*one - res * (x-ch)]
+            }),
+            vec![],
+        );
     
         for k in 0..5 {
-            circuit.constrain(&[one, challenge, pi[k], fractions[k]], &[], div_constr.clone());
+            circuit.constrain(&[one, challenge, pi[k], fractions[k]], div_constr.clone());
         }
     
         let mut circuit = circuit.finalize();
@@ -220,7 +224,7 @@ mod tests {
     
     fn test_check_poly() {
         let f = Rc::new(|x: &[F], _: &[F]|{vec![x[0].pow([5])]});
-        check_poly(5, 1, 1, f).unwrap();
+        check_poly(5, 1, 1, f, &[]).unwrap();
     }
 
     
@@ -301,7 +305,7 @@ mod tests {
     fn test_lagrange_choice() -> () {
         for n in 2..12 {
             for t in 0..n {
-                assert!(find_degree(32, 1, 1, Rc::new(move |v: &[F], _| vec![lagrange_choice(v[0],t,n)])).unwrap() == (n-1) as usize);
+                assert!(find_degree(32, 1, 1, Rc::new(move |v: &[F], _| vec![lagrange_choice(v[0],t,n)]), &[]).unwrap() == (n-1) as usize);
                 for x in 0..n {
                     if x == t {
                         assert!(lagrange_choice(F::from(x), t, n) == F::ONE);
@@ -318,7 +322,7 @@ mod tests {
 
     fn test_lagrange_batch() -> () {
         for n in 2..12 {
-            assert!(find_degree(32, 1, n, Rc::new(move |v: &[F], _| lagrange_choice_batched(v[0], n as u64))).unwrap() == (n-1));
+            assert!(find_degree(32, 1, n, Rc::new(move |v: &[F], _| lagrange_choice_batched(v[0], n as u64)), &[]).unwrap() == (n-1));
             for x in 0..n {
                 let v = lagrange_choice_batched(F::from(x as u64), n as u64);
                 for t in 0..n {

@@ -21,7 +21,7 @@ pub struct PolyOp<'closure, F: PrimeField>{
 impl<'closure, F:PrimeField> PolyOp<'closure, F> {
     pub fn new(d: usize, i: usize, o: usize, f: impl Fn(&[F], &[F]) -> Vec<F> + 'closure) -> Self {
         let f =  Rc::new(f);
-        check_poly(d, i, o, f.clone()).unwrap();
+        check_poly(d, i, o, f.clone(), &[]).unwrap();
 
         Self { d, i, o, f }
     }
@@ -41,7 +41,7 @@ impl<'closure, F: PrimeField> From<PolyOp<'closure, F>> for Gatebb<'closure, F>{
             results.iter().zip(outputs.iter()).map(|(res, out)|*res-*out).collect()
         };
 
-        Gatebb::new(d, i, o, Rc::new(f))   
+        Gatebb::new(d, i, o, Rc::new(f), vec![])   
     }
 }
 
@@ -249,7 +249,7 @@ where
         output
     }
 
-    fn apply_internal(&mut self, visibility: Visibility, round : usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>, constants: &[F]) -> Vec<Variable> {
+    fn apply_internal(&mut self, visibility: Visibility, round : usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>) -> Vec<Variable> {
         assert!(round < self.ops.len(), "The round is too large.");
 
         let op_index = self.ops[round].len();
@@ -270,40 +270,39 @@ where
         let mut gate_io = input;  // do not move input into new buffer
         gate_io.extend(output.iter().cloned());
 
-        self.constrain(&gate_io, &constants, polyop.into());
+        self.constrain(&gate_io, polyop.into());
         
         output
     }
 
-    pub fn apply(&mut self, round: usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>, constants: &[F]) -> Vec<Variable> {
-        self.apply_internal(Visibility::Private, round, polyop, input, constants)
+    pub fn apply(&mut self, round: usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>) -> Vec<Variable> {
+        self.apply_internal(Visibility::Private, round, polyop, input)
     }
 
-    pub fn apply_pub(&mut self, round : usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>, constants: &[F]) -> Vec<Variable> {
-        self.apply_internal(Visibility::Public, round, polyop, input, constants)
+    pub fn apply_pub(&mut self, round : usize, polyop: PolyOp<'circuit, F>, input: Vec<Variable>) -> Vec<Variable> {
+        self.apply_internal(Visibility::Public, round, polyop, input)
     }
 
     // TODO: pass input by value since we clone it down the stack either way
-    pub fn constrain(&mut self, input: &[Variable], constants: &[F], gate: G) {
+    pub fn constrain(&mut self, input: &[Variable], gate: G) {
         println!("Using legacy unnamed constrains");
-        self._constrain(&input, &constants, gate)
+        self._constrain(&input, gate)
     }
 
-    fn _constrain(&mut self, input: &[Variable], constants: &[F], gate: G) {
+    fn _constrain(&mut self, input: &[Variable], gate: G) {
         assert!(gate.d() > 0, "Trying to constrain with gate of degree 0.");
 
         let kind = if gate.d() == 1 { CommitKind::Zero } else { CommitKind::Group };
-        self.cs.constrain(kind, input, constants, gate);
+        self.cs.constrain(kind, input, gate);
     }
 
     pub fn constrain_with(
         &mut self, 
         input: &[Variable], 
-        constants: &[F],
         gate_fetcher: &dyn Fn(&FrozenMap<String, Box<G>>) -> G
     ) {
         let gate = gate_fetcher(&self.gate_registry);
-        self._constrain(&input, &constants, gate);
+        self._constrain(&input, gate);
     }
 
     pub fn load_pi(&'circuit mut self, round: usize, pi: ExternalValue<F>) -> Variable {
@@ -363,7 +362,7 @@ where
     pub fn valid_witness(&self) -> () {
         for constr in self.circuit.cs.iter_constraints() {
             let input_values: Vec<_> = constr.inputs.iter().map(|&x| self.cs.getvar(x)).collect();
-            let result = constr.gate.exec(&input_values, &constr.constants);
+            let result = constr.gate.exec(&input_values);
 
             assert!(result.iter().all(|&output| output == F::ZERO), "Constraint {:?} is not satisfied", constr);
         }

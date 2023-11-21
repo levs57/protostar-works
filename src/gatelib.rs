@@ -7,5 +7,5 @@ use gate_macro::make_gate;
 
 #[make_gate]
 fn nonzero_check<'c, F: PrimeField + FieldUtils>() -> Gatebb<'c, F> {
-    Gatebb::new(2, 2, 1, Rc::new(|args, _|vec![args[0]*args[1] - F::ONE]))
+    Gatebb::new(2, 2, 1, Rc::new(|args, _|vec![args[0]*args[1] - F::ONE]), vec![])
 }

@@ -87,7 +87,8 @@ pub fn poseidon_partial_rounds_gate<'c>(n_rounds_p: usize, n_rounds_f: usize, t:
             let (adv_in, adv_out) = tmp.split_at(n_rounds_p);
             let (inp, out) = io.split_at(t);
             poseidon_partial_rounds_constraint(inp, out, adv_in, adv_out, &c, &m, n_rounds_f, n_rounds_p, t)
-        })
+        }), 
+        vec![]
     )
 }
 
@@ -144,7 +145,6 @@ pub fn poseidon_partial_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a
 
     circuit.constrain_with(
         &to_constrain,
-        &[],
         &poseidon_partial_rounds_gate(n_rounds_p, n_rounds_f, t)
     );
 
@@ -181,7 +181,6 @@ pub fn poseidon_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F
                 }
             ),
             state,
-            &[],
         );
         i+=k;
     }
@@ -198,7 +197,6 @@ pub fn poseidon_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F
                 }
             ),
             state,
-            &[],
         );        
         i+=k
     }
@@ -215,7 +213,6 @@ pub fn poseidon_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F
                 }
             ),
             state,
-            &[],
         )
     }
 
@@ -304,7 +301,6 @@ pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, 
                 }
             ),
             state,
-            &[],
         )
     } else {
         circuit.apply(round,
@@ -317,7 +313,6 @@ pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, 
                 }
             ),
             state,
-            &[],
         )
     };
 
@@ -330,7 +325,6 @@ pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, 
             move |state, _| poseidon_mixed_strategy_mid(state, i + 1, cfg)
         ),
         state,
-        &[]
     );
 
     circuit.apply(
@@ -342,7 +336,6 @@ pub fn poseidon_mixed_strategy_full_rounds_gadget<'a>(circuit: &mut Circuit<'a, 
             move |state, _| poseidon_mixed_strategy_end(state, i + 3, cfg)
         ),
         state,
-        &[]
     )
 }
 

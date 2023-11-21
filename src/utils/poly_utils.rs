@@ -16,7 +16,7 @@ pub fn bits_le(n: usize) -> Vec<u64> {
     bits
 }
 
-pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'a>) -> Result<(), &str>{
+pub fn check_poly<'c, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'c>, consts: &[F]) -> Result<(), &'static str>{
     let mut a = vec![]; for _ in 0..i {a.push(F::random(OsRng))} 
     let mut b = vec![]; for _ in 0..i {b.push(F::random(OsRng))} 
 
@@ -26,7 +26,7 @@ pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&
 
     for j in 0..n+1 {
         let tmp : Vec<F> = a.iter().zip(b.iter()).map(|(a,b)|*a+F::from(j as u64)*b).collect();
-        lcs.push((*f)(&tmp, &[]));
+        lcs.push((*f)(&tmp, consts));
     }
 
     assert!(lcs[0].len() == o);
@@ -58,11 +58,11 @@ pub fn check_poly<'a, F: PrimeField>(d: usize, i: usize, o:usize, f: Rc<dyn Fn(&
 }
 
 /// Attempts to find a polynomial degree of a black-box function. Should instead use binary search, of course :).
-pub fn find_degree<'a, F: PrimeField>(max_degree: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'a>) -> Result<usize, &str>{
+pub fn find_degree<'a, F: PrimeField>(max_degree: usize, i: usize, o:usize, f: Rc<dyn Fn(&[F], &[F]) -> Vec<F> + 'a>, consts: &[F]) -> Result<usize, &'static str>{
     let mut top = 1;
     loop {
         if top > max_degree {return Err("The degree of provided function is too large.")}
-        match check_poly(top, i, o, f.clone()) {
+        match check_poly(top, i, o, f.clone(), consts) {
             Err(_) => top*=2,
             Ok(()) => break, 
         }
@@ -71,7 +71,7 @@ pub fn find_degree<'a, F: PrimeField>(max_degree: usize, i: usize, o:usize, f: R
     if bot == 0 {return Ok(1)}
     while top-bot > 1 {
         let mid = (top+bot)/2;
-        match check_poly(mid, i, o, f.clone()) {
+        match check_poly(mid, i, o, f.clone(), consts) {
             Err(_) => bot = mid,
             Ok(()) => top = mid,
         }

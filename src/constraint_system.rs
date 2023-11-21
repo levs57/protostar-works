@@ -35,7 +35,6 @@ pub struct Variable {
 #[derive(Debug, Clone)]
 pub struct Constraint<'c, F: PrimeField, G: Gate<'c, F>>{
     pub inputs: Vec<Variable>,
-    pub constants: Vec<F>,
     pub gate: G,
     _marker: PhantomData<&'c F>,
 }
@@ -63,12 +62,12 @@ impl<'c, F: PrimeField, G: Gate<'c, F>> ConstraintGroup<'c, F, G> {
         }
     }
 
-    pub fn constrain(&mut self, inputs: &[Variable], constants: &[F], gate: G) {
+    pub fn constrain(&mut self, inputs: &[Variable], gate: G) {
         assert!(gate.d() <= self.max_degree, "Constraint degree is too large for this group.");
         assert!(gate.i() == inputs.len(), "Invalid amount of arguments supplied.");
 
         self.num_rhs += gate.o();
-        self.entries.push(Constraint{inputs : inputs.to_vec(), constants: constants.to_vec(), gate, _marker : PhantomData});
+        self.entries.push(Constraint{inputs : inputs.to_vec(), gate, _marker : PhantomData});
     }
 }
 
@@ -114,7 +113,7 @@ pub trait CS<'c, F: PrimeField, G: Gate<'c, F>> {
         self.alloc_in_round(self.last_round(), visibility, size)
     }
 
-    fn constrain(&mut self, kind: CommitKind, inputs: &[Variable], constnts: &[F], gate: G);
+    fn constrain(&mut self, kind: CommitKind, inputs: &[Variable], gate: G);
 
     fn extval(&mut self, size: usize) -> Vec<ExternalValue<F>>; 
 }
@@ -192,8 +191,8 @@ impl<'c, F: PrimeField, G: Gate<'c, F>> CS<'c, F, G> for ConstraintSystem<'c, F,
         (prev..prev+size).into_iter().map(|index| Variable { visibility, round, index }).collect()
     }
 
-    fn constrain(&mut self, kind: CommitKind, inputs: &[Variable], constants: &[F], gate: G) {
-        self.constraint_group(kind).constrain(inputs, constants, gate);
+    fn constrain(&mut self, kind: CommitKind, inputs: &[Variable], gate: G) {
+        self.constraint_group(kind).constrain(inputs, gate);
     }
 
     fn extval(&mut self, size: usize) -> Vec<ExternalValue<F>> {

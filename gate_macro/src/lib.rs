@@ -14,6 +14,10 @@ pub fn make_gate(_args: TokenStream, input: TokenStream) -> TokenStream {
     let mut initializer = input.clone();
     let generics = input.sig.generics;
     let output = input.sig.output;
+    let output_type = match output.clone() {
+        syn::ReturnType::Default => panic!("make_gate function can not return default"),
+        syn::ReturnType::Type(_, tp) => *tp,
+    };
     let fn_name_ident = input.sig.ident;
     let init_fn_name_ident = format_ident!("_init_{}", fn_name_ident);
     initializer.sig.ident = init_fn_name_ident.clone();
@@ -31,14 +35,14 @@ pub fn make_gate(_args: TokenStream, input: TokenStream) -> TokenStream {
         };
     }).last();
 
-    let generic_params = inputs_forward.iter().map(|pat_ident| format!("{} = {{}}", pat_ident.ident.to_string())).join(", ");
+    let generic_params = inputs_forward.iter().map(|pat_ident| format!("{} = {{:?}}", pat_ident.ident.to_string())).join(", ");
     let qual_token = format!("{}::<{}>", fn_name_ident.to_string(), generic_params);
 
     quote! {
         #initializer
 
-        pub fn #fn_name_ident #generics(#fn_inputs) -> (Box<dyn Fn(&FrozenMap<String, Box<Gatebb<'c, F>>>) #output>) {
-            Box::new(move |fm: &FrozenMap<String, Box<Gatebb<'c, F>>>|  {
+        pub fn #fn_name_ident #generics(#fn_inputs) -> (Box<dyn Fn(&FrozenMap<String, Box<#output_type>>) -> #output_type>) {
+            Box::new(move |fm: &FrozenMap<String, Box<#output_type>>|  {
                 let qual_name = [module_path!().to_string(), format!(#qual_token, #inputs_forward)].join("::");
                 if fm.get(&qual_name).is_none() {
                     fm.insert(qual_name.clone(), Box::new(#init_fn_name_ident(#inputs_forward)));

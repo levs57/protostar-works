@@ -2,7 +2,7 @@ use std::{rc::{Rc, Weak}, marker::PhantomData, iter::repeat_with, cell::RefCell}
 use elsa::map::FrozenMap;
 use ff::PrimeField;
 
-use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind, Visibility, CS, Constraint}, utils::poly_utils::check_poly, circuit::circuit_operations::{AttachedAdvice, AttachedPolynomialAdvice, AttachedAdvicePub} };
+use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind, Visibility, CS, Constraint}, utils::poly_utils::check_poly, circuit::circuit_operations::{AttachedAdvice, AttachedPolynomialAdvice, AttachedAdvicePub}, external_interface::{RunIndex, RunAllocator} };
 
 use self::circuit_operations::CircuitOperation;
 
@@ -310,7 +310,7 @@ where
     pub fn finalize(self) -> ConstructedCircuit<'circuit, F, G> {
         ConstructedCircuit {
             circuit: self,
-            num_runs: RefCell::new(0),
+            run_allocator: RefCell::new(RunAllocator::new()),
         }
     }
 
@@ -323,32 +323,23 @@ where
     }
 }
 
-pub struct RunIndex {
-    idx: usize,
-}
-
-impl RunIndex {
-    fn new(idx: usize) -> Self {
-        Self {
-            idx,
-        }
-    }
-}
-
 pub struct ConstructedCircuit<'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> {
     circuit: Circuit<'circuit, F, G>,
-    num_runs: RefCell<usize>,
+    run_allocator: RefCell<RunAllocator>,
 }
 
 impl<'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> ConstructedCircuit<'circuit, F, G> {
     pub fn spawn<'constructed>(&'constructed self) -> CircuitRun<'constructed, 'circuit, F, G> {
-        *self.num_runs.borrow_mut() += 1;
         CircuitRun { 
             constructed: &self, 
             cs: CSWtns::<F,G>::new(&self.circuit.cs), 
             round_counter: 0,
-            run_idx: RunIndex::new(*self.num_runs.borrow() - 1),
+            run_idx: self.run_allocator.borrow_mut().allocate(),
         }
+    }
+
+    fn deallocate<'constructed>(&'constructed self, idx: RunIndex) {
+        self.run_allocator.borrow_mut().deallocate(idx);
     }
 }
 
@@ -392,6 +383,13 @@ where
 
     pub fn iter_constraints(&self) -> impl Iterator<Item = &Constraint<'circuit, F, G>> {
         self.constructed.circuit.cs.iter_constraints()
+    }
+
+    pub fn finish(self) -> (CSWtns<'circuit, F, G>, &'constructed ConstraintSystem<'circuit, F, G>) {
+        let Self {constructed, cs, round_counter: _, run_idx} = self;
+
+        constructed.deallocate(run_idx);
+        (cs, &constructed.circuit.cs)
     }
 }
 

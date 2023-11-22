@@ -83,7 +83,8 @@ pub fn ecmul_pseudo_fold(c: &mut Criterion) {
 
     assemble_ecmul_circuit(&mut circuit, &pi, num_limbs);
     
-    let mut instance = circuit.finalize();
+    let constructed = circuit.finalize();
+    let mut instance = constructed.spawn();
 
     let pi_a_ext = (pi[0], pi[1]);
     let pi_b_ext = (pi[2], pi[3]); // a*(1+9+...+9^{nl-1})+b=0 must be checked out of band
@@ -141,7 +142,8 @@ pub fn ecmul_msm(c: &mut Criterion) {
 
     assemble_ecmul_circuit(&mut circuit, &pi, num_limbs);
 
-    let mut instance = circuit.finalize();
+    let constructed = circuit.finalize();
+    let mut instance = constructed.spawn();
 
     let pi_a_ext = (pi[0], pi[1]);
     let pi_b_ext = (pi[2], pi[3]); // a*(1+9+...+9^{nl-1})+b=0 must be checked out of band

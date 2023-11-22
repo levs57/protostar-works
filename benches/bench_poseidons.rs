@@ -64,7 +64,8 @@ pub fn poseidons_pseudo_fold(c: &mut Criterion) {
 
     assemble_poseidon_circuit(&mut circuit, &cfg, pi);
 
-    let mut instance = circuit.finalize();
+    let constructed = circuit.finalize();
+    let mut instance = constructed.spawn();
 
     instance.set_ext(pi, F::random(OsRng));
     instance.execute(0);
@@ -99,7 +100,8 @@ pub fn poseidons_msm(c: &mut Criterion) {
     let pi = circuit.ext_val(1)[0];
     assemble_poseidon_circuit(&mut circuit, &cfg, pi);
 
-    let mut instance = circuit.finalize();
+    let constructed = circuit.finalize();
+    let mut instance = constructed.spawn();
 
     instance.set_ext(pi, F::random(OsRng));
     instance.execute(0);

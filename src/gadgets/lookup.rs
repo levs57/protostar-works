@@ -131,7 +131,7 @@ pub fn invsum_gadget<'a, F: PrimeField+FieldUtils>(
         let mut args = vals.to_vec();
         args.push(challenge);
 
-        let batches = circuit.advice(round, advice, args, vec![]);
+        let batches = circuit.advice(round, advice, args);
         for i in 0..l/rate {
             (chunk, vals) = vals.split_at(rate);
             invsum_flat_constrain(circuit, chunk, batches[i], challenge);
@@ -182,7 +182,7 @@ pub fn fracsum_gadget<'a,'c, F: PrimeField+FieldUtils>(
 
         let args = nums.iter().map(|x|*x).chain(once(challenge)).collect();
 
-        let batches = circuit.advice(round, advice, args, vec![]);
+        let batches = circuit.advice(round, advice, args);
         for i in 0..l/rate {
             (num_chunk, nums) = nums.split_at(rate);
             (den_chunk, dens) = dens.split_at(rate);
@@ -262,7 +262,7 @@ impl<'c, F: PrimeField+FieldUtils> Lookup<'c, F> for StaticLookup<F> {
             }
             ret.into_iter().map(|x|F::from(x)).collect()
         });
-        let access_counts = circuit.advice(access_round, compute_accesses, vars.clone(), vec![]);
+        let access_counts = circuit.advice(access_round, compute_accesses, vars.clone());
         // Allocate challenge.
         let challenge = input(circuit, challenge, challenge_round);
 
@@ -469,7 +469,9 @@ mod test {
             let reslut_variable = input(&mut circuit, result_value, 0);
 
             invsum_flat_constrain(&mut circuit, &points_variables, reslut_variable, challenge_variable);
-            let mut instance = circuit.finalize();
+            
+            let constructed = circuit.finalize();
+            let mut instance = constructed.spawn();
 
             instance.set_ext(challenge_value, challenge);
             points_values.into_iter().zip_eq(points).map(|(val, point)| instance.set_ext(val, point)).last();
@@ -505,7 +507,9 @@ mod test {
             let reslut_variable = input(&mut circuit, result_value, 0);
 
             fracsum_flat_constrain(&mut circuit, &numerator_variables, &points, reslut_variable, challenge_variable);
-            let mut instance = circuit.finalize();
+            
+            let constructed = circuit.finalize();
+            let mut instance = constructed.spawn();
 
             instance.set_ext(challenge_value, challenge);
             numerators_values.into_iter().zip_eq(numerators).map(|(val, point)| instance.set_ext(val, point)).last();
@@ -535,15 +539,17 @@ mod test {
             let points_variables = points_values.clone().into_iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
 
             let result_variable = invsum_gadget(&mut circuit, &points_variables, challenge_variable, rate, 0);
-            let mut circuit = circuit.finalize();
+            
+            let constructed = circuit.finalize();
+            let mut instance = constructed.spawn();
 
-            circuit.set_ext(challenge_value, challenge);
-            points_values.into_iter().zip_eq(points).map(|(val, point)| circuit.set_ext(val, point)).last();
+            instance.set_ext(challenge_value, challenge);
+            points_values.into_iter().zip_eq(points).map(|(val, point)| instance.set_ext(val, point)).last();
 
-            circuit.execute(0);
-            circuit.valid_witness();
+            instance.execute(0);
+            instance.valid_witness();
 
-            assert_eq!(result, circuit.cs.getvar(result_variable));
+            assert_eq!(result, instance.cs.getvar(result_variable));
         }
     }
 
@@ -568,14 +574,16 @@ mod test {
             let numerator_variables = numerators_values.clone().into_iter().map(|val| input(&mut circuit, val, 0)).collect_vec();
 
             let result_variable = fracsum_gadget(&mut circuit, &numerator_variables, &points, challenge_variable, 3, 0);
-            let mut circuit = circuit.finalize();
+            
+            let constructed = circuit.finalize();
+            let mut instance = constructed.spawn();
 
-            circuit.set_ext(challenge_value, challenge);
-            numerators_values.into_iter().zip_eq(numerators).map(|(val, point)| circuit.set_ext(val, point)).last();
+            instance.set_ext(challenge_value, challenge);
+            numerators_values.into_iter().zip_eq(numerators).map(|(val, point)| instance.set_ext(val, point)).last();
 
-            circuit.execute(0);
-            circuit.valid_witness();
-            assert_eq!(result, circuit.cs.getvar(result_variable));
+            instance.execute(0);
+            instance.valid_witness();
+            assert_eq!(result, instance.cs.getvar(result_variable));
         }
     }
 
@@ -600,16 +608,18 @@ mod test {
             let test_variables = test_values.clone().into_iter().enumerate().map(|(i, v)| input(&mut circuit, v, i)).collect_vec();
             test_variables.into_iter().map(|variable| range_lookup.check(&mut circuit, variable)).last();
             range_lookup.finalize(&mut circuit, 0, TEST_LEN - 1, TEST_LEN, 2);
-            let mut circuit = circuit.finalize();
 
-            test_values.into_iter().map(|val| circuit.set_ext(val, table[(OsRng.next_u64() % range as u64) as usize])).last();
+            let constructed = circuit.finalize();
+            let mut instance = constructed.spawn();
+
+            test_values.into_iter().map(|val| instance.set_ext(val, table[(OsRng.next_u64() % range as u64) as usize])).last();
             for i in indexes {
-                circuit.execute(i);
+                instance.execute(i);
             }
             let challenge = F::random(OsRng);
-            circuit.set_ext(challenge_value, challenge);
-            circuit.execute(TEST_LEN);
-            circuit.valid_witness();
+            instance.set_ext(challenge_value, challenge);
+            instance.execute(TEST_LEN);
+            instance.valid_witness();
         }
 
         mod invalid {

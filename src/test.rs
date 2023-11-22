@@ -64,7 +64,8 @@ mod tests {
         let sq1 = circuit.apply(0, sq.clone(), vec![input]);
         let _ = circuit.apply_pub(0, sq.clone(), sq1);
     
-        let mut instance = circuit.finalize();
+        let constructed = circuit.finalize();
+        let mut instance = constructed.spawn();
         
         instance.set_ext(public_input_source, F::from(2));
 
@@ -102,7 +103,7 @@ mod tests {
         let mut fractions = vec![];
         for k in 0..5 {
             fractions.push(
-                circuit.advice(1, division_advice.clone(), vec![challenge, pi[k]], vec![])[0]
+                circuit.advice(1, division_advice.clone(), vec![challenge, pi[k]])[0]
             );
         }
     
@@ -122,22 +123,23 @@ mod tests {
             circuit.constrain(&[one, challenge, pi[k], fractions[k]], div_constr.clone());
         }
     
-        let mut circuit = circuit.finalize();
+        let constructed = circuit.finalize();
+        let mut instance = constructed.spawn();
     
         // construction phase ended
-        circuit.set_ext(pi_ext[0], F::from(2));
-        circuit.set_ext(pi_ext[1], F::from(3));
-        circuit.set_ext(pi_ext[2], F::from(4));
-        circuit.set_ext(pi_ext[3], F::from(5));
-        circuit.set_ext(pi_ext[4], F::from(6));
+        instance.set_ext(pi_ext[0], F::from(2));
+        instance.set_ext(pi_ext[1], F::from(3));
+        instance.set_ext(pi_ext[2], F::from(4));
+        instance.set_ext(pi_ext[3], F::from(5));
+        instance.set_ext(pi_ext[4], F::from(6));
     
-        circuit.execute(0);
+        instance.execute(0);
 
-        circuit.set_ext(challenge_ext, F::random(OsRng));
+        instance.set_ext(challenge_ext, F::random(OsRng));
     
-        circuit.execute(1);
+        instance.execute(1);
     
-        circuit.valid_witness(); // test that constraints are satisfied
+        instance.valid_witness(); // test that constraints are satisfied
     }
     
     #[test]
@@ -148,14 +150,15 @@ mod tests {
         let pi = input(&mut circuit, pi_ext, 0);
         let ret = poseidon_gadget_internal(&mut circuit, &cfg, 1, 0, vec![pi]);
     
-        let mut circuit = circuit.finalize();
+        let constructed = circuit.finalize();
+        let mut instance = constructed.spawn();
     
-        circuit.set_ext(pi_ext, F::ONE);
+        instance.set_ext(pi_ext, F::ONE);
     
-        circuit.execute(0);
-        circuit.valid_witness();
+        instance.execute(0);
+        instance.valid_witness();
     
-        assert_eq!(circuit.cs.getvar(ret), F::from_str_vartime("18586133768512220936620570745912940619677854269274689475585506675881198879027").unwrap());
+        assert_eq!(instance.cs.getvar(ret), F::from_str_vartime("18586133768512220936620570745912940619677854269274689475585506675881198879027").unwrap());
     }
     
     #[test]
@@ -166,14 +169,15 @@ mod tests {
         let pi = input(&mut circuit, pi_ext, 0);   
         let ret = poseidon_gadget_internal(&mut circuit, &cfg, 2, 0, vec![pi]);
     
-        let mut circuit = circuit.finalize();
+        let constructed = circuit.finalize();
+        let mut instance = constructed.spawn();
     
-        circuit.set_ext(pi_ext, F::ONE);
+        instance.set_ext(pi_ext, F::ONE);
     
-        circuit.execute(0);
-        circuit.valid_witness();
+        instance.execute(0);
+        instance.valid_witness();
     
-        assert_eq!(circuit.cs.getvar(ret), F::from_str_vartime("18586133768512220936620570745912940619677854269274689475585506675881198879027").unwrap());
+        assert_eq!(instance.cs.getvar(ret), F::from_str_vartime("18586133768512220936620570745912940619677854269274689475585506675881198879027").unwrap());
     }
 
     #[test]
@@ -184,18 +188,19 @@ mod tests {
         let pi = input(&mut circuit, pi_ext, 0);
         let ret = poseidon_gadget_mixstrat(&mut circuit, &cfg, 0, vec![pi]);
 
-        let mut circuit = circuit.finalize();
+        let constructed = circuit.finalize();
+        let mut instance = constructed.spawn();
 
-        circuit.set_ext(pi_ext, F::ONE);
+        instance.set_ext(pi_ext, F::ONE);
 
-        circuit.execute(0);
-        circuit.valid_witness();
+        instance.execute(0);
+        instance.valid_witness();
 
-        assert!(circuit.cs.getvar(ret) == F::from_str_vartime("18586133768512220936620570745912940619677854269274689475585506675881198879027").unwrap());
+        assert!(instance.cs.getvar(ret) == F::from_str_vartime("18586133768512220936620570745912940619677854269274689475585506675881198879027").unwrap());
 
         assert!(cfg.hash(vec![F::ONE]) == F::from_str_vartime("18586133768512220936620570745912940619677854269274689475585506675881198879027").unwrap());
 
-        println!("{:?}", circuit.cs.getvar(ret).to_repr());
+        println!("{:?}", instance.cs.getvar(ret).to_repr());
     }
 
     #[test]
@@ -208,16 +213,18 @@ mod tests {
     
         let bits = bit_decomposition_gadget(&mut circuit, 0, 3, pi);
     
-        let mut circuit = circuit.finalize();
-        circuit.set_ext(pi_ext, F::from(6));
-        circuit.execute(0);
+        let constructed = circuit.finalize();
+        let mut instance = constructed.spawn();
+
+        instance.set_ext(pi_ext, F::from(6));
+        instance.execute(0);
     
-        circuit.valid_witness();
+        instance.valid_witness();
     
         assert!(bits.len()==3);
-        assert!(circuit.cs.getvar(bits[0]) == F::ZERO);
-        assert!(circuit.cs.getvar(bits[1]) == F::ONE);
-        assert!(circuit.cs.getvar(bits[2]) == F::ONE);
+        assert!(instance.cs.getvar(bits[0]) == F::ZERO);
+        assert!(instance.cs.getvar(bits[1]) == F::ONE);
+        assert!(instance.cs.getvar(bits[2]) == F::ONE);
     }
     
     #[test]
@@ -288,15 +295,17 @@ mod tests {
     
         let limbs = limb_decompose_gadget(&mut circuit, 9, 0, 2, pi);
     
-        let mut circuit = circuit.finalize();
-        circuit.set_ext(pi_ext, F::from(25));
-        circuit.execute(0);
+        let constructed = circuit.finalize();
+        let mut instance = constructed.spawn();
+
+        instance.set_ext(pi_ext, F::from(25));
+        instance.execute(0);
     
-        circuit.valid_witness();
+        instance.valid_witness();
     
         assert!(limbs.len()==2);
-        assert!(circuit.cs.getvar(limbs[0].var) == F::from(7));
-        assert!(circuit.cs.getvar(limbs[1].var) == F::from(2));
+        assert!(instance.cs.getvar(limbs[0].var) == F::from(7));
+        assert!(instance.cs.getvar(limbs[1].var) == F::from(2));
 
     }
 
@@ -356,21 +365,23 @@ mod tests {
         let pi : Vec<_> = pi.iter().map(|x|x.as_ref()).collect();
         let chosen = choice_gadget(&mut circuit, &pi, VarSmall::new_unchecked(pi_id, 9), 0);
 
-        let mut circuit = circuit.finalize();
-        circuit.set_ext(pi_id_ext, F::from(5));
+        let constructed = circuit.finalize();
+        let mut instance = constructed.spawn();
+
+        instance.set_ext(pi_id_ext, F::from(5));
         for i in 0..9 {
             for j in 0..3 {
-                circuit.set_ext(pi_ext[i][j], F::random(OsRng));
+                instance.set_ext(pi_ext[i][j], F::random(OsRng));
             }
         }
-        circuit.execute(0);
+        instance.execute(0);
     
-        circuit.valid_witness();
+        instance.valid_witness();
 
         assert!(chosen.len() == 3);
 
         for j in 0..3 {
-            assert!(circuit.cs.getvar(pi[5][j]) == circuit.cs.getvar(chosen[j]))
+            assert!(instance.cs.getvar(pi[5][j]) == instance.cs.getvar(chosen[j]))
         }
     }
 
@@ -401,7 +412,8 @@ mod tests {
         let scmul = escalarmul_gadget_9(&mut circuit, sc, pt, num_limbs, 0, a, b, &mut nonzeros);
 
         nonzero_gadget(&mut circuit, &nonzeros, 9);
-        let mut instance = circuit.finalize();
+        let constructed = circuit.finalize();
+        let mut instance = constructed.spawn();
 
         let pi_a = C::random(OsRng).to_affine();
         instance.set_ext(pi_a_ext.0, pi_a.x);

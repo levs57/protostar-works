@@ -193,7 +193,6 @@ pub fn ecadd_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
             }
         ),
         vec![pt1.x, pt1.y, pt2.x, pt2.y],
-        vec![]
     );
 
     let pt3 = EcAffinePoint::<F,C>::new(circuit, tmp[0], tmp[1]);
@@ -223,7 +222,6 @@ pub fn ecdouble_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
             }
         ),
         vec![pt.x, pt.y],
-        vec![]
     );
 
     let pt2 = EcAffinePoint::<F,C>::new(circuit, tmp[0], tmp[1]);
@@ -384,7 +382,6 @@ pub fn escalarmul_gadget_9<'a, F: PrimeField + FieldUtils, C: CurveExt<Base=F>>(
         round,
         adv,
         pts_limbs.clone(),
-        vec![]
     );
 
     let (acc, rest) = advices.split_at(2*(num_limbs-1));

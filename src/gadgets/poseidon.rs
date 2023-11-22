@@ -132,10 +132,9 @@ pub fn poseidon_partial_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a
             t,
             0,
             n_rounds_p + t,
-            move |input_state: &[F], _: &[F]| poseidon_partial_rounds_advice(input_state, c, m, n_rounds_f, n_rounds_p, t)
+            move |input_state, _| poseidon_partial_rounds_advice(input_state, c, m, n_rounds_f, n_rounds_p, t)
         ),
         inp.clone(),
-        vec![],
     );
 
     let (adv, out) = tmp.split_at(n_rounds_p);

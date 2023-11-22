@@ -43,7 +43,6 @@ pub fn bit_decomposition_gadget<'a, F: PrimeField+FieldUtils>(circuit: &mut Circ
             }
         ),
         vec![input],
-        vec![]
     );
 
     let bitcheck_gate = Gatebb::new(2, 1, 1, Rc::new(|args, _| bitcheck::<F>(args)), vec![]);

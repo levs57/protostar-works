@@ -11,3 +11,4 @@ pub mod utils;
 pub mod folding;
 pub mod test;
 pub mod gatelib;
+pub mod external_interface;

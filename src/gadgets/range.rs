@@ -191,7 +191,6 @@ pub fn limb_decompose_gadget<'a, F: PrimeField+FieldUtils>(
         round,
         Advice::new(
             1,
-            0,
             num_limbs,
             move |args, _| {
                 let x = args[0];

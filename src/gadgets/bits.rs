@@ -26,7 +26,7 @@ pub fn decompcheck<F: PrimeField>(arg: &[F]) -> Vec<F> {
 pub fn bit_decomposition_gadget<'a, F: PrimeField+FieldUtils>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, round: usize, num_bits: usize, input: Variable) -> Vec<Variable> {
     let bits = circuit.advice(
         round,
-        Advice::new(1, 0, num_bits, move |input: &[F], _|{
+        Advice::new(1, num_bits, move |input: &[F], _|{
                 let input = input[0];
                 let limbs = input.to_repr();
                 let mut ret = vec![];

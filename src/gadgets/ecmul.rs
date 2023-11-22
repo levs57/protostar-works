@@ -184,7 +184,6 @@ pub fn ecadd_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
         round,
         Advice::new(
             4,
-            0,
             2,
             move |args, _| {
                 let (x,y,z) = add_proj::<F,C>((args[0], args[1]), (args[2], args[3]));
@@ -213,7 +212,6 @@ pub fn ecdouble_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
         round,
         Advice::new(
             4,
-            0,
             2,
             move |args, _| {
                 let (x,y,z) = double_proj::<F,C>((args[0], args[1]));
@@ -275,7 +273,6 @@ pub fn escalarmul_gadget_9<'a, F: PrimeField + FieldUtils, C: CurveExt<Base=F>>(
 
     let adv = Advice::new(
         2*num_limbs,
-        0,
         8*(num_limbs-1),
         move |args, _| {
             let mut pts = vec![];

@@ -113,7 +113,7 @@ pub fn invsum_gadget<'a, F: PrimeField+FieldUtils>(
         assert!(l%rate == 0);
         let mut vals = vals;
         let mut chunk;
-        let advice = Advice::new(l+1, 0, l/rate, move |args: &[F], _|{
+        let advice = Advice::new(l+1, l/rate, move |args: &[F], _|{
             let (args, c) = args.split_at(l);
             let c = c[0];
             let mut inv = args.iter().map(|x|*x-c).collect_vec();
@@ -162,7 +162,7 @@ pub fn fracsum_gadget<'a,'c, F: PrimeField+FieldUtils>(
         let captured_dens = dens.to_vec();
         let mut num_chunk;
         let mut den_chunk;
-        let advice = Advice::<'c, F>::new(l+1, 0, l/rate, move |args: &[F], _|{
+        let advice = Advice::<'c, F>::new(l+1, l/rate, move |args: &[F], _|{
             let (nums, c) = args.split_at(l);
             let c = c[0];
             let mut inv = captured_dens.iter().map(|x|*x-c).collect_vec();
@@ -250,7 +250,7 @@ impl<'c, F: PrimeField+FieldUtils> Lookup<'c, F> for StaticLookup<F> {
         let mut table_hash = HashMap::new();
         table.iter().enumerate().map(|(i, var)| table_hash.insert(BigUint::from_bytes_le(var.to_repr().as_ref()), i)).last();
         // Access counts.
-        let compute_accesses = Advice::new(vars.len(), 0, table.len(), move |vars: &[F], _|{
+        let compute_accesses = Advice::new(vars.len(), table.len(), move |vars: &[F], _|{
             let mut ret = vec![0; table_hash.len()];
             for var in vars{
                 let var = BigUint::from_bytes_le(var.to_repr().as_ref());

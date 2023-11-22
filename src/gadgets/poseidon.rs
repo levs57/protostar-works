@@ -130,7 +130,6 @@ pub fn poseidon_partial_rounds_gadget<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a
         round,
         Advice::new(
             t,
-            0,
             n_rounds_p + t,
             move |input_state, _| poseidon_partial_rounds_advice(input_state, c, m, n_rounds_f, n_rounds_p, t)
         ),

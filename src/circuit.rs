@@ -72,16 +72,16 @@ impl<F: PrimeField> InternalValue<F> {
  #[derive(Clone)]
  pub struct Advice<'closure, F: PrimeField> {
     pub ivar: usize,
-    pub iext: usize,
+//    pub iext: usize,
     pub o: usize,
     pub f: Rc<dyn Fn(&[F], &RunIndex)-> Vec<F> + 'closure>,
 }
 
 impl<'closure, F: PrimeField> Advice<'closure, F> {
-    pub fn new(ivar: usize, iext: usize, o: usize, f: impl Fn(&[F], &RunIndex) -> Vec<F> + 'closure) -> Self {
+    pub fn new(ivar: usize, o: usize, f: impl Fn(&[F], &RunIndex) -> Vec<F> + 'closure) -> Self {
         let f = Rc::new(f);
 
-        Self { ivar, iext, o, f }
+        Self { ivar, o, f }
     }
 }
 

@@ -94,7 +94,7 @@ mod tests {
     
         let challenge = input(&mut circuit, challenge_ext, 1);
 
-        let division_advice = Advice::new(2, 0, 1, |ivar : &[F], _| {
+        let division_advice = Advice::new(2, 1, |ivar : &[F], _| {
             let ch = ivar[0];
             let x = ivar[1];
             vec![(x-ch).invert().unwrap()]

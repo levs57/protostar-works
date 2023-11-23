@@ -1,8 +1,9 @@
 use std::{rc::{Rc, Weak}, marker::PhantomData, iter::repeat_with, cell::RefCell};
 use elsa::map::FrozenMap;
 use ff::PrimeField;
+use itertools::Itertools;
 
-use crate::{witness::CSWtns, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind, Visibility, CS, Constraint}, utils::poly_utils::check_poly, circuit::circuit_operations::{AttachedAdvice, AttachedPolynomialAdvice, AttachedAdvicePub}, external_interface::{RunIndex, RunAllocator} };
+use crate::{witness::{CSWtns, ProtostarWtns, ProtostarLhsWtns}, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind, Visibility, CS, Constraint}, utils::poly_utils::check_poly, circuit::circuit_operations::{AttachedAdvice, AttachedPolynomialAdvice, AttachedAdvicePub}, external_interface::{RunIndex, RunAllocator} };
 
 use self::circuit_operations::CircuitOperation;
 
@@ -364,6 +365,35 @@ where
                 op.execute(&mut self.cs, &self.run_idx);
             }
             self.round_counter += 1;
+        }
+    }
+
+    pub fn end(&self, mut beta: F) -> ProtostarWtns<'constructed, 'circuit, F, G> {
+        let m = self.constructed.circuit.cs.constr_spec().num_nonlinear_constraints;
+        let mut p = 1;
+        let mut protostar_challenges = vec![];
+        while p <= m {
+            protostar_challenges.push(beta);
+            beta = beta * beta;
+            p = p * 2;
+        }
+
+        let mut pubs = vec![];
+        let mut round_wtns = vec![];
+
+        for round in &self.cs.wtns {
+            round_wtns.push(round.privs.iter().map(|x| x.unwrap()).collect_vec());
+            pubs.push(round.pubs.iter().map(|x| x.unwrap()).collect_vec());
+        }
+
+        ProtostarWtns {
+            lhs: ProtostarLhsWtns {
+                round_wtns,
+                pubs,
+                protostar_challenges,
+                circuit: self.constructed,
+            },
+            error: F::ZERO,
         }
     }
 

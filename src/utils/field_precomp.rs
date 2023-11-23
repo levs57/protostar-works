@@ -6,12 +6,12 @@ use num_traits::pow;
 use super::{powers_of_omega, half_squares, inv_lagrange_prod};
 
 pub trait FieldUtils where Self : PrimeField{
-    /// Returns power of a primitive root of unity of order 2^logorder.
-    fn roots_of_unity(power: u64, logorder: usize) -> Self;
+    // /// Returns power of a primitive root of unity of order 2^logorder.
+    // fn roots_of_unity(power: u64, logorder: usize) -> Self;
     /// Returns power of 1/2.
     fn half_pow(power: u64) -> Self;
-    /// Returns FFT of the binomial.
-    fn binomial_fft(power: usize, logorder: usize) -> Vec<Self>;
+    // /// Returns FFT of the binomial.
+    // fn binomial_fft(power: usize, logorder: usize) -> Vec<Self>;
     /// Multiplies the value by the small scalar.
     fn scale(&self, scale: u64) -> Self;
     /// Returns [k/2]^2
@@ -23,32 +23,32 @@ pub trait FieldUtils where Self : PrimeField{
 type F = bn256::Fr;
 
 impl FieldUtils for F {
-    /// Returns power of a primitive root of unity of order 2^logorder.
-    fn roots_of_unity(power: u64, logorder: usize) -> Self{
-        powers_of_omega::roots_of_unity(power, logorder)
-    }
+    // /// Returns power of a primitive root of unity of order 2^logorder.
+    // fn roots_of_unity(power: u64, logorder: usize) -> Self{
+    //     powers_of_omega::roots_of_unity(power, logorder)
+    // }
     /// Returns power of 1/2.
     fn half_pow(power: u64) -> Self {
         F::TWO_INV.pow([power])
     }
 
-    fn binomial_fft(power: usize, logorder: usize) -> Vec<Self> {
-        assert!(power < pow(2, logorder));
-        let mut bin_coeffs = vec![1];
-        for i in 1..pow(2,logorder) {
-            let tmp = bin_coeffs[i-1];
-            // n!/((i-1)!(n-i+1)!) * (n-i)/i
-            if i <= power{
-                bin_coeffs.push((tmp * (power-i+1)) / i)
-            } else {
-                bin_coeffs.push(0)
-            }
-        }
-        let mut bin_coeffs : Vec<F>= bin_coeffs.iter().map(|x|F::from(*x as u64)).collect();
-        let omega = F::roots_of_unity(1, logorder);
-        best_fft(&mut bin_coeffs, omega, logorder as u32);
-        bin_coeffs
-    }
+    // fn binomial_fft(power: usize, logorder: usize) -> Vec<Self> {
+    //     assert!(power < pow(2, logorder));
+    //     let mut bin_coeffs = vec![1];
+    //     for i in 1..pow(2,logorder) {
+    //         let tmp = bin_coeffs[i-1];
+    //         // n!/((i-1)!(n-i+1)!) * (n-i)/i
+    //         if i <= power{
+    //             bin_coeffs.push((tmp * (power-i+1)) / i)
+    //         } else {
+    //             bin_coeffs.push(0)
+    //         }
+    //     }
+    //     let mut bin_coeffs : Vec<F>= bin_coeffs.iter().map(|x|F::from(*x as u64)).collect();
+    //     let omega = F::roots_of_unity(1, logorder);
+    //     best_fft(&mut bin_coeffs, omega, logorder as u32);
+    //     bin_coeffs
+    // }
 
     /// Addition chains mostly taken from https://github.com/mratsim/constantine/blob/master/constantine/math/arithmetic/finite_fields.nim#L443 
     fn scale(&self, scale: u64) -> Self {

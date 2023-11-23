@@ -4,10 +4,28 @@ use crate::{utils::field_precomp::FieldUtils, circuit::{Circuit, Advice}, gate::
 use super::running_prod::prod_run_gadget;
 use crate::gatelib::nonzero_check;
 
+pub struct Nonzeros {
+    entries: Vec<Variable>,
+    rate: usize,
+}
+
+impl Nonzeros {
+    pub fn new(rate: usize) -> Self {
+        Self {entries : vec![], rate}
+    }
+
+    pub fn push(&mut self, v: Variable) {
+        self.entries.push(v);
+    }
+
+    pub fn finalize<'a, F: PrimeField+FieldUtils>(self, circuit: &mut Circuit<'a, F, Gatebb<'a, F>>) {
+        nonzero_gadget(circuit, &self.entries, self.rate);
+    }
+}
 
 /// Checks that the array of variables is nonzero.
 /// Rate = amount of elements processed in a single chunk.
-pub fn nonzero_gadget<'a, F: PrimeField + FieldUtils> (circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, input: &[Variable], rate: usize) -> () {
+fn nonzero_gadget<'a, F: PrimeField + FieldUtils> (circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, input: &[Variable], rate: usize) -> () {
     let mut round = 0;
     for v in input {
         round = max(

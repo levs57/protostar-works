@@ -12,6 +12,7 @@ use crate::circuit::{PolyOp, Advice};
 use crate::{circuit::Circuit, constraint_system::Variable, gate::Gatebb};
 use crate::utils::field_precomp::FieldUtils;
 
+use super::nonzero_check::Nonzeros;
 use super::range::{limb_decompose_gadget, choice_gadget};
 
 
@@ -90,7 +91,7 @@ pub fn eclin_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
     pt1: EcAffinePoint<F,C>,
     pt2: EcAffinePoint<F,C>,
     pt3: EcAffinePoint<F,C>, 
-    nonzeros: &mut Vec<Variable>,
+    nonzeros: &mut Nonzeros,
     round: usize
 ) -> () {
     let pts = vec![pt1.x, pt1.y, pt2.x, pt2.y, pt3.x, pt3.y];
@@ -134,7 +135,7 @@ pub fn ectangent_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
     circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
     pt1: EcAffinePoint<F,C>,
     pt2: EcAffinePoint<F,C>,
-    nonzeros: &mut Vec<Variable>,
+    nonzeros: &mut Nonzeros,
     round: usize
 ) -> () {
     let pts = vec![pt1.x, pt1.y, pt2.x, pt2.y];
@@ -177,7 +178,7 @@ pub fn ecadd_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
     circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
     pt1: EcAffinePoint<F,C>,
     pt2: EcAffinePoint<F,C>,
-    nonzeros: &mut Vec<Variable>,
+    nonzeros: &mut Nonzeros,
     round: usize
 ) -> EcAffinePoint<F,C>{
     let tmp = circuit.advice(
@@ -205,7 +206,7 @@ pub fn ecadd_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
 pub fn ecdouble_gadget<'a, F: PrimeField+FieldUtils, C: CurveExt<Base=F>>(
     circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
     pt: EcAffinePoint<F,C>,
-    nonzeros: &mut Vec<Variable>,
+    nonzeros: &mut Nonzeros,
     round: usize
 ) -> EcAffinePoint<F,C>{
     let tmp = circuit.advice(
@@ -240,7 +241,7 @@ pub fn escalarmul_gadget_9<'a, F: PrimeField + FieldUtils, C: CurveExt<Base=F>>(
     round: usize,
     a: EcAffinePoint<F,C>,
     b: EcAffinePoint<F,C>,
-    nonzeros: &mut Vec<Variable>,
+    nonzeros: &mut Nonzeros,
 ) -> EcAffinePoint<F, C> {
     // The algorithm:
     // We compute a, pt+a, 2pt+a, ..., 8pt+a

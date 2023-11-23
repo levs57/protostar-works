@@ -8,3 +8,4 @@ pub mod nonzero_check;
 pub mod lookup;
 pub mod input;
 pub mod arith;
+pub mod cyclefold;

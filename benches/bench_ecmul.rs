@@ -4,7 +4,7 @@ use criterion::{Criterion, criterion_main, criterion_group, black_box};
 use ff::Field;
 use group::{Group, Curve};
 use halo2::halo2curves::{bn256, grumpkin, CurveExt};
-use protostar_works::{circuit::{ExternalValue, Circuit}, gate::{Gatebb, Gate}, gadgets::{ecmul::{EcAffinePoint, escalarmul_gadget_9}, nonzero_check::nonzero_gadget, input::input}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit};
+use protostar_works::{circuit::{ExternalValue, Circuit}, gate::{Gatebb, Gate}, gadgets::{ecmul::{EcAffinePoint, escalarmul_gadget_9}, nonzero_check::{Nonzeros}, input::input}, utils::poly_utils::bits_le, commitment::CkRound, witness::CSSystemCommit};
 use rand_core::OsRng;
 
 type F = bn256::Fr;
@@ -68,11 +68,11 @@ pub fn assemble_ecmul_circuit<'a>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, p
     let pt = EcAffinePoint::<F,C>::new(circuit, x, y);
     let sc = input(circuit, pi_sc_ext, 0);
 
-    let mut nonzeros = vec![];
+    let mut nonzeros = Nonzeros::new(9);
 
     escalarmul_gadget_9(circuit, sc, pt, num_limbs, 0, a, b, &mut nonzeros);
 
-    nonzero_gadget(circuit, &nonzeros, 9);
+    nonzeros.finalize(circuit);
 }
 
 pub fn ecmul_pseudo_fold(c: &mut Criterion) {

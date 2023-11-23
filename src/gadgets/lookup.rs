@@ -595,7 +595,7 @@ mod test {
         #[test]
         fn random() {
             type F = bn256::Fr;
-            let indexes = 0..TEST_LEN;
+            let indices = 0..TEST_LEN;
             let range = 16;
 
             let table = (0..range).map(|_| F::random(OsRng)).collect_vec();
@@ -613,7 +613,7 @@ mod test {
             let mut instance = constructed.spawn();
 
             test_values.into_iter().map(|val| instance.set_ext(val, table[(OsRng.next_u64() % range as u64) as usize])).last();
-            for i in indexes {
+            for i in indices {
                 instance.execute(i);
             }
             let challenge = F::random(OsRng);

@@ -26,7 +26,7 @@ mod tests {
                 VarSmall,
                 choice_gadget
             },
-            nonzero_check::nonzero_gadget, input::input
+            nonzero_check::Nonzeros, input::input
         }, folding::poseidon::Poseidon
     };
     use ff::{PrimeField, Field};
@@ -406,12 +406,12 @@ mod tests {
         let pt = EcAffinePoint::<F,C>::new(&mut circuit, x, y);
         let sc = input(&mut circuit, pi_sc_ext, 0);
 
-        let mut nonzeros = vec![];
+        let mut nonzeros = Nonzeros::new(9);
         let num_limbs = 81;
 
         let scmul = escalarmul_gadget_9(&mut circuit, sc, pt, num_limbs, 0, a, b, &mut nonzeros);
 
-        nonzero_gadget(&mut circuit, &nonzeros, 9);
+        nonzeros.finalize(&mut circuit);
         let constructed = circuit.finalize();
         let mut instance = constructed.spawn();
 
@@ -427,6 +427,7 @@ mod tests {
         instance.set_ext(pi_b_ext.1, pi_b.y);
 
         let pi_pt = C::random(OsRng).to_affine();
+
         instance.set_ext(pi_pt_ext.0, pi_pt.x);
         instance.set_ext(pi_pt_ext.1, pi_pt.y);
 

@@ -23,3 +23,11 @@ pub fn ev<F:PrimeField>(poly: &Vec<F>, x: F) -> F {
     }
     ret    
 }
+
+/// Converts jacobian to affine.
+pub fn j2a<F: PrimeField>(pt: (F,F,F)) -> (F,F) {
+    let zi = pt.2.invert().unwrap();
+    let zisq = zi.square();
+    let zicb = zisq*zi;
+    (pt.0 * zisq, pt.1 * zicb)
+}

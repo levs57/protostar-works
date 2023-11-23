@@ -4,7 +4,7 @@
 use ff::PrimeField;
 use halo2::halo2curves::CurveAffine;
 use itertools::Itertools;
-use crate::{utils::arith_helper::{log2_ceil, ev}, constraint_system::{WitnessSpec, ConstraintSystem, CS, ConstrSpec}, gate::Gate};
+use crate::{utils::arith_helper::{log2_ceil, ev}, constraint_system::{WitnessSpec, ConstraintSystem, CS, ConstrSpec}, gate::Gate, witness::Module};
 
 /// Encode value as field elements.
 pub trait FEncoding <F: PrimeField> {
@@ -44,20 +44,22 @@ impl<F: PrimeField, C: CurveAffine<ScalarExt = F>> ProtostarLhs<F, C> {
 
         assert_eq!(self.protostar_challenges.len(), log2_ceil(shape.cspec.num_nonlinear_constraints));
     }
+}
 
-    pub fn scale(&mut self, scale: F) {
+impl<F: PrimeField, C: CurveAffine<ScalarExt = F>> Module<F> for ProtostarLhs<F, C> {
+    fn scale(&mut self, scale: F) {
         self.round_commitments.iter_mut().map(|x| *x = (*x * scale).into()).count();
         self.pubs.iter_mut().map(|rpubs| rpubs.iter_mut().map(|x| *x *= scale).count()).count();
         self.protostar_challenges.iter_mut().map(|x| *x *= scale).count();
     }
 
-    pub fn neg(&mut self) {
+    fn neg(&mut self) {
         self.round_commitments.iter_mut().map(|x| *x = -*x).count();
         self.pubs.iter_mut().map(|rpubs| rpubs.iter_mut().map(|x| *x = -*x).count()).count();
         self.protostar_challenges.iter_mut().map(|x| *x = -*x).count();
     }
 
-    pub fn add_assign(&mut self, other: Self) {
+    fn add_assign(&mut self, other: Self) {
         self.round_commitments.iter_mut().zip_eq(other.round_commitments.iter())
             .map(|(a, b)| *a = (*a + *b).into()).count();
         self.pubs.iter_mut().zip_eq(other.pubs.iter())

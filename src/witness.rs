@@ -2,9 +2,10 @@ use std::iter::repeat;
 use std::marker::PhantomData;
 
 use ff::PrimeField;
-use halo2::halo2curves::CurveAffine;
+use halo2::{halo2curves::CurveAffine, arithmetic::best_multiexp};
+use itertools::Itertools;
 
-use crate::{gate::Gate, constraint_system::{ConstraintSystem, Variable, CS, Visibility, WitnessSpec}, commitment::{CommitmentKey, CkWtns, CtRound, ErrGroup, CkRelaxed}, circuit::ExternalValue};
+use crate::{gate::Gate, constraint_system::{ConstraintSystem, Variable, CS, Visibility, WitnessSpec}, commitment::{CommitmentKey, CkWtns, CtRound, ErrGroup, CkRelaxed}, circuit::{ExternalValue, ConstructedCircuit, PolyOp}, utils::field_precomp::FieldUtils, folding::shape::{ProtostarLhs, ProtostarInstance}};
 
 #[derive(Clone)]
 pub struct RoundWtns<F: PrimeField> {
@@ -136,5 +137,97 @@ pub struct CSWtnsRelaxed<'c, F: PrimeField, T : Gate<'c, F>> {
 impl<'c, F: PrimeField, T: Gate<'c, F>, G:CurveAffine<ScalarExt=F>> CSSystemCommit<F, G, CkRelaxed<G>> for CSWtnsRelaxed<'c, F, T>{
     fn commit(&self, ck: &CkRelaxed<G>) -> <CkRelaxed<G> as CommitmentKey<G>>::Target {
         (ck.0.commit(&self.cs.wtns),  ck.1.commit(&self.err))
+    }
+}
+
+pub trait Module<F> {
+    fn add_assign(&mut self, other: Self) -> ();
+    fn neg(&mut self) -> ();
+    fn scale(&mut self, scale: F) -> ();
+}
+
+pub struct ProtostarLhsWtns<'constructed, 'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> {
+    pub round_wtns: Vec<Vec<F>>,
+    pub pubs: Vec<Vec<F>>,
+    pub protostar_challenges: Vec<F>,
+    pub circuit: &'constructed ConstructedCircuit<'circuit, F, G>,
+}
+
+impl<'constructed, 'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> ProtostarLhsWtns<'constructed, 'circuit, F, G> {
+    pub fn commit<C: CurveAffine<ScalarExt=F>> (&self, commitment_key: Vec<Vec<C>>) -> ProtostarLhs<F, C> {
+        ProtostarLhs { 
+            round_commitments: self.round_wtns.iter().zip_eq(commitment_key).map(|(wtns, ck)| best_multiexp(&wtns, &ck).into()).collect_vec(),
+            pubs: self.pubs.clone(),
+            protostar_challenges: self.protostar_challenges.clone(),
+        }
+    }
+}
+
+impl<'constructed, 'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> Module<F> for ProtostarLhsWtns<'constructed, 'circuit, F, G> {
+    fn add_assign(&mut self, other: Self) -> () {
+        self.round_wtns.iter_mut().zip_eq(other.round_wtns.iter()).map(|(s, o)| {
+            s.iter_mut().zip_eq(o.iter()).map(|(s, o)| *s = *s + o)
+        }).last();
+        self.pubs.iter_mut().zip_eq(other.pubs.iter()).map(|(s, o)| {
+            s.iter_mut().zip_eq(o.iter()).map(|(s, o)| *s = *s + o)
+        }).last();
+        self.protostar_challenges.iter_mut().zip_eq(other.protostar_challenges.iter()).map(|(s, o)| {
+            *s = *s + o
+        }).last();
+    }
+
+    fn neg(&mut self) -> () {
+        self.round_wtns.iter_mut().map(|s| {
+            s.iter_mut().map(|s| *s = -*s)
+        }).last();
+        self.pubs.iter_mut().map(|s| {
+            s.iter_mut().map(|s| *s = -*s)
+        }).last();
+        self.protostar_challenges.iter_mut().map(|s| {
+            *s = -*s
+        }).last();
+    }
+
+    fn scale(&mut self, scale: F) -> () {
+        self.round_wtns.iter_mut().map(|s| {
+            s.iter_mut().map(|s| *s = *s * scale)
+        }).last();
+        self.pubs.iter_mut().map(|s| {
+            s.iter_mut().map(|s| *s = *s * scale)
+        }).last();
+        self.protostar_challenges.iter_mut().map(|s| {
+            *s = *s * scale
+        }).last();
+    }
+}
+
+pub struct ProtostarWtns<'constructed, 'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> {
+    pub lhs: ProtostarLhsWtns<'constructed, 'circuit, F, G>,
+    pub error: F
+}
+
+impl<'constructed, 'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> Module<F> for ProtostarWtns<'constructed, 'circuit, F, G> {
+    fn add_assign(&mut self, other: Self) -> () {
+        self.error += other.error;
+        self.lhs.add_assign(other.lhs);
+    }
+
+    fn neg(&mut self) -> () {
+        self.error = -self.error;
+        self.lhs.neg();
+    }
+
+    fn scale(&mut self, scale: F) -> () {
+        self.error *= scale;
+        self.lhs.scale(scale);
+    }
+}
+
+impl<'constructed, 'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> ProtostarWtns<'constructed, 'circuit, F, G> {
+    pub fn commit<C: CurveAffine<ScalarExt=F>> (&self, commitment_key: Vec<Vec<C>>) -> ProtostarInstance<F, C> {
+        ProtostarInstance {
+            lhs: self.lhs.commit(commitment_key),
+            error: self.error,
+        }
     }
 }

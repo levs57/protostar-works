@@ -1,6 +1,7 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, collections::BTreeMap};
 
 use ff::PrimeField;
+use itertools::Itertools;
 
 use crate::{gate::Gate, circuit::ExternalValue};
 
@@ -46,24 +47,18 @@ pub struct Constraint<'c, F: PrimeField, G: Gate<'c, F>>{
 #[derive(Debug, Clone)]
 struct ConstraintGroup<'c, F: PrimeField, G: Gate<'c, F>> {
     pub entries: Vec<Constraint<'c, F, G>>,
-    #[allow(dead_code)]
-    pub kind: CommitKind,
     pub num_rhs: usize,
-    pub max_degree: usize,
 }
 
 impl<'c, F: PrimeField, G: Gate<'c, F>> ConstraintGroup<'c, F, G> {
-    pub fn new(kind: CommitKind, max_degree: usize) -> Self {
+    pub fn new() -> Self {
         Self {
             entries: Default::default(),
-            kind,
             num_rhs: Default::default(),
-            max_degree,
         }
     }
 
     pub fn constrain(&mut self, inputs: &[Variable], gate: G) {
-        assert!(gate.d() <= self.max_degree, "Constraint degree is too large for this group.");
         assert!(gate.i() == inputs.len(), "Invalid amount of arguments supplied.");
 
         self.num_rhs += gate.o();
@@ -75,7 +70,10 @@ impl<'c, F: PrimeField, G: Gate<'c, F>> ConstraintGroup<'c, F, G> {
 /// 
 /// Any witness used for this constraint system has to at least comply with the spec.
 #[derive(Debug, Default, Clone, PartialEq)]
-pub struct RoundWitnessSpec(pub usize, pub usize);
+pub struct RoundWitnessSpec{
+    pub pubs: usize,
+    pub privs: usize,
+}
 
 /// Witness shape specification: a collection of specifications for each round
 /// 
@@ -94,7 +92,7 @@ pub struct ConstrSpec {
     pub max_degree: usize,
 }
 
-pub trait CS<'c, F: PrimeField, G: Gate<'c, F>> {
+pub trait CS<'c, F: PrimeField, G: Gate<'c, F>> {    
     fn num_rounds(&self) -> usize;
 
     fn last_round(&self) -> usize {
@@ -118,43 +116,42 @@ pub trait CS<'c, F: PrimeField, G: Gate<'c, F>> {
     fn extval(&mut self, size: usize) -> Vec<ExternalValue<F>>; 
 }
 
+/// This CS is made specifically for ProtoGalaxy.
+/// We will probably make interface for this part 
 #[derive(Debug, Clone)]
-pub struct ConstraintSystem<'c, F: PrimeField, G: Gate<'c, F>> {
-    spec: WitnessSpec,
-    constraint_groups: [ConstraintGroup<'c, F, G>; 3],
+pub struct ProtoGalaxyConstraintSystem<'c, F: PrimeField, G: Gate<'c, F>> {
+    pub spec: WitnessSpec,
+    pub max_degree: usize,
+    pub linear_constraints: ConstraintGroup<'c, F, G>,
+    pub non_linear_constraints: BTreeMap<usize, ConstraintGroup<'c, F, G>>,
 }
 
-impl<'c, F: PrimeField, G: Gate<'c, F>> ConstraintSystem<'c, F, G> {
-    pub fn new(num_rounds: usize, max_degree: usize) -> Self {
-        let constraint_groups = [
-            ConstraintGroup::new(CommitKind::Trivial, 0),  // FIXME: correct max_degree
-            ConstraintGroup::new(CommitKind::Group, max_degree),
-            ConstraintGroup::new(CommitKind::Zero, 1),
-        ];
-
+impl<'c, F: PrimeField, G: Gate<'c, F>> ProtoGalaxyConstraintSystem<'c, F, G> {
+    pub fn new(num_rounds: usize) -> Self {
         Self {
             spec: WitnessSpec{ round_specs: vec![RoundWitnessSpec::default(); num_rounds], num_exts: 0, num_ints: 0 },
-            constraint_groups,
-        }
-    }
-
-    /// A (short-lived) cursor to the constraint group of a given kind
-    fn constraint_group(&mut self, kind: CommitKind) -> &mut ConstraintGroup<'c, F, G> {
-        match kind {
-            CommitKind::Trivial => &mut self.constraint_groups[0],
-            CommitKind::Group => &mut self.constraint_groups[1],
-            CommitKind::Zero => &mut self.constraint_groups[2],
+            max_degree: 0,
+            linear_constraints: ConstraintGroup::new(),
+            non_linear_constraints: BTreeMap::new(),
         }
     }
 
     // would love to add this to the trait, but crab god said not yet
     // https://github.com/rust-lang/rust/issues/91611
     pub fn iter_constraints(&self) -> impl Iterator<Item = &Constraint<'c, F, G>> {
-        self.constraint_groups.iter().flat_map(|cg| cg.entries.iter())
+        self.iter_linear_constraints().chain(self.iter_non_linear_constraints())
+    }
+
+    pub fn iter_linear_constraints(&self) -> impl Iterator<Item = &Constraint<'c, F, G>> {
+        self.linear_constraints.entries.iter()
+    }
+
+    pub fn iter_non_linear_constraints(&self) -> impl Iterator<Item = &Constraint<'c, F, G>> {
+        self.non_linear_constraints.iter().flat_map(|(_, cg)| cg.entries.iter())
     }
 }
 
-impl<'c, F: PrimeField, G: Gate<'c, F>> CS<'c, F, G> for ConstraintSystem<'c, F, G> {
+impl<'c, F: PrimeField, G: Gate<'c, F>> CS<'c, F, G> for ProtoGalaxyConstraintSystem<'c, F, G> {    
     fn num_rounds(&self) -> usize {
         self.spec.round_specs.len()
     }
@@ -168,22 +165,22 @@ impl<'c, F: PrimeField, G: Gate<'c, F>> CS<'c, F, G> for ConstraintSystem<'c, F,
     }
 
     fn constr_spec(&self) -> ConstrSpec {
-        let num_lin_constraints = self.constraint_groups[2].num_rhs;
-        let num_nonlinear_constraints = self.constraint_groups[1].num_rhs;
-        let max_degree = self.constraint_groups[1].max_degree;
+        let num_lin_constraints = self.linear_constraints.num_rhs;
+        let num_nonlinear_constraints = self.non_linear_constraints.iter().map(|(_, cg)| cg.num_rhs).sum();
+        let max_degree = self.max_degree;
         ConstrSpec { num_lin_constraints, num_nonlinear_constraints, max_degree }
     }
 
     fn alloc_in_round(&mut self, round: usize, visibility: Visibility, size: usize) -> Vec<Variable> {
         let prev = match visibility {
             Visibility::Public => {
-                let prev = self.spec.round_specs[round].0;
-                self.spec.round_specs[round].0 += size;
+                let prev = self.spec.round_specs[round].pubs;
+                self.spec.round_specs[round].pubs += size;
                 prev
             },
             Visibility::Private => {
-                let prev = self.spec.round_specs[round].1;
-                self.spec.round_specs[round].1 += size;
+                let prev = self.spec.round_specs[round].privs;
+                self.spec.round_specs[round].privs += size;
                 prev
             },
         };
@@ -191,8 +188,17 @@ impl<'c, F: PrimeField, G: Gate<'c, F>> CS<'c, F, G> for ConstraintSystem<'c, F,
         (prev..prev+size).into_iter().map(|index| Variable { visibility, round, index }).collect()
     }
 
-    fn constrain(&mut self, kind: CommitKind, inputs: &[Variable], gate: G) {
-        self.constraint_group(kind).constrain(inputs, gate);
+    fn constrain(&mut self, _: CommitKind, inputs: &[Variable], gate: G) {
+        self.max_degree = self.max_degree.max(gate.d());
+        match gate.d().cmp(&1) {
+            std::cmp::Ordering::Less => panic!("Constraint of degree 0"),
+            std::cmp::Ordering::Equal => {
+                self.linear_constraints.constrain(inputs, gate)
+            },
+            std::cmp::Ordering::Greater => {
+                self.non_linear_constraints.entry(gate.d()).or_insert(ConstraintGroup::new()).constrain(inputs, gate)
+            },
+        }
     }
 
     fn extval(&mut self, size: usize) -> Vec<ExternalValue<F>> {

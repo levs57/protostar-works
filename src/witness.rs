@@ -5,7 +5,7 @@ use ff::PrimeField;
 use halo2::{halo2curves::CurveAffine, arithmetic::best_multiexp};
 use itertools::Itertools;
 
-use crate::{gate::Gate, constraint_system::{ConstraintSystem, Variable, CS, Visibility, WitnessSpec}, commitment::{CommitmentKey, CkWtns, CtRound, ErrGroup, CkRelaxed}, circuit::{ExternalValue, ConstructedCircuit, PolyOp}, utils::field_precomp::FieldUtils, folding::shape::{ProtostarLhs, ProtostarInstance}};
+use crate::{gate::Gate, constraint_system::{ProtoGalaxyConstraintSystem, Variable, CS, Visibility, WitnessSpec}, commitment::{CommitmentKey, CkWtns, CtRound, ErrGroup, CkRelaxed}, circuit::{ExternalValue, ConstructedCircuit, PolyOp}, utils::field_precomp::FieldUtils, folding::shape::{ProtostarLhs, ProtostarInstance}};
 
 #[derive(Clone)]
 pub struct RoundWtns<F: PrimeField> {
@@ -31,14 +31,14 @@ pub struct CSWtns<'c, F: PrimeField, G: Gate<'c, F>> {
 
 impl<'c, F:PrimeField, G: Gate<'c, F>> CSWtns<'c, F, G>{
 
-    pub fn new(cs: &ConstraintSystem<'c, F, G>) -> Self {
+    pub fn new(cs: &ProtoGalaxyConstraintSystem<'c, F, G>) -> Self {
         
         let mut wtns = vec![];
 
         let WitnessSpec{round_specs, num_exts, num_ints} = cs.witness_spec();
 
         for round_spec in round_specs {
-            wtns.push(RoundWtns{pubs: vec![None; round_spec.0], privs: vec![None; round_spec.1]})
+            wtns.push(RoundWtns{pubs: vec![None; round_spec.pubs], privs: vec![None; round_spec.privs]})
         }
 
         let ext_vals = repeat(None).take(*num_exts).collect();
@@ -146,14 +146,13 @@ pub trait Module<F> {
     fn scale(&mut self, scale: F) -> ();
 }
 
-pub struct ProtostarLhsWtns<'constructed, 'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> {
+pub struct ProtostarLhsWtns<F: PrimeField> {
     pub round_wtns: Vec<Vec<F>>,
     pub pubs: Vec<Vec<F>>,
     pub protostar_challenges: Vec<F>,
-    pub circuit: &'constructed ConstructedCircuit<'circuit, F, G>,
 }
 
-impl<'constructed, 'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> ProtostarLhsWtns<'constructed, 'circuit, F, G> {
+impl<F: PrimeField> ProtostarLhsWtns<F> {
     pub fn commit<C: CurveAffine<ScalarExt=F>> (&self, commitment_key: Vec<Vec<C>>) -> ProtostarLhs<F, C> {
         ProtostarLhs { 
             round_commitments: self.round_wtns.iter().zip_eq(commitment_key).map(|(wtns, ck)| best_multiexp(&wtns, &ck).into()).collect_vec(),
@@ -163,7 +162,7 @@ impl<'constructed, 'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'
     }
 }
 
-impl<'constructed, 'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> Module<F> for ProtostarLhsWtns<'constructed, 'circuit, F, G> {
+impl<F: PrimeField> Module<F> for ProtostarLhsWtns<F> {
     fn add_assign(&mut self, other: Self) -> () {
         self.round_wtns.iter_mut().zip_eq(other.round_wtns.iter()).map(|(s, o)| {
             s.iter_mut().zip_eq(o.iter()).map(|(s, o)| *s = *s + o)
@@ -201,12 +200,12 @@ impl<'constructed, 'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'
     }
 }
 
-pub struct ProtostarWtns<'constructed, 'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> {
-    pub lhs: ProtostarLhsWtns<'constructed, 'circuit, F, G>,
+pub struct ProtostarWtns<F: PrimeField> {
+    pub lhs: ProtostarLhsWtns<F>,
     pub error: F
 }
 
-impl<'constructed, 'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> Module<F> for ProtostarWtns<'constructed, 'circuit, F, G> {
+impl<F: PrimeField> Module<F> for ProtostarWtns<F> {
     fn add_assign(&mut self, other: Self) -> () {
         self.error += other.error;
         self.lhs.add_assign(other.lhs);
@@ -223,7 +222,7 @@ impl<'constructed, 'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'
     }
 }
 
-impl<'constructed, 'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> ProtostarWtns<'constructed, 'circuit, F, G> {
+impl<F: PrimeField> ProtostarWtns<F> {
     pub fn commit<C: CurveAffine<ScalarExt=F>> (&self, commitment_key: Vec<Vec<C>>) -> ProtostarInstance<F, C> {
         ProtostarInstance {
             lhs: self.lhs.commit(commitment_key),

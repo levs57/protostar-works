@@ -3,7 +3,7 @@ use elsa::map::FrozenMap;
 use ff::PrimeField;
 use itertools::Itertools;
 
-use crate::{witness::{CSWtns, ProtostarWtns, ProtostarLhsWtns}, gate::{Gatebb, Gate}, constraint_system::{Variable, ConstraintSystem, CommitKind, Visibility, CS, Constraint}, utils::poly_utils::check_poly, circuit::circuit_operations::{AttachedAdvice, AttachedPolynomialAdvice, AttachedAdvicePub}, external_interface::{RunIndex, RunAllocator} };
+use crate::{witness::{CSWtns, ProtostarWtns, ProtostarLhsWtns}, gate::{Gatebb, Gate}, constraint_system::{Variable, ProtoGalaxyConstraintSystem, CommitKind, Visibility, CS, Constraint}, utils::poly_utils::check_poly, circuit::circuit_operations::{AttachedAdvice, AttachedPolynomialAdvice, AttachedAdvicePub}, external_interface::{RunIndex, RunAllocator} };
 
 use self::circuit_operations::CircuitOperation;
 
@@ -184,7 +184,7 @@ pub mod circuit_operations {
 
 pub struct Circuit<'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> {
     gate_registry: FrozenMap<String, Box<G>>,
-    pub cs: ConstraintSystem<'circuit, F, G>,
+    pub cs: ProtoGalaxyConstraintSystem<'circuit, F, G>,
     ops: Vec<Vec<Box<dyn CircuitOperation<'circuit, F, G> + 'circuit>>>,
     max_degree: usize,
 //    round_counter : usize,
@@ -197,7 +197,7 @@ where
     G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>,
 {
     pub fn new(max_degree: usize, num_rounds: usize) -> Self {
-        let cs = ConstraintSystem::new(num_rounds, max_degree);
+        let cs = ProtoGalaxyConstraintSystem::new(num_rounds);
         let mut prep = Self {
                 gate_registry: FrozenMap::new(),
                 cs,
@@ -325,7 +325,7 @@ where
 }
 
 pub struct ConstructedCircuit<'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> {
-    circuit: Circuit<'circuit, F, G>,
+    pub circuit: Circuit<'circuit, F, G>,
     run_allocator: RefCell<RunAllocator>,
 }
 
@@ -368,11 +368,11 @@ where
         }
     }
 
-    pub fn end(&self, mut beta: F) -> ProtostarWtns<'constructed, 'circuit, F, G> {
+    pub fn end(&self, mut beta: F) -> ProtostarWtns<F> {
         let m = self.constructed.circuit.cs.constr_spec().num_nonlinear_constraints;
         let mut p = 1;
         let mut protostar_challenges = vec![];
-        while p <= m {
+        while p < m {
             protostar_challenges.push(beta);
             beta = beta * beta;
             p = p * 2;
@@ -391,7 +391,6 @@ where
                 round_wtns,
                 pubs,
                 protostar_challenges,
-                circuit: self.constructed,
             },
             error: F::ZERO,
         }
@@ -411,11 +410,35 @@ where
         }
     }
 
+    pub fn error_term(&self, beta: F) -> F {
+        let mut resulst = vec![];
+        for constr in self.constructed.circuit.cs.iter_constraints() {
+            let input_values: Vec<_> = constr.inputs.iter().map(|&x| self.cs.getvar(x)).collect();
+            resulst.extend(constr.gate.exec(&input_values));
+        }
+        let mut b = 1;
+        let mut betas = vec![beta];
+        while b < resulst.len() {
+            b *= 2;
+            let last = *betas.last().unwrap();
+            betas.push(last * last);
+        }
+        
+        for beta_pow in betas.iter().rev() {
+            for i in b..((b * 2).min(resulst.len())) {
+                resulst[i - b] = resulst[i - b] + resulst[i] * beta_pow;
+            }
+            b /= 2;
+        }
+
+        resulst[0]
+    }
+
     pub fn iter_constraints(&self) -> impl Iterator<Item = &Constraint<'circuit, F, G>> {
         self.constructed.circuit.cs.iter_constraints()
     }
 
-    pub fn finish(self) -> (CSWtns<'circuit, F, G>, &'constructed ConstraintSystem<'circuit, F, G>) {
+    pub fn finish(self) -> (CSWtns<'circuit, F, G>, &'constructed ProtoGalaxyConstraintSystem<'circuit, F, G>) {
         let Self {constructed, cs, round_counter: _, run_idx} = self;
 
         constructed.deallocate(run_idx);

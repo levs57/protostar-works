@@ -61,8 +61,8 @@ pub fn construct_cyclefold_circuit<
         read_const_gadget(&mut circuit, b.1, 0)
     );
 
-    let pt_a = EcAffinePoint::<Fs, C>::new(&mut circuit, var_a.0, var_a.1);
-    let pt_b = EcAffinePoint::new(&mut circuit, var_b.0, var_b.1);
+    let pt_a = EcAffinePoint::<Fs, C>::new_unchecked(var_a.0, var_a.1);
+    let pt_b = EcAffinePoint::new_unchecked(var_b.0, var_b.1);
 
     let mut nonzeros = Nonzeros::new(9);
 

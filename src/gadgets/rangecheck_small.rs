@@ -4,37 +4,7 @@ use ff::PrimeField;
 use crate::{utils::field_precomp::FieldUtils, gate::Gatebb, circuit::{Circuit, Advice, PolyOp}, constraint_system::Variable};
 use num_bigint::{self, BigUint};
 
-#[derive(Clone, Copy)]
-/// Range-checked variable of limb-size.
-pub struct VarSmall {
-    pub var: Variable,
-    pub range: u32,
-}
-
-impl VarSmall {
-    
-    /// Believes that variable var it is in range.
-    pub fn new_unchecked(var: Variable, range: u32) -> Self {
-        Self { var, range }
-    }
-
-    /// Range-checks variable var. Base = limb size.
-    pub fn new<'a, F: PrimeField+FieldUtils>(
-        circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
-        var: Variable,
-        base: u32) -> Self {
-
-        circuit.constrain(&[var], Gatebb::new(base as usize, 1, 1,
-            Rc::new(move |args, _|{
-                vec![rangecheck(args[0], base as u64)]
-            }), 
-            vec![],
-        ));
-
-        Self::new_unchecked(var, base)
-
-    }
-}
+use super::rangecheck_common::{limb_decompose_unchecked, VarRange};
 
 pub fn rangecheck<F: PrimeField+FieldUtils>(x: F, range: u64) -> F {
     let x = x - F::TWO_INV.scale(range-1);
@@ -168,71 +138,16 @@ pub fn lagrange_choice_batched<F: PrimeField+FieldUtils>(x: F, n: u64) -> Vec<F>
     ret.iter().enumerate().map(|(i, val)| *val*F::inv_lagrange_prod(i as u64, n)).collect()
 }
 
-pub fn limbs<F: PrimeField>(x: F, base: u32) ->  Vec<u32>{
-    let mut x = BigUint::from_bytes_le(x.to_repr().as_ref());
-    let mut ret = vec![];
-    loop {
-        let y = x.clone()%base;
-        x = x/base;
-        ret.push(y.to_u32_digits()[0]);
-        if x==BigUint::from(0 as u64) {break}
-    }
-    ret
-}
-
-pub fn limb_decompose_gadget<'a, F: PrimeField+FieldUtils>(
-    circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
-    base: u32,
-    round: usize,
-    num_limbs: usize,
-    input: Variable
-) -> Vec<VarSmall> {
-    let mut limbs = circuit.advice(
-        round,
-        Advice::new(
-            1,
-            num_limbs,
-            move |args, _| {
-                let x = args[0];
-                let limbs = limbs(x, base);
-                assert!(limbs.len()<=num_limbs, "The value has too many limbs.");
-                limbs.into_iter().map(|x|F::from(x as u64)).chain(repeat(F::ZERO)).take(num_limbs).collect()
-            }
-        ),
-        vec![input],
-    );
-
-
-    limbs.push(input);
-
-    circuit.constrain(&limbs, Gatebb::new(1, num_limbs+1, 1,
-            Rc::new(move |args, _| {
-                let mut acc = F::ZERO;
-                for i in 0..num_limbs {
-                    acc = acc.scale(base as u64);
-                    acc += args[num_limbs-i-1];
-                }
-                vec![acc - args[num_limbs]]
-            }), 
-            vec![],
-        )
-    );
-
-    limbs.pop();
-    
-    limbs.iter().map(|var|VarSmall::new(circuit, *var, base)).collect() // Note that this constrains limbs to be limbs.
-
-}
-
 /// Gadget which takes as an input n vector variables, and an index variable, and returns a variable #i.
 pub fn choice_gadget<'a, F: PrimeField+FieldUtils> (
         circuit: &mut Circuit<'a, F, Gatebb<'a,F>>,
         variants: &[&[Variable]],
-        index: VarSmall,
+        index: VarRange,
         round: usize) -> Vec<Variable> {
 
-    let n = index.range as usize;
-    assert!(variants.len() == n);
+    let n = index.range;
+    assert!(BigUint::from(variants.len()) == n);
+    let n = variants.len();
     let q = variants[0].len();
     for v in variants {
         assert!(v.len() == q);
@@ -259,4 +174,18 @@ pub fn choice_gadget<'a, F: PrimeField+FieldUtils> (
     );
 
     circuit.apply(round, choice_poly, v)
+}
+
+
+
+pub fn limb_decompose_no_lookup_gadget<'a, F: PrimeField+FieldUtils>(
+    circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
+    base: u32,
+    round: usize,
+    num_limbs: usize,
+    input: Variable
+) -> Vec<VarRange> {
+    limb_decompose_unchecked(circuit, base, round, num_limbs, input)
+        .iter().map(|var|VarRange::new_no_lookup(circuit, *var, base)).collect()
+        // Note that this constrains limbs to be limbs.
 }

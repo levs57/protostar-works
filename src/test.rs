@@ -18,13 +18,15 @@ mod tests {
                 EcAffinePoint,
                 escalarmul_gadget_9
             },
-            range::{
+            rangecheck_small::{
                 rangecheck,
-                limb_decompose_gadget,
                 lagrange_choice,
                 lagrange_choice_batched,
-                VarSmall,
-                choice_gadget
+                choice_gadget,
+                limb_decompose_no_lookup_gadget
+            },
+            rangecheck_common::{
+                VarRange,
             },
             nonzero_check::Nonzeros, input::input
         }, folding::poseidon::Poseidon
@@ -32,6 +34,7 @@ mod tests {
     use ff::{PrimeField, Field};
     use group::{Group, Curve};
     use halo2::halo2curves::{bn256, grumpkin, CurveAffine, CurveExt};
+    use num_bigint::BigUint;
     use rand_core::OsRng;
     use crate::utils::poly_utils::{check_poly, find_degree};
     use crate::utils::field_precomp::FieldUtils;
@@ -293,7 +296,7 @@ mod tests {
         let pi = input(&mut circuit, pi_ext, 0);
 
     
-        let limbs = limb_decompose_gadget(&mut circuit, 9, 0, 2, pi);
+        let limbs = limb_decompose_no_lookup_gadget(&mut circuit, 9, 0, 2, pi);
     
         let constructed = circuit.finalize();
         let mut instance = constructed.spawn();
@@ -363,7 +366,7 @@ mod tests {
 
         
         let pi : Vec<_> = pi.iter().map(|x|x.as_ref()).collect();
-        let chosen = choice_gadget(&mut circuit, &pi, VarSmall::new_unchecked(pi_id, 9), 0);
+        let chosen = choice_gadget(&mut circuit, &pi, VarRange::new_unchecked(pi_id, BigUint::from(9u64)), 0);
 
         let constructed = circuit.finalize();
         let mut instance = constructed.spawn();

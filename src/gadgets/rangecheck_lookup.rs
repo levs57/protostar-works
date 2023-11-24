@@ -3,12 +3,7 @@ use itertools::Itertools;
 use num_bigint::BigUint;
 use crate::{constraint_system::Variable, circuit::{Circuit, ExternalValue}, gate::Gatebb, utils::field_precomp::FieldUtils};
 
-use super::{lookup::{StaticLookup, Lookup}, rangecheck_common::RangeCheckedVariable};
-
-pub struct VarRLookup {
-    var: Variable,
-    range: BigUint
-}
+use super::{lookup::{StaticLookup, Lookup}, rangecheck_common::{limb_decompose_unchecked, VarRange}};
 
 pub struct RangeLookup<F: PrimeField+FieldUtils> {
     lookup: StaticLookup<F>,
@@ -43,15 +38,14 @@ impl<'a, F: PrimeField+FieldUtils> Lookup<'a, F> for RangeLookup<F> {
     }
 }
 
-impl<F: PrimeField+FieldUtils> RangeCheckedVariable<BigUint, RangeLookup<F>, F> for VarRLookup {
-    fn new_unchecked(var: Variable, range: BigUint) -> Self {
-        todo!()
-    }
-    fn new<'a>(
-            circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
-            var: Variable,
-            base: u32,
-            checker: &mut RangeLookup<F>) -> Self {
-        todo!()
-    }
+pub fn limb_decompose_with_lookup_gadget<'a, F: PrimeField+FieldUtils>(
+    circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
+    round: usize,
+    num_limbs: usize,
+    checker: &mut RangeLookup<F>,
+    input: Variable
+) -> Vec<VarRange> {
+    limb_decompose_unchecked(circuit, checker.range() as u32, round, num_limbs, input)
+        .iter().map(|var|VarRange::new_with_lookup(circuit, *var, checker)).collect()
+        // Note that this constrains limbs to be limbs.
 }

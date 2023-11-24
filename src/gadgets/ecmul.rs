@@ -13,7 +13,7 @@ use crate::{circuit::Circuit, constraint_system::Variable, gate::Gatebb};
 use crate::utils::field_precomp::FieldUtils;
 
 use super::nonzero_check::Nonzeros;
-use super::range::{limb_decompose_gadget, choice_gadget};
+use super::rangecheck_small::{choice_gadget, limb_decompose_no_lookup_gadget};
 
 
 #[derive(Clone, Copy)]
@@ -252,7 +252,7 @@ pub fn escalarmul_gadget_9<'a, F: PrimeField + FieldUtils, C: CurveExt<Base=F>>(
 
     // Compute limbs:
 
-    let limbs = limb_decompose_gadget(circuit, 9, round, num_limbs, sc);
+    let limbs = limb_decompose_no_lookup_gadget(circuit, 9, round, num_limbs, sc);
     let mut precomputed_pts = vec![a];
     let mut curr = a;
     for _ in 1..9 {
@@ -267,7 +267,7 @@ pub fn escalarmul_gadget_9<'a, F: PrimeField + FieldUtils, C: CurveExt<Base=F>>(
 
     let mut pts_limbs = vec![];
     for i in 0..num_limbs {
-        pts_limbs.append(&mut choice_gadget(circuit, &precomputed_pts_prep, limbs[i], round));
+        pts_limbs.append(&mut choice_gadget(circuit, &precomputed_pts_prep, limbs[i].clone(), round));
     }
 
     // Compute advices:

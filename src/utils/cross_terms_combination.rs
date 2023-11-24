@@ -323,7 +323,7 @@ mod tests {
     use rand_core::OsRng;
 
 
-    use crate::{utils::{cross_terms_combination::{parallelize_with_alignment, compute_binomial_coefficients, extend, compute_layouts, SanitizeLayout}, field_precomp::FieldUtils}, gadgets::range::lagrange_choice_batched};
+    use crate::{utils::{cross_terms_combination::{parallelize_with_alignment, compute_binomial_coefficients, extend, compute_layouts, SanitizeLayout}, field_precomp::FieldUtils}, gadgets::rangecheck_small::lagrange_choice_batched};
 
     use super::{combine_cross_terms, EvalLayout, merge};
 

@@ -1,7 +1,9 @@
 pub mod lc;
 pub mod poseidon;
 pub mod bits;
-pub mod range;
+pub mod rangecheck_small;
+pub mod rangecheck_lookup;
+pub mod rangecheck_common;
 pub mod ecmul;
 pub mod running_prod;
 pub mod nonzero_check;

@@ -161,9 +161,9 @@ mod test {
 
     use ff::Field;
     use halo2::halo2curves::bn256;
-    use itertools::{Unfold, unfold};
+    use itertools::unfold;
     use rand_core::OsRng;
-    use crate::{gate::Gatebb, circuit::{Circuit, Advice}, gadgets::input::input, constraint_system::CS, witness::{Module, compute_error_term, ProtostarLhsWtns}};
+    use crate::{gate::Gatebb, circuit::{Circuit, Advice}, gadgets::input::input, witness::{Module, compute_error_term, ProtostarLhsWtns}};
 
     use super::*;
 

@@ -342,6 +342,18 @@ impl<'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> 
     fn deallocate<'constructed>(&'constructed self, idx: RunIndex) {
         self.run_allocator.borrow_mut().deallocate(idx);
     }
+
+    pub fn perepare_protostar_chellanges(&self, mut beta: F) -> Vec<F> {
+        let m = self.circuit.cs.constr_spec().num_nonlinear_constraints;
+        let mut p = 1;
+        let mut protostar_challenges = vec![];
+        while p < m {
+            protostar_challenges.push(beta);
+            beta = beta * beta;
+            p = p * 2;
+        }
+        protostar_challenges
+    }
 }
 
 pub struct CircuitRun<'constructed, 'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>>{
@@ -368,15 +380,8 @@ where
         }
     }
 
-    pub fn end(&self, mut beta: F) -> ProtostarWtns<F> {
-        let m = self.constructed.circuit.cs.constr_spec().num_nonlinear_constraints;
-        let mut p = 1;
-        let mut protostar_challenges = vec![];
-        while p < m {
-            protostar_challenges.push(beta);
-            beta = beta * beta;
-            p = p * 2;
-        }
+    pub fn end(&self, beta: F) -> ProtostarWtns<F> {
+        let protostar_challenges = self.constructed.perepare_protostar_chellanges(beta);
 
         let mut pubs = vec![];
         let mut round_wtns = vec![];
@@ -408,30 +413,6 @@ where
 
             assert!(result.iter().all(|&output| output == F::ZERO), "Constraint {:?} is not satisfied", constr);
         }
-    }
-
-    pub fn error_term(&self, beta: F) -> F {
-        let mut resulst = vec![];
-        for constr in self.constructed.circuit.cs.iter_constraints() {
-            let input_values: Vec<_> = constr.inputs.iter().map(|&x| self.cs.getvar(x)).collect();
-            resulst.extend(constr.gate.exec(&input_values));
-        }
-        let mut b = 1;
-        let mut betas = vec![beta];
-        while b < resulst.len() {
-            b *= 2;
-            let last = *betas.last().unwrap();
-            betas.push(last * last);
-        }
-        
-        for beta_pow in betas.iter().rev() {
-            for i in b..((b * 2).min(resulst.len())) {
-                resulst[i - b] = resulst[i - b] + resulst[i] * beta_pow;
-            }
-            b /= 2;
-        }
-
-        resulst[0]
     }
 
     pub fn iter_constraints(&self) -> impl Iterator<Item = &Constraint<'circuit, F, G>> {

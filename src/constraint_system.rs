@@ -122,8 +122,8 @@ pub trait CS<'c, F: PrimeField, G: Gate<'c, F>> {
 pub struct ProtoGalaxyConstraintSystem<'c, F: PrimeField, G: Gate<'c, F>> {
     pub spec: WitnessSpec,
     pub max_degree: usize,
-    pub linear_constraints: ConstraintGroup<'c, F, G>,
-    pub non_linear_constraints: BTreeMap<usize, ConstraintGroup<'c, F, G>>,
+    linear_constraints: ConstraintGroup<'c, F, G>,
+    non_linear_constraints: BTreeMap<usize, ConstraintGroup<'c, F, G>>,
 }
 
 impl<'c, F: PrimeField, G: Gate<'c, F>> ProtoGalaxyConstraintSystem<'c, F, G> {

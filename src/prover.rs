@@ -2,7 +2,7 @@ use ff::{PrimeField, BatchInvert};
 use halo2::arithmetic::lagrange_interpolate;
 use itertools::Itertools;
 
-use crate::{witness::ProtostarWtns, gate::Gate, circuit::PolyOp, constraint_system::{ProtoGalaxyConstraintSystem, Visibility}, utils::{cross_terms_combination::{combine_cross_terms, self, EvalLayout}, field_precomp::FieldUtils, inv_lagrange_prod}, gadgets::range::lagrange_choice};
+use crate::{witness::{ProtostarWtns, ProtostarLhsWtns}, gate::Gate, circuit::PolyOp, constraint_system::{ProtoGalaxyConstraintSystem, Visibility}, utils::{cross_terms_combination::{combine_cross_terms, self, EvalLayout}, field_precomp::FieldUtils, inv_lagrange_prod}, gadgets::range::lagrange_choice};
 
 pub struct ProtoGalaxyProver {
 
@@ -23,10 +23,10 @@ impl ProtoGalaxyProver
     > (
         &self,
         cs: &ProtoGalaxyConstraintSystem<'circuit, F, G>,
-        template: &ProtostarWtns<F>,
+        template: &ProtostarLhsWtns<F>,
     ) -> (Vec<Vec<usize>>, Vec<Vec<usize>>) {
-        let mut pubs_degrees: Vec<Vec<usize>> = template.lhs.pubs.iter().map(|v| v.iter().map(|_| 0).collect_vec()).collect_vec();
-        let mut privs_degrees: Vec<Vec<usize>> = template.lhs.round_wtns.iter().map(|v| v.iter().map(|_| 0).collect_vec()).collect_vec();
+        let mut pubs_degrees: Vec<Vec<usize>> = template.pubs.iter().map(|v| v.iter().map(|_| 0).collect_vec()).collect_vec();
+        let mut privs_degrees: Vec<Vec<usize>> = template.round_wtns.iter().map(|v| v.iter().map(|_| 0).collect_vec()).collect_vec();
 
         for constraint in cs.iter_non_linear_constraints() {
             for variable in &constraint.inputs {
@@ -130,8 +130,8 @@ impl ProtoGalaxyProver
 
     pub fn prove<'circuit, F: PrimeField + FieldUtils, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>>(
         &self,
-        a: &ProtostarWtns<F>, 
-        b: &ProtostarWtns<F>,
+        a: &ProtostarLhsWtns<F>, 
+        b: &ProtostarLhsWtns<F>,
         cs: &ProtoGalaxyConstraintSystem<'circuit, F, G>,
     ) -> Vec<F> {
         let (pubs_degrees, privs_degrees) = self.calculate_powers(cs, a);
@@ -142,15 +142,15 @@ impl ProtoGalaxyProver
 
         // ^ that might be moved to 'new'
 
-        self.fill_variable_combinations(&mut privs_combinations, &privs_degrees, &a.lhs.round_wtns, &b.lhs.round_wtns);
-        self.fill_variable_combinations(&mut pubs_combinations, &pubs_degrees, &a.lhs.pubs, &b.lhs.pubs);
+        self.fill_variable_combinations(&mut privs_combinations, &privs_degrees, &a.round_wtns, &b.round_wtns);
+        self.fill_variable_combinations(&mut pubs_combinations, &pubs_degrees, &a.pubs, &b.pubs);
 
         let evals = self.evaluate(cs, &pubs_combinations, &privs_combinations);
-        let pg_challenges = self.combine_challenges(&a.lhs.protostar_challenges, &b.lhs.protostar_challenges);
+        let pg_challenges = self.combine_challenges(&a.protostar_challenges, &b.protostar_challenges);
         let mut cross_terms = combine_cross_terms(evals, layout, pg_challenges);
         let cross_terms = self.leave_quotient(&mut cross_terms);
         
-        let points = self.prepare_interpolation_points(cs.max_degree, a.lhs.protostar_challenges.len());
+        let points = self.prepare_interpolation_points(cs.max_degree, a.protostar_challenges.len());
         lagrange_interpolate(&points, cross_terms)
     }
 }
@@ -159,8 +159,11 @@ impl ProtoGalaxyProver
 mod test {
     use std::rc::Rc;
 
+    use ff::Field;
     use halo2::halo2curves::bn256;
-    use crate::{gate::Gatebb, circuit::{Circuit, Advice}, gadgets::input::input};
+    use itertools::{Unfold, unfold};
+    use rand_core::OsRng;
+    use crate::{gate::Gatebb, circuit::{Circuit, Advice}, gadgets::input::input, constraint_system::CS, witness::{Module, compute_error_term, ProtostarLhsWtns}};
 
     use super::*;
 
@@ -175,7 +178,9 @@ mod test {
             1,
             |args, _| vec![args[0] * args[1]]
         ), vec![input_vars[0], input_vars[1]])[0];
-        circuit.constrain(&[input_vars[0], input_vars[1], mul_a_res], Gatebb::<F>::new(2, 3, 1, Rc::new(|args, _| vec![args[0] * args[1] - args[2]]), vec![]));
+        circuit.constrain(&[input_vars[0], input_vars[1], mul_a_res], Gatebb::<F>::new(2, 3, 1, Rc::new(|args, _| 
+            {let res = vec![args[0] * args[1] - args[2]]; res}
+        ), vec![]));
 
         let mul_b_res = circuit.advice(1, Advice::new(
             2,
@@ -197,24 +202,49 @@ mod test {
         let mut run_a = constructed.spawn();
         let mut run_b = constructed.spawn();
 
-        for (idx, i) in inputs.iter().enumerate() {
-            run_a.set_ext(*i, F::from((idx + 3) as u64));
-            run_b.set_ext(*i, F::from((idx + 10) as u64));
+        for i in inputs {
+            run_a.set_ext(i, F::random(OsRng));
+            run_b.set_ext(i, F::random(OsRng));
         }
         
         run_a.execute(1);
         run_b.execute(1);
 
-        let beta = F::from(2);
+        let beta_a = F::random(OsRng);
+        let beta_b = F::random(OsRng);
 
         let pgp = ProtoGalaxyProver::new();
 
-        let a_wtns = run_a.end(beta);
-        let b_wtns = run_b.end(beta);
+        let a_wtns = run_a.end(beta_a);
+        let b_wtns = run_b.end(beta_b);
 
-        let res = pgp.prove(&a_wtns, &b_wtns, &constructed.circuit.cs);
-        run_a.valid_witness();
-        run_b.valid_witness();
+        
+        // Now we create random witnesses with same shape
+
+        let a_wtns = ProtostarLhsWtns::random_like(&mut OsRng, &a_wtns.lhs);
+        let b_wtns = ProtostarLhsWtns::random_like(&mut OsRng, &b_wtns.lhs);
+        
+        let q = pgp.prove(&a_wtns, &b_wtns, &constructed.circuit.cs);
+
+        let a_err = compute_error_term(&a_wtns, &constructed.circuit.cs);
+        let b_err = compute_error_term(&b_wtns, &constructed.circuit.cs);
+
+        let t = F::random(OsRng);
+        let mut fold_wtns = a_wtns.clone();
+        fold_wtns.neg();
+        fold_wtns.add_assign(b_wtns.clone());
+        fold_wtns.scale(t);
+        fold_wtns.add_assign(a_wtns.clone());
+
+        let fold_err = compute_error_term(&fold_wtns, &constructed.circuit.cs);
+
+        let q_eval: F = unfold(F::ONE, |next| {
+            let tmp = *next;
+            *next = *next * t;
+            Some(tmp)
+        }).zip(q).map(|(pow, c)| c * pow).sum();
+
+        assert_eq!(fold_err, a_err + (b_err - a_err) * t + t * (t - F::ONE) * q_eval)
         
     }
 }

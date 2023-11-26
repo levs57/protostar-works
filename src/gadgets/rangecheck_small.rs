@@ -145,7 +145,7 @@ pub fn choice_gadget<'a, F: PrimeField+FieldUtils> (
         index: VarRange<F>,
         round: usize) -> Vec<Variable> {
 
-    let n = index.range;
+    let n = index.range();
     assert!(BigUint::from(variants.len()) == n);
     let n = variants.len();
     let q = variants[0].len();
@@ -153,7 +153,7 @@ pub fn choice_gadget<'a, F: PrimeField+FieldUtils> (
         assert!(v.len() == q);
     }
 
-    let v : Vec<_> = variants.iter().map(|x|*x).flatten().map(|x|*x).chain([index.var].into_iter()).collect();
+    let v : Vec<_> = variants.iter().map(|x|*x).flatten().map(|x|*x).chain([index.var()].into_iter()).collect();
     
     let choice_poly = PolyOp::new(
         n,

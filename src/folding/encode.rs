@@ -7,13 +7,9 @@ use itertools::Itertools;
 use num_bigint::BigUint;
 use num_traits::FromBytes;
 
-fn shift64<F: PrimeField> (x: F) -> F {
-    let mut x = x;
-    for _ in 0..64 {
-        x = x.double()
-    }
-    x
-}
+use crate::utils::arith_helper::shift64;
+
+
 
 pub trait Encoded<R: PrimeField> : PrimeField + Copy{
     fn encode(self) -> Vec<R> {

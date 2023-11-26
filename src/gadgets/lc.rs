@@ -23,10 +23,10 @@ pub fn sum_arr<F: PrimeField+FieldUtils>(args: &[F]) -> F {
 }
 
 /// Linear combination with constant coefficients. Constrain version.
-pub fn lc_constr<'a, F: PrimeField+FieldUtils>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, coeffs:&'a [F], vars: &[Variable]) -> () {
+pub fn lc_constr<'a, F: PrimeField+FieldUtils>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, coeffs:&[F], vars: &[Variable]) -> () {
     assert_eq!(coeffs.len(), vars.len());
     let l = vars.len();
-    let gate = Gatebb::new(1, l, 1, Rc::new(|args, _|{vec![inner_prod(coeffs, args)]}), vec![]); // NO MOVE HERE!!
+    let gate = Gatebb::new(1, l, 1, Rc::new(|args, coeffs|{vec![inner_prod(coeffs, args)]}), vec![]); // NO MOVE HERE!!
     circuit.constrain(vars, gate);
 }
 
@@ -38,10 +38,10 @@ pub fn qc<'a, F: PrimeField+FieldUtils>(circuit: &mut Circuit<'a, F, Gatebb<'a, 
     circuit.apply(round, poly, args)[0]
 }
 
-pub fn lc<'a, F: PrimeField+FieldUtils>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, coeffs:&'a [F], vars: &[Variable], round: usize) -> Variable {
+pub fn lc<'a, F: PrimeField+FieldUtils>(circuit: &mut Circuit<'a, F, Gatebb<'a, F>>, coeffs:&[F], vars: &[Variable], round: usize) -> Variable {
     assert_eq!(coeffs.len(), vars.len());
     let l = vars.len();
-    let poly = PolyOp::new(1, l, 1, |args, _|{vec![inner_prod(coeffs, args)]}); // NO MOVE HERE!!
+    let poly = PolyOp::new(1, l, 1, |args, coeffs|{vec![inner_prod(coeffs, args)]});
     circuit.apply(round, poly, vars.to_vec())[0]
 }
 

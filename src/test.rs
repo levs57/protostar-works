@@ -307,8 +307,8 @@ mod tests {
         instance.valid_witness();
     
         assert!(limbs.len()==2);
-        assert!(instance.cs.getvar(limbs[0].var) == F::from(7));
-        assert!(instance.cs.getvar(limbs[1].var) == F::from(2));
+        assert!(instance.cs.getvar(limbs[0].var()) == F::from(7));
+        assert!(instance.cs.getvar(limbs[1].var()) == F::from(2));
 
     }
 

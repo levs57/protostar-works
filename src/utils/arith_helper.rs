@@ -37,3 +37,21 @@ pub fn modulus<F: PrimeField>() -> BigUint {
     let x = -F::ONE;
     BigUint::from_bytes_le(x.to_repr().as_ref()) + BigUint::from(1u8)
 }
+
+pub fn shift64<F: PrimeField> (x: F) -> F {
+    let mut x = x;
+    for _ in 0..64 {
+        x = x.double()
+    }
+    x
+}
+
+pub fn from_biguint<F:PrimeField>(x: &BigUint) -> F {
+    assert!(*x < modulus::<F>());
+    x
+        .to_u64_digits()
+        .into_iter()
+        .map(|v|F::from(v))
+        .rev()
+        .fold(F::ZERO, |acc, inc| shift64(acc) + inc)
+}

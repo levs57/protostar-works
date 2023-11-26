@@ -142,7 +142,7 @@ pub fn lagrange_choice_batched<F: PrimeField+FieldUtils>(x: F, n: u64) -> Vec<F>
 pub fn choice_gadget<'a, F: PrimeField+FieldUtils> (
         circuit: &mut Circuit<'a, F, Gatebb<'a,F>>,
         variants: &[&[Variable]],
-        index: VarRange,
+        index: VarRange<F>,
         round: usize) -> Vec<Variable> {
 
     let n = index.range;
@@ -184,7 +184,7 @@ pub fn limb_decompose_no_lookup_gadget<'a, F: PrimeField+FieldUtils>(
     round: usize,
     num_limbs: usize,
     input: Variable
-) -> Vec<VarRange> {
+) -> Vec<VarRange<F>> {
     limb_decompose_unchecked(circuit, base, round, num_limbs, input)
         .iter().map(|var|VarRange::new_no_lookup(circuit, *var, base)).collect()
         // Note that this constrains limbs to be limbs.

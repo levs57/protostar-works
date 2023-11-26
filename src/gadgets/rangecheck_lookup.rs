@@ -44,7 +44,7 @@ pub fn limb_decompose_with_lookup_gadget<'a, F: PrimeField+FieldUtils>(
     num_limbs: usize,
     checker: &mut RangeLookup<F>,
     input: Variable
-) -> Vec<VarRange> {
+) -> Vec<VarRange<F>> {
     limb_decompose_unchecked(circuit, checker.range() as u32, round, num_limbs, input)
         .iter().map(|var|VarRange::new_with_lookup(circuit, *var, checker)).collect()
         // Note that this constrains limbs to be limbs.

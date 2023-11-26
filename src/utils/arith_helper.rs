@@ -1,5 +1,6 @@
 use std::ops::ShrAssign;
 use ff::PrimeField;
+use num_bigint::BigUint;
 use num_traits::{Unsigned, PrimInt};
 
 /// Returns k for numbers x such that 2^{k-1} < x <= 2^k. Panics for x=0.
@@ -30,4 +31,9 @@ pub fn j2a<F: PrimeField>(pt: (F,F,F)) -> (F,F) {
     let zisq = zi.square();
     let zicb = zisq*zi;
     (pt.0 * zisq, pt.1 * zicb)
+}
+
+pub fn modulus<F: PrimeField>() -> BigUint {
+    let x = -F::ONE;
+    BigUint::from_bytes_le(x.to_repr().as_ref()) + BigUint::from(1u8)
 }

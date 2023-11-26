@@ -1,29 +1,32 @@
-use std::{rc::Rc, iter::repeat};
+use std::{rc::Rc, iter::repeat, marker::PhantomData};
 
 use ff::PrimeField;
 use num_bigint::BigUint;
 
-use crate::{constraint_system::Variable, utils::field_precomp::FieldUtils, circuit::{Circuit, Advice}, gate::Gatebb, gadgets::rangecheck_small::rangecheck};
+use crate::{constraint_system::Variable, utils::{field_precomp::FieldUtils, arith_helper::modulus}, circuit::{Circuit, Advice}, gate::Gatebb, gadgets::rangecheck_small::rangecheck};
 
-use super::{rangecheck_lookup::RangeLookup, lookup::Lookup};
+use super::{rangecheck_lookup::{RangeLookup, self, limb_decompose_with_lookup_gadget}, lookup::Lookup};
 
 
 #[derive(Clone)]
 /// Range-checked variable of limb-size.
-pub struct VarRange {
+pub struct VarRange<F: PrimeField+FieldUtils> {
     pub var: Variable,
     pub range: BigUint,
+    _marker: PhantomData<F>,
 }
 
-impl VarRange {
+impl<F:PrimeField+FieldUtils> VarRange<F> {
     
-    /// Believes that variable var is in range.
+    /// Believes that variable var is in range. Demands that the range is less than field modulus,
+    /// all implementations that create VarRange must go through this check.
     pub fn new_unchecked(var: Variable, range: BigUint) -> Self {
-        Self { var, range }
+        assert!(range < modulus::<F>(), "Construction error: variable does not fit in a single field element.");
+        Self { var, range, _marker: PhantomData::<F> }
     }
 
     /// Range-checks variable var. Base = limb size. Do not use for large base.
-    pub fn new_no_lookup<'a, F: PrimeField+FieldUtils>(
+    pub fn new_no_lookup<'a>(
         circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
         var: Variable,
         base: u32) -> Self {
@@ -35,17 +38,16 @@ impl VarRange {
         ));
 
         Self::new_unchecked(var, BigUint::from(base))
-
     }
 
-    pub fn new_with_lookup<'a, F: PrimeField+FieldUtils>(
+    pub fn new_with_lookup<'a>(
         circuit: &mut Circuit<'a, F, Gatebb<'a, F>>,
         var: Variable,
         checker: &mut RangeLookup<F>) -> Self {
             checker.check(circuit, var);
-
             Self::new_unchecked(var, BigUint::from(checker.range()))
     }
+
 
 }
 

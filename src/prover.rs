@@ -2,7 +2,7 @@ use ff::{PrimeField, BatchInvert};
 use halo2::arithmetic::lagrange_interpolate;
 use itertools::Itertools;
 
-use crate::{witness::{ProtostarWtns, ProtostarLhsWtns}, gate::Gate, circuit::PolyOp, constraint_system::{ProtoGalaxyConstraintSystem, Visibility}, utils::{cross_terms_combination::{combine_cross_terms, self, EvalLayout}, field_precomp::FieldUtils, inv_lagrange_prod}, gadgets::range::lagrange_choice};
+use crate::{witness::ProtostarLhsWtns, gate::Gate, circuit::PolyOp, constraint_system::{ProtoGalaxyConstraintSystem, Visibility}, utils::{cross_terms_combination::{combine_cross_terms, EvalLayout}, field_precomp::FieldUtils}};
 
 pub struct ProtoGalaxyProver {
 
@@ -61,7 +61,7 @@ impl ProtoGalaxyProver
         degrees.iter().map(|d| d.iter().map(|d| Vec::with_capacity(d + 1)).collect_vec()).collect_vec()
     }
 
-    fn fill_variable_combinations<F: PrimeField + FieldUtils>(&self, mut storage: &mut Vec<Vec<Vec<F>>>, degrees: &Vec<Vec<usize>>, a: &Vec<Vec<F>>, b: &Vec<Vec<F>>) {
+    fn fill_variable_combinations<F: PrimeField + FieldUtils>(&self, storage: &mut Vec<Vec<Vec<F>>>, degrees: &Vec<Vec<usize>>, a: &Vec<Vec<F>>, b: &Vec<Vec<F>>) {
         storage.iter_mut().zip_eq(degrees.iter()).zip_eq(a.iter().zip_eq(b.iter())).map(|((s, d), (a, b))| {
             s.iter_mut().zip_eq(d.iter()).zip_eq(a.iter().zip_eq(b.iter())).map(|((res, d), (a, b))| {
                 if *d != 0 { // min gate degree here is 2 (were iterating over nonlinear)

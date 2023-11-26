@@ -1,0 +1,2 @@
+[alias]
+cli = "run --manifest-path=cli/Cargo.toml"

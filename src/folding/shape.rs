@@ -26,7 +26,7 @@ impl Shape {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProtostarLhs<F: PrimeField, C: CurveAffine<ScalarExt=F>> {
     pub round_commitments: Vec<C>,
     pub pubs: Vec<Vec<F>>,
@@ -115,7 +115,7 @@ impl<F: PrimeField, C: CurveAffine<ScalarExt = F>> Fold<F,C> {
         lhs_acc.add_assign(diff);
         let lhs = lhs_acc;
         let nt = F::ONE-t;
-        let error = nt*error_acc + t*error_inc + t*nt*ev(&cross_terms, t);
+        let error = nt*error_acc + t*error_inc - t*nt*ev(&cross_terms, t);
         ProtostarInstance { lhs, error }
     }
 }

@@ -160,16 +160,19 @@ mod test {
     use std::rc::Rc;
 
     use ff::Field;
-    use halo2::halo2curves::bn256;
+    use group::Group;
+    use halo2::halo2curves::{bn256, grumpkin};
     use itertools::unfold;
     use rand_core::OsRng;
-    use crate::{gate::Gatebb, circuit::{Circuit, Advice}, gadgets::input::input, witness::{Module, compute_error_term, ProtostarLhsWtns}};
+    use crate::{gate::Gatebb, circuit::{Circuit, Advice}, gadgets::input::input, witness::{Module, compute_error_term, ProtostarLhsWtns, ProtostarWtns}, folding::shape::{Fold, Shape}};
 
     use super::*;
 
     #[test]
     fn pg_prover() {
         type F = bn256::Fr;
+        type C = bn256::G1Affine;
+
         let mut circuit = Circuit::new(4, 2);
         let inputs = circuit.ext_val(4);
         let input_vars = inputs.iter().map(|i| input(&mut circuit, *i, 0)).collect_vec();
@@ -218,33 +221,46 @@ mod test {
         let a_wtns = run_a.end(beta_a);
         let b_wtns = run_b.end(beta_b);
 
-        
         // Now we create random witnesses with same shape
-
-        let a_wtns = ProtostarLhsWtns::random_like(&mut OsRng, &a_wtns.lhs);
-        let b_wtns = ProtostarLhsWtns::random_like(&mut OsRng, &b_wtns.lhs);
         
-        let q = pgp.prove(&a_wtns, &b_wtns, &constructed.circuit.cs);
+        let mut a_wtns = ProtostarWtns::random_like(&mut OsRng, &a_wtns);
+        let mut b_wtns = ProtostarWtns::random_like(&mut OsRng, &b_wtns);
+        
+        let q = pgp.prove(&a_wtns.lhs, &b_wtns.lhs, &constructed.circuit.cs);
 
-        let a_err = compute_error_term(&a_wtns, &constructed.circuit.cs);
-        let b_err = compute_error_term(&b_wtns, &constructed.circuit.cs);
+        let a_err = compute_error_term(&a_wtns.lhs, &constructed.circuit.cs);
+        let b_err = compute_error_term(&b_wtns.lhs, &constructed.circuit.cs);
+        a_wtns.error = a_err;
+        b_wtns.error = b_err;
 
         let t = F::random(OsRng);
+        let commitment_key = a_wtns.lhs.round_wtns.iter().map(|w| w.iter().map(|_| C::random(OsRng)).collect_vec()).collect_vec();
+
         let mut fold_wtns = a_wtns.clone();
         fold_wtns.neg();
         fold_wtns.add_assign(b_wtns.clone());
         fold_wtns.scale(t);
         fold_wtns.add_assign(a_wtns.clone());
 
-        let fold_err = compute_error_term(&fold_wtns, &constructed.circuit.cs);
+        let fold_wtns_commited = fold_wtns.commit(&commitment_key);
+        let fold_err = compute_error_term(&fold_wtns.lhs, &constructed.circuit.cs);
 
         let q_eval: F = unfold(F::ONE, |next| {
             let tmp = *next;
             *next = *next * t;
             Some(tmp)
-        }).zip(q).map(|(pow, c)| c * pow).sum();
+        }).zip(q.iter()).map(|(pow, c)| c * pow).sum();
 
-        assert_eq!(fold_err, a_err + (b_err - a_err) * t + t * (t - F::ONE) * q_eval)
+        assert_eq!(fold_err, a_err + (b_err - a_err) * t + t * (t - F::ONE) * q_eval);
         
+        let a_wtns_commited = a_wtns.commit(&commitment_key);
+        let b_wtns_commited = b_wtns.commit(&commitment_key);
+
+        let mut fold = Fold::new(a_wtns_commited, b_wtns_commited, q, Shape::new(&constructed.circuit.cs));
+        fold.challenge(t);
+        let folded_commited = fold.fold();
+
+        assert_eq!(folded_commited.lhs, fold_wtns_commited.lhs);
+        assert_eq!(fold_err, folded_commited.error);
     }
 }

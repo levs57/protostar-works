@@ -147,7 +147,7 @@ pub trait Module<F> {
     fn scale(&mut self, scale: F) -> ();
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct ProtostarLhsWtns<F: PrimeField> {
     pub round_wtns: Vec<Vec<F>>,
     pub pubs: Vec<Vec<F>>,
@@ -155,7 +155,7 @@ pub struct ProtostarLhsWtns<F: PrimeField> {
 }
 
 impl<F: PrimeField> ProtostarLhsWtns<F> {
-    pub fn commit<C: CurveAffine<ScalarExt=F>> (&self, commitment_key: Vec<Vec<C>>) -> ProtostarLhs<F, C> {
+    pub fn commit<C: CurveAffine<ScalarExt=F>> (&self, commitment_key: &Vec<Vec<C>>) -> ProtostarLhs<F, C> {
         ProtostarLhs { 
             round_commitments: self.round_wtns.iter().zip_eq(commitment_key).map(|(wtns, ck)| best_multiexp(&wtns, &ck).into()).collect_vec(),
             pubs: self.pubs.clone(),
@@ -211,7 +211,7 @@ impl<F: PrimeField> Module<F> for ProtostarLhsWtns<F> {
 }
 
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct ProtostarWtns<F: PrimeField> {
     pub lhs: ProtostarLhsWtns<F>,
     pub error: F
@@ -235,10 +235,17 @@ impl<F: PrimeField> Module<F> for ProtostarWtns<F> {
 }
 
 impl<F: PrimeField> ProtostarWtns<F> {
-    pub fn commit<C: CurveAffine<ScalarExt=F>> (&self, commitment_key: Vec<Vec<C>>) -> ProtostarInstance<F, C> {
+    pub fn commit<C: CurveAffine<ScalarExt=F>> (&self, commitment_key: &Vec<Vec<C>>) -> ProtostarInstance<F, C> {
         ProtostarInstance {
             lhs: self.lhs.commit(commitment_key),
             error: self.error,
+        }
+    }
+
+    pub fn random_like<RNG: RngCore>(mut rng: &mut RNG, other: &Self) -> Self {
+        Self {
+            lhs: ProtostarLhsWtns::random_like(rng, &other.lhs),
+            error: other.error,
         }
     }
 }

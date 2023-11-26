@@ -4,7 +4,7 @@
 use ff::PrimeField;
 use halo2::halo2curves::CurveAffine;
 use itertools::Itertools;
-use crate::{utils::arith_helper::{log2_ceil, ev}, constraint_system::{WitnessSpec, ConstraintSystem, CS, ConstrSpec}, gate::Gate, witness::Module};
+use crate::{utils::arith_helper::{log2_ceil, ev}, constraint_system::{WitnessSpec, ProtoGalaxyConstraintSystem, CS, ConstrSpec}, gate::Gate, witness::Module};
 
 /// Encode value as field elements.
 pub trait FEncoding <F: PrimeField> {
@@ -19,14 +19,14 @@ pub struct Shape {
 }
 
 impl Shape {
-    pub fn new<'c,F:PrimeField,G:Gate<'c,F>>(c: &ConstraintSystem<'c, F, G>) -> Self {
+    pub fn new<'c,F:PrimeField,G:Gate<'c,F>>(c: &ProtoGalaxyConstraintSystem<'c, F, G>) -> Self {
         let wspec = c.witness_spec().clone();
         let cspec = c.constr_spec().clone();
         Self{wspec, cspec}
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProtostarLhs<F: PrimeField, C: CurveAffine<ScalarExt=F>> {
     pub round_commitments: Vec<C>,
     pub pubs: Vec<Vec<F>>,
@@ -37,7 +37,7 @@ impl<F: PrimeField, C: CurveAffine<ScalarExt = F>> ProtostarLhs<F, C> {
     pub fn validate_shape(&self, shape: &Shape) {
         shape.wspec.round_specs.iter().zip_eq(self.pubs.iter())
             .map(|(rspec,rpubs)|{
-                assert_eq!(rspec.0,rpubs.len())
+                assert_eq!(rspec.pubs, rpubs.len())
             }).count();
 
         assert_eq!(self.pubs.len(), self.round_commitments.len());
@@ -115,7 +115,7 @@ impl<F: PrimeField, C: CurveAffine<ScalarExt = F>> Fold<F,C> {
         lhs_acc.add_assign(diff);
         let lhs = lhs_acc;
         let nt = F::ONE-t;
-        let error = nt*error_acc + t*error_inc + t*nt*ev(&cross_terms, t);
+        let error = nt*error_acc + t*error_inc - t*nt*ev(&cross_terms, t);
         ProtostarInstance { lhs, error }
     }
 }

@@ -12,3 +12,4 @@ pub mod folding;
 pub mod test;
 pub mod gatelib;
 pub mod external_interface;
+pub mod prover;

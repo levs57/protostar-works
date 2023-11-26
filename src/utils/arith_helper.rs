@@ -15,7 +15,7 @@ pub fn log2_ceil<T: Unsigned + PrimInt + ShrAssign<i32>>(x: T) -> usize {
     ret
 }
 
-pub fn ev<F:PrimeField>(poly: &Vec<F>, x: F) -> F {
+pub fn ev<F: PrimeField>(poly: &Vec<F>, x: F) -> F {
     let mut ret = F::ZERO;
     let l = poly.len();
     for i in 0..l {

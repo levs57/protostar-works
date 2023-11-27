@@ -32,8 +32,12 @@ impl<F:PrimeField+FieldUtils> VarRange<F> {
     /// all implementations that create VarRange must go through this check.
     pub fn new_unchecked(var: Variable, range: BigUint) -> Self {
         assert!(range != BigUint::from(0u8), "Construction error: range must be positive.");
-        assert!(range < modulus::<F>(), "Construction error: variable does not fit in a single field element.");
+        assert!(range <= modulus::<F>(), "Construction error: variable does not fit in a single field element.");
         Self { var, range, _marker: PhantomData::<F> }
+    }
+
+    pub fn from_var(var: Variable) -> Self {
+        Self::new_unchecked(var, modulus::<F>())
     }
 
     /// Range-checks variable var. Base = limb size. Do not use for large base.

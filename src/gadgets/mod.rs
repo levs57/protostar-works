@@ -11,3 +11,4 @@ pub mod lookup;
 pub mod input;
 pub mod arith;
 pub mod cyclefold;
+pub mod folding;

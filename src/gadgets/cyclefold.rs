@@ -4,8 +4,8 @@ use ff::PrimeField;
 use group::{prime::PrimeCurveAffine, Group, Curve};
 use halo2::halo2curves::{CurveExt, CurveAffine};
 
-use crate::{circuit::{ConstructedCircuit, Circuit, ExternalValue, CircuitRun}, gate::Gatebb, utils::{field_precomp::FieldUtils, arith_helper::j2a}, gadgets::{arith::read_const_gadget, ecmul::EcAffinePoint, input::input}, folding::encode::Encoded, constraint_system::Variable, external_interface::InnerValue};
-use super::{ecmul::{escalarmul_gadget_9, eclin_gadget}, lookup::StaticLookup, nonzero_check::Nonzeros};
+use crate::{circuit::{ConstructedCircuit, Circuit, ExternalValue, CircuitRun}, gate::Gatebb, utils::{field_precomp::FieldUtils, arith_helper::j2a}, gadgets::{arith::read_const_gadget, ecmul::EcAffinePoint, input::input}, folding::encode::Encoded, constraint_system::Variable, external_interface::InnerValue, witness::ProtostarWtns};
+use super::{ecmul::{escalarmul_gadget_9, eclin_gadget}, lookup::StaticLookup, nonzero_check::Nonzeros, rangecheck_common::VarRange};
 
 
 // Convention: Cp - primary curve, i.e. bn254, Cs - secondary curve (which is primary for cyclefold)
@@ -15,7 +15,7 @@ pub struct ConstructedCyclefoldCircuit<
     'circuit,
     Fs: PrimeField+FieldUtils,
     Fp: PrimeField+FieldUtils,
-    C: CurveExt<ScalarExt=Fp, Base=Fs>,
+    Cp: CurveExt<ScalarExt=Fp, Base=Fs>,
 >
 {
     pub constructed: ConstructedCircuit<'circuit, Fs, Gatebb<'circuit, Fs>>,
@@ -23,8 +23,7 @@ pub struct ConstructedCyclefoldCircuit<
     pub pt_inc : (ExternalValue<Fs>, ExternalValue<Fs>),
     pub pt_res : (ExternalValue<Fs>, ExternalValue<Fs>),
     pub sc : ExternalValue<Fs>,
-
-    _marker: PhantomData<(Fp, C)>
+    _marker: PhantomData<Cp>
 }
 
 
@@ -38,10 +37,10 @@ pub fn construct_cyclefold_circuit<
     'circuit,
     Fs: PrimeField+FieldUtils,
     Fp: PrimeField+FieldUtils,
-    C: CurveExt<ScalarExt=Fp, Base=Fs>
+    Cp: CurveExt<ScalarExt=Fp, Base=Fs>,
 > (
-    offset_point: C,
-) -> ConstructedCyclefoldCircuit<'circuit, Fs, Fp, C>{
+    offset_point: Cp,
+) -> ConstructedCyclefoldCircuit<'circuit, Fs, Fp, Cp>{
     let mut circuit = Circuit::<Fs, Gatebb<'circuit,Fs>>::new(10, 1);
     let num_limbs = 41;
     let a = offset_point;
@@ -61,7 +60,7 @@ pub fn construct_cyclefold_circuit<
         read_const_gadget(&mut circuit, b.1, 0)
     );
 
-    let pt_a = EcAffinePoint::<Fs, C>::new_unchecked(var_a.0, var_a.1);
+    let pt_a = EcAffinePoint::<Fs, Cp>::new_unchecked(var_a.0, var_a.1);
     let pt_b = EcAffinePoint::new_unchecked(var_b.0, var_b.1);
 
     let mut nonzeros = Nonzeros::new(9);
@@ -105,7 +104,7 @@ pub fn construct_cyclefold_circuit<
 
     nonzeros.finalize(&mut circuit);
     let constructed = circuit.finalize();
-    ConstructedCyclefoldCircuit { constructed, pt_acc, pt_inc, pt_res, sc : scalar_inp, _marker: PhantomData::<(Fp, C)> }
+    ConstructedCyclefoldCircuit { constructed, pt_acc, pt_inc, pt_res, sc : scalar_inp, _marker: PhantomData }
 }
 
 
@@ -119,15 +118,70 @@ pub fn construct_cyclefold_circuit<
 // }
 
 
+pub struct CyclefoldInstanceExternalView <
+    Fs: PrimeField+FieldUtils,
+    Fp: PrimeField+FieldUtils,
+    Cp: CurveExt<ScalarExt=Fp, Base=Fs>
+> {
+    acc_limbs: [[VarRange<Fp>; 3]; 2],
+    inc_limbs: [[VarRange<Fp>; 3]; 2],
+    ret_limbs: [[VarRange<Fp>; 3]; 2],
+    sc_limbs: [VarRange<Fp>; 3],
+    error_limbs: [VarRange<Fp>; 3],
+    protostar_challenges: Vec<[VarRange<Fp>; 3]>,
+    exec_trace_commitment: EcAffinePoint<Fs, Cp>,
+    
+    _marker: PhantomData<Fs>
+}
 
+impl<
+    Fs:PrimeField+FieldUtils,
+    Fp: PrimeField+FieldUtils,
+    Cp: CurveExt<Base = Fs, ScalarExt = Fp>,
+> CyclefoldInstanceExternalView<Fs, Fp, Cp>
+{
+
+}
 
 /// This component can consume non-native elliptic curve ops. 
 pub struct CyclefoldComponent<
+    'constructed,
     'cfold,
-    F: PrimeField+FieldUtils,
-    F2: PrimeField+FieldUtils,
-    C: CurveExt<ScalarExt=F2, Base=F>
+    Fs: PrimeField+FieldUtils,
+    Fp: PrimeField+FieldUtils,
+    Cp: CurveExt<ScalarExt=Fp, Base=Fs>
 > {
-    constructed_cfold: ConstructedCyclefoldCircuit<'cfold, F, F2, C>,
+    constructed_cfold: &'constructed ConstructedCyclefoldCircuit<'cfold, Fs, Fp, Cp>,
+    
+    accumulated_cfold_witness: InnerValue<ProtostarWtns<Fs>>,
+    incoming_cfold_witness: InnerValue<ProtostarWtns<Fs>>,
 
+    accumulated_cfold_instance: CyclefoldInstanceExternalView<Fs, Fp, Cp>,
+
+}
+
+impl<
+    'constructed,
+    'cfold,
+    Fs: PrimeField+FieldUtils,
+    Fp: PrimeField+FieldUtils,
+    Cp: CurveExt<ScalarExt=Fp, Base=Fs>
+> CyclefoldComponent<'constructed, 'cfold, Fs, Fp, Cp> {
+    pub fn new<'circuit>(
+        circuit: &'circuit mut Circuit<'circuit, Fp, Gatebb<'circuit, Fp>>,
+        ccc: &'constructed ConstructedCyclefoldCircuit<'cfold, Fs, Fp, Cp>,
+        acw: Option<ProtostarWtns<Fs>>,
+    ) -> Self
+    {
+        todo!()
+    }
+
+    // pub fn delegate_ec_op<'circuit> (
+    //     &mut self,
+    //     circuit: &'circuit mut Circuit<'circuit, Fp, Gatebb<'circuit, Fp>>,
+    //     a: [[VarRange<Fp>; 3]; 2],
+    //     b: [[VarRange<Fp>; 3]; 2],
+    //     s: VarRange<Fp>
+        
+    // )
 }

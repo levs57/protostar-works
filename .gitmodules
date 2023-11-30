@@ -1,3 +1,0 @@
-[submodule "typed_exec_graph"]
-	path = typed_exec_graph
-	url = ./typed_exec_graph

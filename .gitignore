@@ -4,3 +4,5 @@
 /Cargo.lock
 /gate_macro/target
 /gate_macro/Cargo.lock
+/typed_exec_graph/target
+/typed_exec_graph/Cargo.lock

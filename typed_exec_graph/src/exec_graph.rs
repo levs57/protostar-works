@@ -115,28 +115,26 @@ macro_rules! op {
          $(let $output = $crate::exec_graph::Storage::alloc(
              $crate::exec_graph::Execution::storage($execution)
          );)*
-        let tmp = 
-            move |st: &mut _|{
-                let ret_list = $crate::tuple_list::Tuple::into_tuple_list(
-                    $func (
-                        $( *::std::option::Option::unwrap($crate::exec_graph::Storage::get(st, $input)),
-                        )*
+         $execution.op_push(
+            ::std::rc::Rc::new(
+                move |st: &mut _|{
+                    let ret_list = $crate::tuple_list::Tuple::into_tuple_list(
+                        $func (
+                            $( *::std::option::Option::unwrap($crate::exec_graph::Storage::get(st, $input)),
+                            )*
 
-                    )
-                );
+                        )
+                    );
 
-                ::std::result::Result::unwrap($crate::exec_graph::Storage::set(st, ret_list.0, $first_out));
+                    ::std::result::Result::unwrap($crate::exec_graph::Storage::set(st, ret_list.0, $first_out));
 
-                $(
-                let ret_list = ret_list.1;
-                ::std::result::Result::unwrap($crate::exec_graph::Storage::set(st, ret_list.0, $output));
-                )*
-            };
-        
-
-        let tmp = ::std::rc::Rc::new(tmp);
-        
-        $execution.op_push(tmp);
+                    $(
+                    let ret_list = ret_list.1;
+                    ::std::result::Result::unwrap($crate::exec_graph::Storage::set(st, ret_list.0, $output));
+                    )*
+                }
+            )
+        );
         
     }
 }

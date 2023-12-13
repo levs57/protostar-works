@@ -85,6 +85,7 @@ pub fn construct_operation_simple<Inp: 'static, Out: 'static, Stor: Storage, Fun
     Box::new(closure)
 }
 
+#[macro_export]
 macro_rules! construct_operation {
     ($storage:ident: $first_out:ident $(,$output:ident)* <-- $func:ident($($input:ident),* $(,)?)) => {
         {
@@ -110,6 +111,8 @@ macro_rules! construct_operation {
         }
     }
 }
+
+
 #[test]
 
 fn test() -> () {

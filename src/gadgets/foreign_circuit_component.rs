@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, rc::Rc};
 
 use ff::PrimeField;
 
@@ -47,15 +47,6 @@ pub trait ForeignCircuit {
 }
 
 
-
-
-
-
-
-
-
-
-
 struct ForeignCircuitComponent<MainCircuit, CInputs, COutputs, Advisor, FCInputs, FCInstance, FC>
 where 
     FCInstance: ForeignCircuitInstance<Inputs = FCInputs>,
@@ -96,4 +87,226 @@ where
         self._apply(&fcinputs);
         coutputs
     }
+}
+
+
+
+pub type VarIdx = usize;
+
+#[derive(Clone)]
+pub struct Var<T> {
+    addr: VarIdx,
+    _marker: PhantomData<T>,
+}
+
+pub trait TStorage {
+    fn get<T: 'static>(&self, addr: Var<T>) -> Option<Rc<T>>;
+    fn set<T: 'static >(&mut self, value: T, addr: Var<T>) -> Result<(), String>;
+    fn replace<T: 'static >(&mut self, value: T, addr: Var<T>) -> ();
+}
+
+pub trait TStorageBuilder {
+    type Instance: TStorage;
+
+    fn alloc<T: 'static>(&mut self) -> Var<T>;
+
+    fn instanciate(self) -> Self::Instance;
+}
+
+pub trait TOperation<Storage: TStorage> {
+    fn inputs(&self) -> &[VarIdx];
+    fn outputs(&self) -> &[VarIdx];
+    fn execute(self, storage: &mut Storage);
+}
+
+pub struct Operation<Storage: TStorage> {
+    inputs: Vec<VarIdx>,
+    outputs: Vec<VarIdx>,
+    f: Box<dyn FnOnce(&mut Storage) -> ()>,
+}
+
+impl<Storage: TStorage> Operation<Storage> {
+    pub fn new(
+        inputs: &[VarIdx],
+        outputs: &[VarIdx],
+        f: Box<dyn FnOnce(&mut Storage) -> ()>
+    ) -> Self {
+        Self {
+            inputs: inputs.into(),
+            outputs: outputs.into(),
+            f,
+        }
+    }
+}
+
+impl<Storage: TStorage> TOperation<Storage> for Operation<Storage> {
+    fn inputs(&self) -> &[VarIdx] {
+        &self.inputs
+    }
+
+    fn outputs(&self) -> &[VarIdx] {
+        &self.outputs
+    }
+
+    fn execute(self, storage: &mut Storage) {
+        (self.f)(storage);
+    }
+}
+
+pub trait TCircuitBuilder {
+    type Constructed: TCircuitConstructed;
+    type StorageBuilder: TStorageBuilder;
+    type Operation: TOperation<<Self::StorageBuilder as TStorageBuilder>::Instance>;
+
+    fn var<T>(&mut self) -> Var<T>;
+
+    fn input<T>(&mut self, var: &Var<T>);
+
+    fn output<T>(&mut self, var: &Var<T>);
+
+    fn push(&mut self, op: Self::Operation);
+
+    fn construct(self) -> Self::Constructed;
+}
+
+pub trait TCircuitConstructed {
+    type Instance: TCircuitInstance;
+    type ConstraintSystem;
+
+    fn cs(&self) -> &Self::ConstraintSystem;
+    
+    fn spawn(&self) -> Self::Instance;
+}
+
+pub trait TCircuitInstance {
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+struct TestCircuitBuilder {}
+
+struct TestCircuitConstructed {}
+
+struct TestCircuitInstance {}
+
+struct TestConstraintSystem {}
+
+struct TestStorageBuilder {}
+struct TestStorage {}
+
+impl TStorage for TestStorage {
+    fn get<T: 'static>(&self, addr: Var<T>) -> Option<std::rc::Rc<T>> {
+        todo!()
+    }
+
+    fn set<T: 'static >(&mut self, value: T, addr: Var<T>) -> Result<(), String> {
+        todo!()
+    }
+
+    fn replace<T: 'static >(&mut self, value: T, addr: Var<T>) -> () {
+        todo!()
+    }
+}
+
+impl TStorageBuilder for TestStorageBuilder {
+    type Instance = TestStorage;
+
+    fn alloc<T: 'static>(&mut self) -> Var<T> {
+        todo!()
+    }
+
+    fn instanciate(self) -> Self::Instance {
+        todo!()
+    }
+}
+
+impl TCircuitInstance for TestCircuitInstance {}
+
+impl TCircuitConstructed for TestCircuitConstructed {
+    type Instance = TestCircuitInstance;
+
+    type ConstraintSystem = TestConstraintSystem;
+
+    fn cs(&self) -> &Self::ConstraintSystem {
+        todo!()
+    }
+
+    fn spawn(&self) -> Self::Instance {
+        todo!()
+    }
+}
+
+impl TCircuitBuilder for TestCircuitBuilder {
+    type Constructed = TestCircuitConstructed;
+    type StorageBuilder = TestStorageBuilder;
+    type Operation = Operation<TestStorage>;
+
+    fn var<T>(&mut self) -> Var<T> {
+        todo!()
+    }
+
+    fn input<T>(&mut self, var: &Var<T>) {
+        todo!()
+    }
+
+    fn output<T>(&mut self, var: &Var<T>) {
+        todo!()
+    }
+
+    fn push(&mut self, op: Self::Operation) {
+        todo!()
+    }
+
+    fn construct(self) -> Self::Constructed {
+        todo!()
+    }
+}
+
+
+fn test() {
+    let mut storageBuilder = TestStorageBuilder{};
+    let mut circuit = TestCircuitBuilder{};
+    let x = circuit.var::<u32>();
+    let y = circuit.var::<u32>();
+    let z = circuit.var::<u32>();
+
+    circuit.input(&x);
+    circuit.input(&y);
+    circuit.input(&z);
+    
+    let f = |x:u32, y:u32, z:u32| {(x + y, x - y, x + 2 * y, x)};
+
+    let ans = circuit.var();
+    circuit.output(&ans);
+    
+    let (_x, _y, _z, _ans) = (x.clone(), y.clone(), z.clone(), ans.clone());
+    let closure = Box::new(move |storage: &mut TestStorage| {
+        let _x = storage.get(_x).unwrap();
+        let _y = storage.get(_y).unwrap();
+        let _z = storage.get(_z).unwrap();
+        storage.set(f(*_x, *_y, *_z), _ans).unwrap();
+    });
+    
+    circuit.push(Operation::new(&[x.addr, y.addr, z.addr], &[ans.addr], closure));
+
+    // circuit.output(&ans);
+
+    let constructed = circuit.construct();
+    let run = constructed.spawn();
+
 }

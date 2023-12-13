@@ -1,7 +1,6 @@
 use std::{marker::PhantomData, any::Any, cell::RefCell, rc::{Rc, Weak}, borrow::BorrowMut, sync::atomic::{AtomicU64, Ordering}};
 
-static STORAGE_COUNTER : AtomicU64 = AtomicU64::new(0);
-
+pub static STORAGE_COUNTER : AtomicU64 = AtomicU64::new(0);
 
 #[derive(Copy, Clone)]
 pub struct Var<T>{
@@ -85,47 +84,82 @@ pub fn construct_operation_simple<Inp: 'static, Out: 'static, Stor: Storage, Fun
     Box::new(closure)
 }
 
-macro_rules! construct_operation {
-    ($storage:ident: $first_out:ident $(,$output:ident)* <-- $func:ident($($input:ident),* $(,)?)) => {
-        {
-            let $first_out = $crate::exec_graph::Storage::alloc($storage);
-            $(let $output = $crate::exec_graph::Storage::alloc($storage);)*
-            let closure = move||{
+pub struct Execution<Stor: Storage> {
+    pub operations: Vec<Rc<dyn Fn(&mut Stor) -> ()>>,
+    pub storage: Stor,
+}
+
+impl<Stor: Storage> Execution<Stor> {
+    pub fn storage(&mut self) -> &mut Stor {
+        &mut self.storage
+    }
+
+    pub fn op_push (&mut self, s: Rc<dyn Fn(&mut Stor) -> ()>) -> () {
+        self.operations.push(s);
+    }
+
+    pub fn exec(&mut self, i: usize) -> () {
+        let op = self.operations[i].clone();
+        op(self.storage());
+    }
+}
+
+#[macro_export]
+macro_rules! op {
+    ($execution:ident : $first_out:ident $(,$output:ident)* <-- $func:ident($($input:ident),* $(,)?)) =>
+    
+    {
+         let $first_out = $crate::exec_graph::Storage::alloc(
+             $crate::exec_graph::Execution::storage($execution)
+         );
+         $(let $output = $crate::exec_graph::Storage::alloc(
+             $crate::exec_graph::Execution::storage($execution)
+         );)*
+        let tmp = 
+            move |st: &mut _|{
                 let ret_list = $crate::tuple_list::Tuple::into_tuple_list(
                     $func (
-                        $( *::std::option::Option::unwrap($crate::exec_graph::Storage::get($storage, $input)),
+                        $( *::std::option::Option::unwrap($crate::exec_graph::Storage::get(st, $input)),
                         )*
 
                     )
                 );
-                
-                ::std::result::Result::unwrap($crate::exec_graph::Storage::set($storage, ret_list.0, $first_out));
+
+                ::std::result::Result::unwrap($crate::exec_graph::Storage::set(st, ret_list.0, $first_out));
 
                 $(
                 let ret_list = ret_list.1;
-                ::std::result::Result::unwrap($crate::exec_graph::Storage::set($storage, ret_list.0, $output));
+                ::std::result::Result::unwrap($crate::exec_graph::Storage::set(st, ret_list.0, $output));
                 )*
             };
-            closure
-        }
+        
+
+        let tmp = ::std::rc::Rc::new(tmp);
+        
+        $execution.op_push(tmp);
+        
     }
 }
-#[test]
 
+fn f (x:i32,y:i32,z:i32)->(i32,i32,i32,i32){(x+y, x-y, x+2*y, x)}
+
+#[test]
 fn test() -> () {
     let mut arr = AnyData::new();
-    let arr = &mut arr;
     let var = arr.alloc();
     let var2 = arr.alloc();
     let var3 = arr.alloc();
-    arr.set::<u32>(2, var).unwrap();
-    arr.set::<u32>(2, var2).unwrap();
-    arr.set::<u32>(2, var3).unwrap();
+    arr.set::<i32>(2, var).unwrap();
+    arr.set::<i32>(2, var2).unwrap();
+    arr.set::<i32>(2, var3).unwrap();
 
-    let val = arr.get::<u32>(var).unwrap();
-    let f = |x:u32,y:u32,z:u32|{(x+y, x-y, x+2*y, x)};
+    let mut arr = Execution { operations: vec![], storage: arr };
 
-    let mut closure = construct_operation!(arr: out1, out2, out3, out4 <-- f(var, var2, var3));
-    closure();
+    let arr = &mut arr;
+    op!(arr: out1, out2, out3, out4 <-- f(var, var2, var3));
+    //op!(brr: out5, out6, out7, out8 <-- f(var, out1, out2));
+    arr.exec(0);
+    arr.exec(1);
+    let val = arr.storage().get::<i32>(out5).unwrap();
     println!("{}", val);
 }

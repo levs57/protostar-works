@@ -339,7 +339,7 @@ impl<'circuit, F: PrimeField, G: Gate<'circuit, F> + From<PolyOp<'circuit, F>>> 
         }
     }
 
-    fn deallocate<'constructed>(&'constructed self, idx: RunIndex) {
+    pub fn deallocate<'constructed>(&'constructed self, idx: RunIndex) {
         self.run_allocator.borrow_mut().deallocate(idx);
     }
 

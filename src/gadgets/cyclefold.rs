@@ -40,7 +40,7 @@ pub fn construct_cyclefold_circuit<
     Cp: CurveExt<ScalarExt=Fp, Base=Fs>,
 > (
     offset_point: Cp,
-) -> ConstructedCyclefoldCircuit<'circuit, Fs, Fp, Cp>{
+) -> ConstructedCyclefoldCircuit<'circuit, Fs, Fp, Cp> {
     let mut circuit = Circuit::<Fs, Gatebb<'circuit,Fs>>::new(10, 1);
     let num_limbs = 41;
     let a = offset_point;

@@ -12,3 +12,4 @@ pub mod input;
 pub mod arith;
 pub mod cyclefold;
 pub mod folding_utils;
+pub mod foreign_circuit_component;

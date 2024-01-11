@@ -1,5 +1,5 @@
 pub trait TCommitmentScheme {
-    type CommitmentGrpAddr<T>;
+    type CommitmentGrpAddr<T>: for <T> Clone + Copy;
 }
 
 pub trait TCommitmentSchemeWith<CommitmentGroup>: TCommitmentScheme {

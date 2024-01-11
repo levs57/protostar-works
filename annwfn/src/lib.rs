@@ -12,6 +12,8 @@ pub mod tests {
     use storage::*;
     use committer::*;
     use std::marker::PhantomData;
+
+    #[derive(Clone, Copy)]
     pub struct Var<T: ?Sized> {
         pub idx: usize,
         _phantom_data: PhantomData<T>,
@@ -26,6 +28,7 @@ pub mod tests {
         }
     }
 
+    #[derive(Clone, Copy)]
     pub struct Sig<T: ?Sized> {
         pub idx: usize,
         _phantom_data: PhantomData<T>,
@@ -44,6 +47,17 @@ pub mod tests {
         pub idx: usize,
         _phantom_data: PhantomData<T>,
     }
+
+    impl<T> Clone for Addr<T> {
+        fn clone(&self) -> Self {
+            Self {
+                idx: self.idx,
+                _phantom_data: self._phantom_data,
+            }
+        }
+    }
+
+    impl<T> Copy for Addr<T> {}
 
     impl<T: ?Sized> From<Var<T>> for Addr<T> {
         fn from(v: Var<T>) -> Self {
@@ -72,11 +86,56 @@ pub mod tests {
     }
 
     impl storage::TCircuitRunStorage for CircuitRunStorage {
+        type Witness = Witness;
+        type Addr<T: ?Sized> = Addr<T>;
+
+        fn take_witness(&self) -> Self::Witness {
+            todo!();
+        }
+    }
+
+    impl ReaderOf<u64> for CircuitRunStorage {
+        fn get(&self, addr: Self::Addr<u64>) -> u64 {
+            todo!();
+        }
+    }
+
+    impl WriterOf<u64> for CircuitRunStorage {
+        fn put(&mut self, addr: Self::Addr<u64>, val: u64) {
+            todo!();
+        }
+    }
+
+    impl ReaderOf<bool> for CircuitRunStorage {
+        fn get(&self, addr: Self::Addr<bool>) -> bool {
+            todo!();
+        }
+    }
+
+    impl WriterOf<bool> for CircuitRunStorage {
+        fn put(&mut self, addr: Self::Addr<bool>, val: bool) {
+            todo!();
+        }
+    }
+
+    pub struct Witness {
+
+    }
+    
+    impl TWitness for Witness {
         type Addr<T: ?Sized> = Addr<T>;
     }
 
-    pub struct Witness{
+    impl WitnessOf<u64> for Witness {
+        fn get(&self, addr: Self::Addr<u64>) -> u64 {
+            todo!();
+        }
+    }
 
+    impl WitnessOf<bool> for Witness {
+        fn get(&self, addr: Self::Addr<bool>) -> bool {
+            todo!();
+        }
     }
 
     pub struct CircuitRun {
@@ -161,7 +220,8 @@ pub mod tests {
             CGT: committer::CommitTo<ST>,
             CGT: for <T> committer::TCommitmentGroup<Var<T> = <Self as TCircuitBuilder>::Var<T>, Sig<T> = <Self as TCircuitBuilder>::Sig<T>>
         {
-            self.committer().get_group(commitment_addr).commit(self.allocate_var())
+            let var = self.allocate_var();
+            self.committer().get_group(commitment_addr).commit(var)
         }
     }
 
@@ -216,8 +276,8 @@ pub mod tests {
             }
         }
     }
-    
-    struct Commiter {
+
+    pub struct Commiter {
 
     }
 
@@ -254,8 +314,8 @@ pub mod tests {
         fn construct(self) -> Self::ConstructedCircuit {
             todo!();
         }
-        
     }
+    
 
     fn branching_exec<T>(t: T, f: T, cond: bool) -> T {
         return if cond {
@@ -316,12 +376,24 @@ pub mod tests {
         
     }
 
-    impl circuit::TConstraint for dyn Fn(&CircuitRunStorage) -> Vec<u64> {
+    struct Constraint {
+        f: Box<dyn Fn(&<Self as circuit::TConstraint>::Witness) -> Vec<<Self as circuit::TConstraint>::Field>>,
+    }
+
+    impl Constraint {
+        fn new(f: Box<dyn Fn(&<Self as circuit::TConstraint>::Witness) -> Vec<<Self as circuit::TConstraint>::Field>>) -> Self {
+            Self {
+                f,
+            }
+        }
+    }
+
+    impl circuit::TConstraint for Constraint {
         type Field = u64;
-        type Witness = CircuitRunStorage;
+        type Witness = Witness;
 
         fn execute(&self, wtns: &Self::Witness) -> Vec<Self::Field> {
-            self(wtns)
+            (self.f)(wtns)
         }
     }
 
@@ -334,12 +406,25 @@ pub mod tests {
         let u_y = builder.allocate_sig(l0_grp_addr);
         let b_c = builder.allocate_sig(l0_grp_addr);
 
-        let u_r = builder.allocate_sig(l0_grp_addr);
+        let u_r: Sig<u64> = builder.allocate_sig(l0_grp_addr);
         builder.execution().advice();
 
+        builder.cs().constrain(Box::new(Constraint::new(Box::new(move |storage: &Witness| {
+            let _u_x = storage.get(u_x.into());
+            let _u_y = storage.get(u_y.into());
+            let _b_c = storage.get(b_c.into());
+            let _u_r = storage.get(u_r.into());
+            
+            let f = |x: u64, y: u64, c: bool| -> u64 {
+                if c {
+                    x
+                } else {
+                    y
+                }
+            };
+            let _res = f(_u_x, _u_y, _b_c);
 
-        builder.cs().constrain(Box::new(|storage: &CircuitRunStorage| {
-            return vec![1u64]
-        }));
+            vec![_res - _u_r]
+        }))));
     }
 }

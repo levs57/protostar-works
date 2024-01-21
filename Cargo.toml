@@ -1,3 +1,4 @@
+workspace = { members = ["annwfn"] }
 [package]
 name = "protostar_works"
 version = "0.1.0"

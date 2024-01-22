@@ -204,19 +204,31 @@ impl Commitment for GenericCommitmentGroup {
 pub trait CommitmentGroupOf<T>
 where StorageBuilder: AllocatorOf<T> {
     fn create(&mut self, storage: &mut StorageBuilder) -> Sig<T>;
+    fn add(&mut self, s: Sig<T>);
 }
 
 impl CommitmentGroupOf<bool> for GenericCommitmentGroup {
     fn create(&mut self, storage: &mut StorageBuilder) -> Sig<bool> {
-        self.bool_addrs.push(storage.allocate());
-        *self.bool_addrs.last().unwrap()
+        let s = storage.allocate();
+        self.add(s);
+        s
+    }
+
+    fn add(&mut self, s: Sig<bool>) {
+        self.bool_addrs.push(s);
+
     }
 }
 
 impl CommitmentGroupOf<u64> for GenericCommitmentGroup {
     fn create(&mut self, storage: &mut StorageBuilder) -> Sig<u64> {
-        self.u64_addrs.push(storage.allocate());
-        *self.u64_addrs.last().unwrap()
+        let s = storage.allocate();
+        self.add(s);
+        s
+    }
+
+    fn add(&mut self, s: Sig<u64>) {
+        self.u64_addrs.push(s)
     }
 }
 
@@ -299,9 +311,7 @@ impl CommitmentSchemeWith<OtherCommitmentType> for CommitmentScheme {
     fn get(&mut self, addr: &Self::Addr<OtherCommitmentType>) -> &mut OtherCommitmentType {
         &mut self.other
     }
-
 }
-
 
 pub trait TConstraint {
     type Field;
@@ -309,7 +319,6 @@ pub trait TConstraint {
 
     fn evaluate(&self, witness: &Self::Witness) -> Vec<Self::Field>;
 }
-
 
 struct ConstraintSystem {
     constraints: Vec<Box<dyn TConstraint<Field = <Self as TConstraintSystem>::Field, Witness = <Self as TConstraintSystem>::Witness>>>,
@@ -393,7 +402,6 @@ impl ExecutionBuilder {
     }
 }
 
-
 struct CircuitBuilder {
     storage: StorageBuilder,
     commitment_scheme: CommitmentScheme,
@@ -460,11 +468,14 @@ mod tests {
 
         let mut builder = CircuitBuilder::new();
         let round_0_commitment = builder.new_commitment_group::<GenericCommitmentGroup>();
-        let s1 = builder.new_signal::<u64, _>(&round_0_commitment);
-        let s2 = builder.new_signal::<u64, _>(&round_0_commitment);
-        let b1 = builder.new_signal::<bool, _>(&round_0_commitment);
-        let s3 = builder.new_signal::<u64, _>(&round_0_commitment);
-        let s4 = builder.new_signal::<bool, _>(&round_0_commitment);
+        let s1 = builder.new_signal(&round_0_commitment);
+        let s2 = builder.new_signal(&round_0_commitment);
+        let b1 = builder.new_signal(&round_0_commitment);
+
+        //assign!(builder, [s3: round_0_commitment, s4: round_0_commitment] <== bar(s1, s2, b1))
+
+        let s3 = builder.new_signal(&round_0_commitment);
+        let s4 = builder.new_signal(&round_0_commitment);
 
         struct _Computation<T1, T2, T3, T4, T5> {
             s1: RunVar<T1>,
@@ -559,7 +570,5 @@ mod tests {
                 vec![(u64::from(_s3) - u64::from(s3)), (u64::from(_s4) - u64::from(s4))]
             })
         }));
-
-
     }
 }

@@ -176,26 +176,26 @@ impl GenericCommitmentGroup {
 }
 
 pub trait Commitment {
-    type SeedType;
+    type KeyType;
     type CommitmentType;
 
-    fn get(&self, storage: &Witness, seed: Self::SeedType) -> Self::CommitmentType;
+    fn get(&self, storage: &Witness, commitment_key: Self::KeyType) -> Self::CommitmentType;
 }
 
 impl Commitment for GenericCommitmentGroup {
-    type SeedType = u64;
+    type KeyType = u64;
     type CommitmentType = u64;
 
-    fn get(&self, storage: &Witness, seed: Self::SeedType) -> Self::CommitmentType {
+    fn get(&self, storage: &Witness, commitment_key: Self::KeyType) -> Self::CommitmentType {
         let mut running = 0;
         let mut pow = 1;
         for addr in &self.u64_addrs {
             running += pow * storage.get(&addr);
-            pow *= seed;
+            pow *= commitment_key;
         }
         for addr in &self.bool_addrs {
             running += pow * u64::from(*storage.get(&addr));
-            pow *= seed;
+            pow *= commitment_key;
         }
         running
     }
@@ -235,12 +235,12 @@ impl CommitmentGroupOf<u64> for GenericCommitmentGroup {
 struct OtherCommitmentType {}
 
 impl Commitment for OtherCommitmentType {
-    type SeedType = u64;
+    type KeyType = u64;
 
     type CommitmentType = u64;
 
-    fn get(&self, storage: &Witness, seed: Self::SeedType) -> Self::CommitmentType {
-        seed
+    fn get(&self, storage: &Witness, commitment_key: Self::KeyType) -> Self::CommitmentType {
+        commitment_key
     }
 }
 
@@ -274,19 +274,15 @@ impl CommitmentScheme {
 }
 
 pub trait TCommitmentScheme {
-    type SeedType;
-    type CommitmentType;
     type Addr<T>;
 }
 
 impl TCommitmentScheme for CommitmentScheme {
-    type SeedType = u64;
-    type CommitmentType = u64;
     type Addr<T> = CGAddr<T>;
 }
 
 pub trait CommitmentSchemeWith<GRP>: TCommitmentScheme
-where GRP: Commitment<SeedType = Self::SeedType, CommitmentType = Self::CommitmentType>,  {
+where GRP: Commitment,  {
     fn create(&mut self) -> Self::Addr<GRP>;
     fn get(&mut self, addr: &Self::Addr<GRP>) -> &mut GRP;
 }
@@ -421,14 +417,14 @@ impl CircuitBuilder {
 
     pub fn new_commitment_group<GRP>(&mut self) -> <CommitmentScheme as TCommitmentScheme>::Addr<GRP>
     where 
-        GRP: Commitment<SeedType = <CommitmentScheme as TCommitmentScheme>::SeedType, CommitmentType = <CommitmentScheme as TCommitmentScheme>::CommitmentType>,
+        GRP: Commitment,
         CommitmentScheme: CommitmentSchemeWith<GRP> {
         CommitmentSchemeWith::<GRP>::create(&mut self.commitment_scheme)
     }
 
     pub fn new_signal<T, GRP>(&mut self, grp_addr: &<CommitmentScheme as TCommitmentScheme>::Addr<GRP>) -> Sig<T>
     where 
-        GRP: Commitment<SeedType = <CommitmentScheme as TCommitmentScheme>::SeedType, CommitmentType = <CommitmentScheme as TCommitmentScheme>::CommitmentType>,
+        GRP: Commitment,
         GRP: CommitmentGroupOf<T>,
         CommitmentScheme: CommitmentSchemeWith<GRP>,
         StorageBuilder: AllocatorOf<T>, {
@@ -476,6 +472,9 @@ mod tests {
 
         let s3 = builder.new_signal(&round_0_commitment);
         let s4 = builder.new_signal(&round_0_commitment);
+
+        // (dyn Fn(T1, T2, T3) -> T4, T5) => (dyn Fn([T1, [T2, [T3, None]]]) -> [T4, [T5, None]])
+
 
         struct _Computation<T1, T2, T3, T4, T5> {
             s1: RunVar<T1>,

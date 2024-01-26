@@ -1,17 +1,20 @@
-use std::{marker::PhantomData, cell::OnceCell, ops::Deref, fmt::Debug, vec, iter::Once};
+use std::{cell::OnceCell, fmt::Debug, iter::Once, marker::PhantomData, ops::Deref, vec};
 
-use storage::{ReaderOf, AllocatorOf, WriterOf, TStorageBuilder};
+use storage::{AllocatorOf, ReaderOf, TStorageBuilder, WriterOf};
 
 pub mod storage;
 
 pub struct Sig<T> {
     idx: usize,
-    _pd: PhantomData<T>, 
+    _pd: PhantomData<T>,
 }
 
 impl<T> Clone for Sig<T> {
     fn clone(&self) -> Self {
-        Self { idx: self.idx.clone(), _pd: self._pd.clone() }
+        Self {
+            idx: self.idx.clone(),
+            _pd: self._pd.clone(),
+        }
     }
 }
 
@@ -37,7 +40,7 @@ impl StorageBuilder {
             b_idx: 0,
             u64_idx: 0,
         }
-    }    
+    }
 }
 
 impl storage::TStorageBuilder for StorageBuilder {
@@ -88,9 +91,13 @@ impl storage::WriterOf<bool> for Witness {
 
 impl storage::ReaderOf<bool> for Witness {
     fn get(&self, addr: &Self::Addr<bool>) -> &bool {
-        self.bools.get(addr.idx).unwrap().as_ref().expect("Reading uninitialized signal")
+        self.bools
+            .get(addr.idx)
+            .unwrap()
+            .as_ref()
+            .expect("Reading uninitialized signal")
     }
-} 
+}
 
 impl storage::WriterOf<u64> for Witness {
     fn put(&mut self, addr: &Self::Addr<u64>, val: u64) {
@@ -100,13 +107,17 @@ impl storage::WriterOf<u64> for Witness {
 
 impl storage::ReaderOf<u64> for Witness {
     fn get(&self, addr: &Self::Addr<u64>) -> &u64 {
-        self.u64s.get(addr.idx).unwrap().as_ref().expect("Reading uninitialized signal")
+        self.u64s
+            .get(addr.idx)
+            .unwrap()
+            .as_ref()
+            .expect("Reading uninitialized signal")
     }
-} 
+}
 
 enum BuildVar<T> {
     V,
-    S(Sig<T>)
+    S(Sig<T>),
 }
 
 impl<T> Clone for BuildVar<T> {
@@ -116,7 +127,7 @@ impl<T> Clone for BuildVar<T> {
             Self::S(arg0) => Self::S(arg0.clone()),
         }
     }
-} 
+}
 
 impl<T> Copy for BuildVar<T> {}
 
@@ -128,7 +139,7 @@ impl<T> From<Sig<T>> for BuildVar<T> {
 
 enum RunVar<T> {
     V(OnceCell<T>),
-    S(Sig<T>)
+    S(Sig<T>),
 }
 
 impl<T> From<BuildVar<T>> for RunVar<T> {
@@ -137,11 +148,13 @@ impl<T> From<BuildVar<T>> for RunVar<T> {
             BuildVar::V => Self::V(OnceCell::new()),
             BuildVar::S(s) => Self::S(s),
         }
-    } 
+    }
 }
 
 impl<T: Debug> RunVar<T>
-where Witness: ReaderOf<T> {
+where
+    Witness: ReaderOf<T>,
+{
     fn get_from<'storage, 'addr: 'storage>(&'addr self, storage: &'storage Witness) -> &'storage T {
         match self {
             RunVar::V(cell) => return cell.get().expect("Reading uninitialized variable"),
@@ -151,7 +164,9 @@ where Witness: ReaderOf<T> {
 }
 
 impl<T: Debug> RunVar<T>
-where Witness: WriterOf<T> {
+where
+    Witness: WriterOf<T>,
+{
     fn set_to(&self, storage: &mut Witness, value: T) {
         match self {
             RunVar::V(cell) => cell.set(value).expect("Second write to variable"),
@@ -159,7 +174,6 @@ where Witness: WriterOf<T> {
         }
     }
 }
-
 
 struct GenericCommitmentGroup {
     u64_addrs: Vec<Sig<u64>>,
@@ -202,7 +216,9 @@ impl Commitment for GenericCommitmentGroup {
 }
 
 pub trait CommitmentGroupOf<T>
-where StorageBuilder: AllocatorOf<T> {
+where
+    StorageBuilder: AllocatorOf<T>,
+{
     fn create(&mut self, storage: &mut StorageBuilder) -> Sig<T>;
     fn add(&mut self, s: Sig<T>);
 }
@@ -216,7 +232,6 @@ impl CommitmentGroupOf<bool> for GenericCommitmentGroup {
 
     fn add(&mut self, s: Sig<bool>) {
         self.bool_addrs.push(s);
-
     }
 }
 
@@ -247,7 +262,7 @@ impl Commitment for OtherCommitmentType {
 #[derive(Clone, Copy)]
 pub struct CGAddr<T> {
     idx: usize,
-    _pd: PhantomData<T>, 
+    _pd: PhantomData<T>,
 }
 
 impl<T> CGAddr<T> {
@@ -282,7 +297,9 @@ impl TCommitmentScheme for CommitmentScheme {
 }
 
 pub trait CommitmentSchemeWith<GRP>: TCommitmentScheme
-where GRP: Commitment,  {
+where
+    GRP: Commitment,
+{
     fn create(&mut self) -> Self::Addr<GRP>;
     fn get(&mut self, addr: &Self::Addr<GRP>) -> &mut GRP;
 }
@@ -294,9 +311,10 @@ impl CommitmentSchemeWith<GenericCommitmentGroup> for CommitmentScheme {
     }
 
     fn get(&mut self, addr: &Self::Addr<GenericCommitmentGroup>) -> &mut GenericCommitmentGroup {
-        self.generic.get_mut(addr.idx).expect("Getting non existent Commitment group")
+        self.generic
+            .get_mut(addr.idx)
+            .expect("Getting non existent Commitment group")
     }
-
 }
 
 impl CommitmentSchemeWith<OtherCommitmentType> for CommitmentScheme {
@@ -317,7 +335,14 @@ pub trait TConstraint {
 }
 
 struct ConstraintSystem {
-    constraints: Vec<Box<dyn TConstraint<Field = <Self as TConstraintSystem>::Field, Witness = <Self as TConstraintSystem>::Witness>>>,
+    constraints: Vec<
+        Box<
+            dyn TConstraint<
+                Field = <Self as TConstraintSystem>::Field,
+                Witness = <Self as TConstraintSystem>::Witness,
+            >,
+        >,
+    >,
 }
 
 impl ConstraintSystem {
@@ -332,7 +357,15 @@ pub trait TConstraintSystem {
     type Field;
     type Witness;
 
-    fn add(&mut self, constraint: Box<dyn TConstraint<Field = <Self as TConstraintSystem>::Field, Witness = <Self as TConstraintSystem>::Witness>>);
+    fn add(
+        &mut self,
+        constraint: Box<
+            dyn TConstraint<
+                Field = <Self as TConstraintSystem>::Field,
+                Witness = <Self as TConstraintSystem>::Witness,
+            >,
+        >,
+    );
 
     fn crossterms(witness: &Witness) -> Self::Witness;
 }
@@ -345,24 +378,30 @@ impl TConstraintSystem for ConstraintSystem {
         todo!()
     }
 
-    fn add(&mut self, constraint: Box<dyn TConstraint<Field = <Self as TConstraintSystem>::Field, Witness = <Self as TConstraintSystem>::Witness>>) {
+    fn add(
+        &mut self,
+        constraint: Box<
+            dyn TConstraint<
+                Field = <Self as TConstraintSystem>::Field,
+                Witness = <Self as TConstraintSystem>::Witness,
+            >,
+        >,
+    ) {
         self.constraints.push(constraint)
     }
 }
 
 struct Execution {
-    steps: Vec<Box<dyn TComputation>>
+    steps: Vec<Box<dyn TComputation>>,
 }
 
 struct ExecutionBuilder {
-    steps: Vec<Box<dyn TComputationTemplate>>
+    steps: Vec<Box<dyn TComputationTemplate>>,
 }
 
 impl Execution {
     pub fn new(steps: Vec<Box<dyn TComputation>>) -> Self {
-        Self {
-            steps,
-        }
+        Self { steps }
     }
 }
 
@@ -377,7 +416,7 @@ pub trait TComputation {
 pub trait TExecutionBuilder {
     fn add(&mut self, computation: Box<dyn TComputationTemplate>);
 
-    fn spawn(&self) -> Execution; 
+    fn spawn(&self) -> Execution;
 }
 
 impl TExecutionBuilder for ExecutionBuilder {
@@ -392,9 +431,7 @@ impl TExecutionBuilder for ExecutionBuilder {
 
 impl ExecutionBuilder {
     pub fn new() -> Self {
-        Self {
-            steps: vec![],
-        }
+        Self { steps: vec![] }
     }
 }
 
@@ -415,23 +452,40 @@ impl CircuitBuilder {
         }
     }
 
-    pub fn new_commitment_group<GRP>(&mut self) -> <CommitmentScheme as TCommitmentScheme>::Addr<GRP>
-    where 
+    pub fn new_commitment_group<GRP>(
+        &mut self,
+    ) -> <CommitmentScheme as TCommitmentScheme>::Addr<GRP>
+    where
         GRP: Commitment,
-        CommitmentScheme: CommitmentSchemeWith<GRP> {
+        CommitmentScheme: CommitmentSchemeWith<GRP>,
+    {
         CommitmentSchemeWith::<GRP>::create(&mut self.commitment_scheme)
     }
 
-    pub fn new_signal<T, GRP>(&mut self, grp_addr: &<CommitmentScheme as TCommitmentScheme>::Addr<GRP>) -> Sig<T>
-    where 
+    pub fn new_signal<T, GRP>(
+        &mut self,
+        grp_addr: &<CommitmentScheme as TCommitmentScheme>::Addr<GRP>,
+    ) -> Sig<T>
+    where
         GRP: Commitment,
         GRP: CommitmentGroupOf<T>,
         CommitmentScheme: CommitmentSchemeWith<GRP>,
-        StorageBuilder: AllocatorOf<T>, {
-        self.commitment_scheme.get(grp_addr).create(&mut self.storage)
+        StorageBuilder: AllocatorOf<T>,
+    {
+        self.commitment_scheme
+            .get(grp_addr)
+            .create(&mut self.storage)
     }
 
-    pub fn set_constraint(&mut self, constraint: Box<dyn TConstraint<Field = <ConstraintSystem as TConstraintSystem>::Field, Witness = <ConstraintSystem as TConstraintSystem>::Witness>>) {
+    pub fn set_constraint(
+        &mut self,
+        constraint: Box<
+            dyn TConstraint<
+                Field = <ConstraintSystem as TConstraintSystem>::Field,
+                Witness = <ConstraintSystem as TConstraintSystem>::Witness,
+            >,
+        >,
+    ) {
         self.constraint_system.add(constraint)
     }
 
@@ -446,13 +500,12 @@ mod tests {
 
     use super::*;
 
-
     fn foo(a: &u64, b: &u64, c: &bool, d: &u64) -> Vec<u64> {
-        vec![(if *c {*a} else {*b}) - *d]
+        vec![(if *c { *a } else { *b }) - *d]
     }
 
     fn bar(a: &u64, b: &u64, c: &bool) -> (u64, bool) {
-        ((if *c {*a} else {*b}), *a < *b)
+        ((if *c { *a } else { *b }), *a < *b)
     }
 
     #[test]
@@ -460,7 +513,7 @@ mod tests {
         // assign!(builder, [d, e] <-- bar(a, b, c))  // will create 2 variables d and e and add execution step to assign them with return values of bar(a, b, c)
         // assign!(builder, d <-- bar(a, b, c)) // same as assign!(builder, [d] <-- bar(a, b, c))
         // assign!(builder, [d, e] <-- bar(a, b, c) | foo) // same as above but add a constraint foo(a, b, c, d, e)
-        // assign!(builder, [d, e] <== bar(a, b, c)) // same as above, but constraint will be constructed ad-hoc as [bar(a, b, c).0 - d, bar(a, b, c).1 - e] 
+        // assign!(builder, [d, e] <== bar(a, b, c)) // same as above, but constraint will be constructed ad-hoc as [bar(a, b, c).0 - d, bar(a, b, c).1 - e]
 
         let mut builder = CircuitBuilder::new();
         let round_0_commitment = builder.new_commitment_group::<GenericCommitmentGroup>();
@@ -474,7 +527,6 @@ mod tests {
         let s4 = builder.new_signal(&round_0_commitment);
 
         // (dyn Fn(T1, T2, T3) -> T4, T5) => (dyn Fn([T1, [T2, [T3, None]]]) -> [T4, [T5, None]])
-
 
         struct _Computation<T1, T2, T3, T4, T5> {
             s1: RunVar<T1>,
@@ -494,13 +546,17 @@ mod tests {
             s4: BuildVar<T5>,
         }
 
-        impl<T1, T2, T3, T4, T5> TComputationTemplate for _ComputationTemplate<T1, T2, T3, T4, T5> 
-        where 
-            Witness: storage::ReaderOf<T1> + storage::ReaderOf<T2> + storage::ReaderOf<T3> + storage::WriterOf<T4> + storage::WriterOf<T5>,
+        impl<T1, T2, T3, T4, T5> TComputationTemplate for _ComputationTemplate<T1, T2, T3, T4, T5>
+        where
+            Witness: storage::ReaderOf<T1>
+                + storage::ReaderOf<T2>
+                + storage::ReaderOf<T3>
+                + storage::WriterOf<T4>
+                + storage::WriterOf<T5>,
             T1: Debug + 'static,
             T2: Debug + 'static,
-            T3: Debug + 'static, 
-            T4: Debug + 'static, 
+            T3: Debug + 'static,
+            T4: Debug + 'static,
             T5: Debug + 'static,
         {
             fn spawn(&self) -> Box<dyn TComputation> {
@@ -516,16 +572,24 @@ mod tests {
         }
 
         impl<T1, T2, T3, T4, T5> TComputation for _Computation<T1, T2, T3, T4, T5>
-        where 
-            Witness: storage::ReaderOf<T1> + storage::ReaderOf<T2> + storage::ReaderOf<T3> + storage::WriterOf<T4> + storage::WriterOf<T5>,
+        where
+            Witness: storage::ReaderOf<T1>
+                + storage::ReaderOf<T2>
+                + storage::ReaderOf<T3>
+                + storage::WriterOf<T4>
+                + storage::WriterOf<T5>,
             T1: Debug,
             T2: Debug,
-            T3: Debug, 
-            T4: Debug, 
+            T3: Debug,
+            T4: Debug,
             T5: Debug,
         {
             fn execute(&self, storage: &mut Witness) {
-                let (_s3, _s4) = (self.f)(self.s1.get_from(storage), self.s2.get_from(storage), self.b1.get_from(storage));
+                let (_s3, _s4) = (self.f)(
+                    self.s1.get_from(storage),
+                    self.s2.get_from(storage),
+                    self.b1.get_from(storage),
+                );
                 self.s3.set_to(storage, _s3);
                 self.s4.set_to(storage, _s4);
             }
@@ -549,25 +613,42 @@ mod tests {
             f: Box<dyn Fn(&T1, &T2, &T3, &T4, &T5) -> Vec<u64>>,
         }
 
-        impl<T1, T2, T3, T4, T5> TConstraint for _Constraint<T1, T2, T3, T4, T5> 
-        where 
-            Witness: storage::ReaderOf<T1> + storage::ReaderOf<T2> + storage::ReaderOf<T3> + storage::ReaderOf<T4> + storage::ReaderOf<T5>,
+        impl<T1, T2, T3, T4, T5> TConstraint for _Constraint<T1, T2, T3, T4, T5>
+        where
+            Witness: storage::ReaderOf<T1>
+                + storage::ReaderOf<T2>
+                + storage::ReaderOf<T3>
+                + storage::ReaderOf<T4>
+                + storage::ReaderOf<T5>,
         {
             type Field = u64;
 
             type Witness = Witness;
 
             fn evaluate(&self, witness: &Self::Witness) -> Vec<Self::Field> {
-                (self.f)(witness.get(&self.s1), witness.get(&self.s2), witness.get(&self.b1), witness.get(&self.s3), witness.get(&self.s4))
+                (self.f)(
+                    witness.get(&self.s1),
+                    witness.get(&self.s2),
+                    witness.get(&self.b1),
+                    witness.get(&self.s3),
+                    witness.get(&self.s4),
+                )
             }
         }
-        
+
         builder.set_constraint(Box::new(_Constraint {
-            s1, s2, b1, s3, s4,
+            s1,
+            s2,
+            b1,
+            s3,
+            s4,
             f: Box::new(|&s1, &s2, &b1, &s3, &s4| {
                 let (_s3, _s4) = bar(&s1, &s2, &b1);
-                vec![(u64::from(_s3) - u64::from(s3)), (u64::from(_s4) - u64::from(s4))]
-            })
+                vec![
+                    (u64::from(_s3) - u64::from(s3)),
+                    (u64::from(_s4) - u64::from(s4)),
+                ]
+            }),
         }));
     }
 }

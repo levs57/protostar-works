@@ -1,4 +1,4 @@
-workspace = { members = ["annwfn"] }
+workspace = { members = ["annwfn", "awaiting-runtime"] }
 [package]
 name = "protostar_works"
 version = "0.1.0"
